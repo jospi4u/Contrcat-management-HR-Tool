@@ -1,5 +1,6 @@
 {
   "rewrites": [
-    { "source": "/", "destination": "/aristo-manpower-app.html" }
+    { "source": "/", "destination": "/contract-workers.html" },
+    { "source": "/recruitment", "destination": "/aristo-manpower-app.html" }
   ]
 }

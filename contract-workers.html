@@ -1,0 +1,2942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contract Worker HR Management System</title>
+    <style>
+        :root {
+            /* Matte sport palette: black / red / yellow / white */
+            --primary-color: #1a1a1a;      /* matte black */
+            --secondary-color: #262626;    /* charcoal black */
+            --accent-color: #b3241c;       /* matte red */
+            --accent-color-dark: #8c1c15;  /* deeper matte red (hover/active) */
+            --accent-yellow: #e0a721;      /* matte yellow */
+            --accent-yellow-dark: #b8860f; /* darker matte yellow */
+            --background-color: #f4f2ee;   /* warm matte white */
+            --text-color: #262626;
+            --border-color: #d8d3c8;
+            --white: #ffffff;
+            --table-header: #f6efdd;       /* warm cream/yellow tint */
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            font-size: 13px;
+        }
+
+        header {
+            background-color: var(--primary-color);
+            color: var(--white);
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 20px;
+        }
+
+        .container {
+            display: flex;
+            min-height: calc(100vh - 50px);
+        }
+
+        nav {
+            width: 220px;
+            background-color: var(--secondary-color);
+            color: var(--white);
+            padding-top: 10px;
+            flex-shrink: 0;
+        }
+
+        nav ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        nav ul li a {
+            display: block;
+            padding: 12px 20px;
+            color: #b8b8b8;
+            text-decoration: none;
+            font-weight: 500;
+            border-bottom: 1px solid #3a3a3a;
+            border-left: 3px solid transparent;
+            transition: all 0.2s;
+        }
+
+        nav ul li a:hover {
+            color: var(--white);
+            background-color: var(--accent-color-dark);
+        }
+
+        nav ul li a.active {
+            color: var(--primary-color);
+            background-color: var(--accent-yellow);
+            border-left: 3px solid var(--accent-color);
+            font-weight: 700;
+        }
+
+        main {
+            flex-grow: 1;
+            padding: 20px;
+            overflow-x: auto;
+        }
+
+        .tab-content {
+            display: none;
+            background: var(--white);
+            padding: 20px;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        h2 {
+            margin-top: 0;
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--accent-color);
+            padding-bottom: 8px;
+            font-size: 16px;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            max-width: 100%;
+            margin-top: 15px;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            white-space: nowrap;
+            font-size: 12px;
+        }
+
+        table, th, td {
+            border: 1px solid var(--border-color);
+        }
+
+        th {
+            background-color: var(--table-header);
+            color: var(--primary-color);
+            font-weight: 600;
+            text-align: center;
+            padding: 8px 6px;
+        }
+
+        td {
+            padding: 6px;
+            text-align: center;
+        }
+
+        .text-left { text-align: left; }
+        .text-right { text-align: right; }
+
+        form {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 15px;
+            background: #f1f5f9;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-size: 11px;
+            font-weight: bold;
+            margin-bottom: 4px;
+            color: #475569;
+        }
+
+        .form-group input, .form-group select, .form-group textarea {
+            padding: 6px 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            background: #fff;
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+        }
+
+        button {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+            font-size: 12px;
+            transition: background-color 0.15s;
+        }
+
+        button:hover {
+            background-color: var(--accent-color-dark);
+            opacity: 1;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .metric-card {
+            background: #f8fafc;
+            border: 1px solid var(--border-color);
+            padding: 12px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .metric-card .value {
+            font-size: 20px;
+            font-weight: bold;
+            color: var(--accent-color);
+        }
+
+        .metric-card .label {
+            font-size: 11px;
+            color: #64748b;
+        }
+
+        .section-header {
+            background: var(--table-header);
+            padding: 6px 10px;
+            font-weight: bold;
+            margin-top: 15px;
+            margin-bottom: 10px;
+            border-left: 4px solid var(--accent-color);
+            color: var(--primary-color);
+        }
+
+        /* ---------- Login / Role Selection ---------- */
+        #login-screen {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-color) 45%, var(--accent-color) 100%);
+        }
+
+        .login-card {
+            background: var(--white);
+            width: 420px;
+            max-width: 90vw;
+            border-radius: 10px;
+            padding: 28px 30px;
+            border-top: 6px solid var(--accent-yellow);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+        }
+
+        .login-card h1 {
+            font-size: 18px;
+            color: var(--primary-color);
+            margin: 0 0 4px 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .login-card p.sub {
+            margin: 0 0 18px 0;
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .role-option {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 10px 12px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .role-option:hover {
+            border-color: var(--accent-color);
+            background: #fdf6e3;
+        }
+
+        .role-option.selected {
+            border-color: var(--accent-color);
+            background: #fdf1ea;
+            box-shadow: 0 0 0 2px rgba(179,36,28,0.25);
+        }
+
+        .role-option .role-name {
+            font-weight: 600;
+            font-size: 13px;
+            color: var(--primary-color);
+        }
+
+        .role-option .role-desc {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 2px;
+        }
+
+        #contractor-name-field {
+            display: none;
+            margin: 12px 0;
+        }
+
+        #contractor-name-field input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 8px 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        #login-btn {
+            width: 100%;
+            padding: 10px;
+            margin-top: 8px;
+            font-size: 13px;
+        }
+
+        #login-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .login-error {
+            color: #dc2626;
+            font-size: 11px;
+            margin-top: 6px;
+            display: none;
+        }
+
+        /* ---------- App shell / role badge ---------- */
+        #app-shell { display: none; }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        #role-badge {
+            background: var(--accent-color);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        #logout-btn {
+            background: transparent;
+            border: 1px solid #475569;
+            padding: 5px 10px;
+            font-size: 11px;
+        }
+
+        #signout-link {
+            color: inherit;
+            border: 1px solid #475569;
+            border-radius: 4px;
+            padding: 5px 10px;
+            font-size: 11px;
+            text-decoration: none;
+            margin-left: 6px;
+        }
+
+        .access-note {
+            background: #fbf1d9;
+            border: 1px solid var(--accent-yellow);
+            border-left: 4px solid var(--accent-yellow-dark);
+            color: #5c4610;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-bottom: 14px;
+        }
+
+        /* Read-only styling for view-only roles */
+        fieldset.readonly-fieldset {
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        fieldset.readonly-fieldset input,
+        fieldset.readonly-fieldset select,
+        fieldset.readonly-fieldset textarea {
+            background: #f1f5f9;
+            pointer-events: none;
+        }
+
+        .action-btn {
+            padding: 3px 8px;
+            font-size: 10px;
+            margin: 0 2px;
+        }
+
+        .action-btn.delete {
+            background: var(--accent-color-dark);
+        }
+
+        .action-btn.edit {
+            background: var(--primary-color);
+        }
+
+        /* ---------- Status badges ---------- */
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .badge-active { background:#dcfce7; color:#166534; }
+        .badge-pending { background:#fef9c3; color:#854d0e; }
+        .badge-warn { background:#ffedd5; color:#9a3412; }
+        .badge-danger { background:#fee2e2; color:#991b1b; }
+        .badge-info { background:#dbeafe; color:#1e40af; }
+        .badge-neutral { background:#e2e8f0; color:#334155; }
+
+        .mini-form {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            background: #f8fafc;
+            border: 1px solid var(--border-color);
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 14px;
+        }
+        .mini-form .form-group { margin: 0; }
+        .mini-form .full-width { grid-column: 1 / -1; }
+
+        .notif-list { list-style:none; padding:0; margin:0 0 14px 0; max-height:160px; overflow-y:auto; border:1px solid var(--border-color); border-radius:6px; }
+        .notif-list li { padding:6px 10px; border-bottom:1px solid #eef2f7; font-size:11px; }
+        .notif-list li:last-child { border-bottom:none; }
+        .notif-list li.urgent { background:#fee2e2; color:#991b1b; font-weight:600; }
+        .notif-empty { padding:10px; font-size:11px; color:#94a3b8; }
+
+        .subsection-title { font-weight:700; color:var(--primary-color); margin:18px 0 8px 0; font-size:13px; border-bottom:2px solid var(--accent-color); padding-bottom:4px; }
+    </style>
+</head>
+<body>
+
+    <!-- ============ LOGIN / ROLE SELECTION ============ -->
+    <div id="login-screen">
+        <div class="login-card">
+            <h1>KBros HR Management Tool</h1>
+            <p class="sub">Select your role to continue. Contract Operations — Bangalore | Hyderabad | Kerala | Mumbai | Faridabad (NCR)</p>
+
+            <div class="role-option" data-role="hr_admin" onclick="selectRole('hr_admin')">
+                <div>
+                    <div class="role-name">HR Admin</div>
+                    <div class="role-desc">Full access — all modules, add/edit worker &amp; payroll data</div>
+                </div>
+            </div>
+            <div class="role-option" data-role="contractor" onclick="selectRole('contractor')">
+                <div>
+                    <div class="role-name">Contractor</div>
+                    <div class="role-desc">Submits your workers, candidates, exits &amp; invoices; confirms payroll — sees only your own workers</div>
+                </div>
+            </div>
+            <div class="role-option" data-role="production_manager" onclick="selectRole('production_manager')">
+                <div>
+                    <div class="role-name">Production Manager</div>
+                    <div class="role-desc">Approves Supervisor requisitions; manpower planning, attendance, exit clearance</div>
+                </div>
+            </div>
+            <div class="role-option" data-role="supervisor" onclick="selectRole('supervisor')">
+                <div>
+                    <div class="role-name">Supervisor</div>
+                    <div class="role-desc">Raises hiring requisitions; requisitions, manpower planning, attendance, exit clearance</div>
+                </div>
+            </div>
+            <div class="role-option" data-role="gm_production" onclick="selectRole('gm_production')">
+                <div>
+                    <div class="role-name">GM Production</div>
+                    <div class="role-desc">Approves New Manpower requisitions after Production Manager sign-off</div>
+                </div>
+            </div>
+
+            <div id="contractor-name-field">
+                <label style="font-size:11px; font-weight:bold; color:#475569;">Contractor / Agency Name</label>
+                <select id="contractor-name-input">
+                    <option value="">-- Select Contractor --</option>
+                </select>
+            </div>
+
+            <div id="division-field" style="display:none; margin:12px 0;">
+                <label style="font-size:11px; font-weight:bold; color:#475569;">Assigned Division</label>
+                <select id="division-select" style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid var(--border-color); border-radius:4px; font-size:12px;">
+                    <option value="">-- Select Division --</option>
+                    <option>Aristo Vertical Production</option>
+                    <option>Aristo Cabinetry Production</option>
+                    <option>Art of Lacquering</option>
+                    <option>Aristo Quality and Service</option>
+                    <option>Aristo Cabinetry Site Installation</option>
+                    <option>Admin Department</option>
+                </select>
+            </div>
+
+            <button id="login-btn" disabled onclick="login()">Continue</button>
+            <div class="login-error" id="login-error">Please select a role to continue.</div>
+            <p style="margin:14px 0 0; font-size:11px; text-align:center;"><a href="/logout" style="color:#475569;">Sign out</a></p>
+        </div>
+    </div>
+
+    <!-- ============ MAIN APP (hidden until login) ============ -->
+    <div id="app-shell">
+    <header>
+        <h1>KBros HR Management Tool - Contract Operations</h1>
+        <div class="header-right">
+            <div>Locations: Bangalore | Hyderabad | Kerala | Mumbai | Faridabad (NCR)</div>
+            <span id="role-badge">Role</span>
+            <button id="logout-btn" onclick="logout()">Switch role</button>
+            <a id="signout-link" href="/logout">Sign out</a>
+        </div>
+    </header>
+
+    <div class="container">
+        <nav>
+            <ul>
+                <li data-roles="hr_admin,contractor"><a href="#master" class="nav-link active" onclick="switchTab('master')">Workers Master Data</a></li>
+                <li data-roles="hr_admin,production_manager,supervisor"><a href="#requisition-form" class="nav-link" onclick="switchTab('requisition-form')">Hiring Requisition Form</a></li>
+                <li data-roles="hr_admin,production_manager,supervisor,contractor,gm_production"><a href="#requisition-tracker" class="nav-link" onclick="switchTab('requisition-tracker')">Requisition Tracker</a></li>
+                <li data-roles="hr_admin,production_manager,supervisor"><a href="#manpower" class="nav-link" onclick="switchTab('manpower')">Manpower Planning</a></li>
+                <li data-roles="hr_admin,production_manager,supervisor"><a href="#attendance" class="nav-link" onclick="switchTab('attendance')">Attendance (eSSL)</a></li>
+                <li data-roles="hr_admin,contractor"><a href="#payroll" class="nav-link" onclick="switchTab('payroll')">Payroll / Wage Register / Invoice</a></li>
+                <li data-roles="hr_admin"><a href="#ot-report" class="nav-link" onclick="switchTab('ot-report')">OT Reports</a></li>
+                <li data-roles="hr_admin"><a href="#leave-salary" class="nav-link" onclick="switchTab('leave-salary')">Leave Salary</a></li>
+                <li data-roles="hr_admin"><a href="#bonus" class="nav-link" onclick="switchTab('bonus')">Bonus Act (8.33%)</a></li>
+                <li data-roles="hr_admin"><a href="#salary-revision" class="nav-link" onclick="switchTab('salary-revision')">Annual Revision</a></li>
+                <li data-roles="hr_admin,production_manager,supervisor,contractor"><a href="#exit-clearance" class="nav-link" onclick="switchTab('exit-clearance')">Exit & Clearance</a></li>
+            </ul>
+        </nav>
+
+        <main>
+            <!-- 1. WORKERS MASTER DATA -->
+            <div id="master" class="tab-content active">
+                <h2>Workers Master Data Entry</h2>
+                <div class="access-note" id="master-contractor-note" style="display:none;">
+                    You are viewing this in read-only mode. Contractors can view worker details but cannot edit them. Contact HR to request a change.
+                </div>
+                <form id="master-form">
+                    <input type="hidden" id="f-record-index" value="">
+                    <input type="hidden" id="f-pending-id" value="">
+                    <div class="form-group"><label>Employee Name</label><input type="text" id="f-name" placeholder="Enter Name"></div>
+                    <div class="form-group" id="f-empid-group"><label>Employee ID</label><input type="text" id="f-empid" placeholder="Emp ID"></div>
+                    <div class="form-group"><label>Contractor</label>
+                        <select id="f-contractor">
+                            <option value="">-- Select Contractor --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Division</label>
+                        <select id="f-division">
+                            <option>Aristo Vertical Production</option>
+                            <option>Aristo Cabinetry Production</option>
+                            <option>Art of Lacquering</option>
+                            <option>Aristo Quality and Service</option>
+                            <option>Aristo Cabinetry Site Installation</option>
+                            <option>Admin Department</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Location</label>
+                        <select id="f-location">
+                            <option>Bangalore</option><option>Kerala</option><option>Hyderabad</option>
+                            <option>Mumbai</option><option>NCR Delhi</option><option>Chennai</option><option>Kolkata</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Date of Joining</label><input type="date" id="f-doj"></div>
+                    <div class="form-group"><label>Designation</label><input type="text" id="f-designation"></div>
+                    <div class="form-group">
+                        <label>Department</label>
+                        <select id="f-department">
+                            <option>Admin</option><option>Aristo Glass Warehouse</option><option>Aristo Vertical</option>
+                            <option>Aristo Vertical Store</option><option>Cabinetry</option><option>Cabinetry Store</option>
+                            <option>Coating</option><option>Coating Store</option><option>Quality</option><option>Service</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Section</label>
+                        <select id="f-section">
+                            <option>Driver</option><option>Forklift Driver</option><option>House Keeping</option><option>Store</option>
+                            <option>Showroom</option><option>Dispatch</option><option>Production</option><option>Site</option>
+                            <option>Assembly Aristo Coating</option><option>PG Team Bangalore</option><option>PG Team Chennai</option>
+                            <option>PG Team Cochin</option><option>PG Team Kolkata</option><option>Production (Slide Tech)</option>
+                            <option>Site (Slide Tech)</option><option>Warehouse</option><option>Coating</option><option>Coating Store</option>
+                            <option>Quality</option><option>Service</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Skill Level</label>
+                        <select id="f-skill">
+                            <option>Helper Grade I</option><option>Helper Grade II</option><option>Highly Skilled Grade I</option>
+                            <option>Highly Skilled Grade II</option><option>Highly Skilled Grade III</option><option>Semi Skilled Grade I</option>
+                            <option>Semi Skilled Grade II</option><option>Skilled Grade I</option><option>Skilled Grade II</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Experience (Years)</label><input type="number" id="f-expyr"></div>
+                    <div class="form-group"><label>Experience (Months)</label><input type="number" id="f-expmo"></div>
+                    <div class="form-group"><label>Mobile Number</label><input type="tel" id="f-mobile"></div>
+                    <div class="form-group"><label>Emergency Contact</label><input type="tel" id="f-emergency"></div>
+                    <div class="form-group"><label>Date of Birth</label><input type="date" id="f-dob"></div>
+                    <div class="form-group"><label>Age</label><input type="number" id="f-age"></div>
+                    <div class="form-group"><label>State</label><input type="text" id="f-state"></div>
+                    <div class="form-group"><label>Permanent Address</label><input type="text" id="f-permaddr"></div>
+                    <div class="form-group"><label>Present Address</label><input type="text" id="f-presaddr"></div>
+                    <div class="form-group"><label>Aadhar Number</label><input type="text" id="f-aadhar" placeholder="[Aadhaar Redacted]"></div>
+                    <div class="form-group"><label>PAN Number</label><input type="text" id="f-pan"></div>
+                    <div class="form-group"><label>UAN Number</label><input type="text" id="f-uan"></div>
+                    <div class="form-group"><label>ESI Number</label><input type="text" id="f-esi"></div>
+                    <div class="form-group"><label>PPE Kit Issue Date</label><input type="date" id="f-ppedate"></div>
+                    <div class="form-group"><label>Fixed Basic+DA</label><input type="number" id="f-basicda"></div>
+                    <div class="form-group"><label>Fixed HRA</label><input type="number" id="f-hra"></div>
+                    <div class="form-group"><label>Fixed Gross Salary</label><input type="number" id="f-gross"></div>
+                    <div class="form-group">
+                        <label>Shift</label>
+                        <select id="f-shift">
+                            <option>General Shift (8:30 AM - 5:00 PM)</option>
+                            <option>First Shift (6:00 AM - 2:30 PM)</option>
+                            <option>Second Shift (2:00 PM - 10:30 PM)</option>
+                            <option>Warehouse Shift (9:30 AM - 6:00 PM)</option>
+                            <option>Night Shift (10:00 PM - 6:30 AM)</option>
+                        </select>
+                    </div>
+                    <div class="form-group full-width" id="master-save-row">
+                        <button type="button" id="master-save-btn" onclick="saveWorker()">Save Worker Master Data</button>
+                        <button type="button" id="master-clear-btn" onclick="clearWorkerForm()" style="background:#64748b; margin-left:8px;">Clear Form</button>
+                    </div>
+                </form>
+
+                <div class="access-note" id="master-contractor-info" style="display:none;">
+                    New employees you submit here will show as <b>Pending HR Verification</b> below until HR reviews and approves them. The Employee ID is generated automatically by HR on approval (first 2 letters of your agency name + a running number) — you don't need to enter one.
+                </div>
+
+                <div class="section-header" id="pending-approvals-header" style="display:none;">Pending Employee Submissions</div>
+                <div class="table-wrapper" id="pending-approvals-wrapper" style="display:none;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th><th>Contractor</th><th>Division</th><th>Designation</th><th>Mobile</th><th>Status</th><th>HR Remarks</th><th id="pending-actions-col">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pending-table-body"></tbody>
+                    </table>
+                </div>
+
+                <div class="section-header">Workers List<span id="master-filter-label"></span></div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Emp ID</th><th>Name</th><th>Contractor</th><th>Division</th><th>Location</th><th>Designation</th>
+                                <th>Department</th><th>Skill Level</th><th>DOJ</th><th>Mobile</th><th>Status</th><th>Fixed Gross</th>
+                                <th id="master-actions-col" style="display:none;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="workers-table-body">
+                            <!-- populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 2. HIRING REQUISITION FORM -->
+            <div id="requisition-form" class="tab-content">
+                <h2>Hiring Requisition Form (Workers)</h2>
+                <div class="access-note" id="requisition-hr-note" style="display:none;">Requisitions are raised by Production Managers / Supervisors. Use the <b>Requisition Tracker</b> tab to review, approve and assign them to contractors.</div>
+                <div id="requisition-own-section">
+                <div class="access-note" id="requisition-form-note" style="display:none;">Raised for your assigned division. Once submitted, this goes to HR for approval; on approval HR assigns it to one or more contractors who then source and submit candidates.</div>
+                <form id="requisition-form-el" class="mini-form">
+                    <div class="form-group"><label>Division</label><input type="text" id="rq-division" readonly></div>
+                    <div class="form-group"><label>Department / Position</label><input type="text" id="rq-position" placeholder="e.g. Assembler"></div>
+                    <div class="form-group"><label>No. of Workers Required</label><input type="number" id="rq-count" min="1" value="1"></div>
+                    <div class="form-group">
+                        <label>Skill Required / Grade</label>
+                        <select id="rq-skill" onchange="updateReqBudgetDisplay()">
+                            <option>Helper Grade I</option><option>Helper Grade II</option><option>Semi Skilled Grade I</option>
+                            <option>Semi Skilled Grade II</option><option>Skilled Grade I</option><option>Skilled Grade II</option>
+                            <option>Highly Skilled Grade I</option><option>Highly Skilled Grade II</option><option>Highly Skilled Grade III</option>
+                        </select>
+                        <div id="rq-budget-display" style="font-size:11px; color:#5c4610; margin-top:4px; font-weight:600;"></div>
+                    </div>
+                    <div class="form-group"><label>Experience Required</label><input type="text" id="rq-exp" placeholder="e.g. 1-3 Yrs"></div>
+                    <div class="form-group">
+                        <label>Shift</label>
+                        <select id="rq-shift">
+                            <option>General Shift (8:30 AM - 5:00 PM)</option>
+                            <option>First Shift (6:00 AM - 2:30 PM)</option>
+                            <option>Second Shift (2:00 PM - 10:30 PM)</option>
+                            <option>Warehouse Shift (9:30 AM - 6:00 PM)</option>
+                            <option>Night Shift (10:00 PM - 6:30 AM)</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Required Joining Date</label><input type="date" id="rq-date"></div>
+                    <div class="form-group">
+                        <label>Preferred Education</label>
+                        <select id="rq-education">
+                            <option>SSLC</option>
+                            <option>PUC (+2)</option>
+                            <option>ITI / Diploma</option>
+                            <option>Bachelor's Degree</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Driving License Required</label>
+                        <select id="rq-driving-license">
+                            <option value="No">No</option>
+                            <option value="Yes">Yes</option>
+                        </select>
+                    </div>
+                    <div class="form-group full-width"><label>Specific Training / Skill Required</label><input type="text" id="rq-training" placeholder="e.g. Forklift license, glass handling, PLC basics"></div>
+
+                    <div class="form-group full-width">
+                        <label>Required PPE Kit</label>
+                        <div style="display:flex; flex-wrap:wrap; gap:10px; font-size:12px; font-weight:normal; margin-top:4px;">
+                            <label style="font-weight:normal;"><input type="checkbox" class="rq-ppe" value="Shoes"> Shoes</label>
+                            <label style="font-weight:normal;"><input type="checkbox" class="rq-ppe" value="T-Shirt"> T-Shirt</label>
+                            <label style="font-weight:normal;"><input type="checkbox" class="rq-ppe" value="Hand Gloves"> Hand Gloves</label>
+                            <label style="font-weight:normal;"><input type="checkbox" class="rq-ppe" value="Hand Sleeves"> Hand Sleeves</label>
+                            <label style="font-weight:normal;"><input type="checkbox" class="rq-ppe" value="Mask"> Mask</label>
+                            <label style="font-weight:normal;"><input type="checkbox" class="rq-ppe" value="Goggles"> Goggles</label>
+                            <label style="font-weight:normal;"><input type="checkbox" class="rq-ppe" value="Helmet"> Helmet</label>
+                            <label style="font-weight:normal;"><input type="checkbox" class="rq-ppe" value="Ear Plug"> Ear Plug</label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Requirement Type</label>
+                        <select id="rq-type" onchange="toggleTypeFields()">
+                            <option value="New">New Manpower</option>
+                            <option value="Replacement">Replacement</option>
+                        </select>
+                    </div>
+
+                    <!-- NEW MANPOWER fields: needs GM Production approval -->
+                    <div class="form-group full-width" id="rq-new-fields" style="display:none;">
+                        <div class="mini-form" style="grid-template-columns: repeat(2,1fr); background:#fbf1d9; border-color:var(--accent-yellow);">
+                            <div class="access-note" style="grid-column: 1 / -1;">New Manpower requests are routed to <b>GM Production</b> for approval after your Production Manager, before going to HR. All fields below are mandatory.</div>
+                            <div class="form-group"><label>Project / Site</label><input type="text" id="rq-new-project" placeholder="e.g. Aristo Vertical – Line 2 expansion"></div>
+                            <div class="form-group"><label>Management Approved?</label>
+                                <select id="rq-new-mgmt-approved"><option value="">-- Select --</option><option value="Yes">Yes</option><option value="No">No</option></select>
+                            </div>
+                            <div class="form-group full-width"><label>Why This New Manpower Is Required</label><input type="text" id="rq-new-why" placeholder="e.g. New line added, existing headcount insufficient"></div>
+                            <div class="form-group full-width"><label>Justification</label><textarea rows="2" id="rq-new-justification"></textarea></div>
+                        </div>
+                    </div>
+
+                    <!-- REPLACEMENT fields: skips GM Production, goes straight to HR after PM approval -->
+                    <div class="form-group full-width" id="rq-replacement-fields" style="display:none;">
+                        <div class="mini-form" style="grid-template-columns: repeat(3,1fr); background:#fff7ed; border-color:#fdba74;">
+                            <div class="access-note" style="grid-column: 1 / -1;">Replacement requests skip GM Production and go straight to HR after your Production Manager approves.</div>
+                            <div class="form-group full-width"><label>Employee Being Replaced (resigned/exited workers in your division)</label>
+                                <select id="rq-repl-emp" onchange="fillReplacementDetails()"><option value="">-- Select resigned/exited worker --</option></select>
+                            </div>
+                            <div class="form-group"><label>Existing Position</label><input type="text" id="rq-repl-position" readonly></div>
+                            <div class="form-group"><label>Existing Salary (for record)</label><input type="text" id="rq-repl-salary" readonly></div>
+                            <div class="form-group"><label>Exit Status</label><input type="text" id="rq-repl-status" readonly></div>
+                            <div class="form-group full-width"><label>Reason for Replacement</label><input type="text" id="rq-repl-reason"></div>
+                        </div>
+                    </div>
+
+                    <div class="form-group full-width"><label>Job Description / Remarks</label><textarea rows="2" id="rq-remarks"></textarea></div>
+                    <div class="form-group full-width"><button type="button" onclick="submitRequisition()">Submit Requisition</button></div>
+                </form>
+
+                <div class="section-header">My Submitted Requisitions</div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr><th>Date</th><th>Division</th><th>Position</th><th>Count</th><th>Type</th><th>Required By</th><th>Status</th><th>Assigned Contractor(s)</th></tr></thead>
+                        <tbody id="my-requisitions-body"></tbody>
+                    </table>
+                </div>
+                </div><!-- /#requisition-own-section -->
+            </div>
+
+            <!-- 3. REQUISITION TRACKER -->
+            <div id="requisition-tracker" class="tab-content">
+                <h2>Manpower Requisition Tracker</h2>
+
+                <!-- STAGE 1: Production Manager approval of Supervisor-raised requisitions -->
+                <div class="section-header" id="rt-pm-header" style="display:none;">Requisitions Awaiting My Approval (Production Manager)</div>
+                <div class="table-wrapper" id="rt-pm-wrapper" style="display:none;">
+                    <table>
+                        <thead><tr><th>Date</th><th>Raised By</th><th>Position</th><th>Count</th><th>Skill</th><th>Type</th><th>Next Stage</th><th>Action</th></tr></thead>
+                        <tbody id="rt-pm-body"></tbody>
+                    </table>
+                </div>
+
+                <!-- STAGE 2: GM Production approval — New Manpower only -->
+                <div class="section-header" id="rt-gm-header" style="display:none;">New Manpower Requisitions Awaiting GM Production Approval</div>
+                <div class="table-wrapper" id="rt-gm-wrapper" style="display:none;">
+                    <table>
+                        <thead><tr><th>Date</th><th>Division</th><th>Position</th><th>Count</th><th>Project</th><th>Why Needed</th><th>Mgmt Approved?</th><th>Justification</th><th>Action</th></tr></thead>
+                        <tbody id="rt-gm-body"></tbody>
+                    </table>
+                </div>
+
+                <!-- STAGE 3: HR approval + assign to contractor(s) -->
+                <div class="section-header" id="rt-approval-header" style="display:none;">Requisitions Awaiting HR Approval</div>
+                <div class="table-wrapper" id="rt-approval-wrapper" style="display:none;">
+                    <table>
+                        <thead><tr><th>Date</th><th>Division</th><th>Position</th><th>Count</th><th>Skill</th><th>Type</th><th>Raised By</th><th>Action</th></tr></thead>
+                        <tbody id="rt-approval-body"></tbody>
+                    </table>
+                </div>
+
+                <!-- HR Review & Assign panel -->
+                <div id="hr-review-panel" style="display:none; border:2px solid var(--accent-color); border-radius:6px; padding:14px; margin-bottom:20px; background:#fffaf5;">
+                    <div class="section-header" style="margin-top:0;">Requisition Details — <span id="hrr-id"></span></div>
+                    <div id="hrr-details" style="font-size:12px; line-height:1.8;"></div>
+                    <div class="section-header">Assign To Contractor(s)</div>
+                    <div style="font-size:11px; margin-bottom:6px;"><label><input type="checkbox" id="hrr-all-contractors" onchange="toggleAllContractors()"> <b>Select All Contractors</b></label></div>
+                    <div id="hrr-contractor-checks" style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:10px; font-size:11px;"></div>
+                    <div class="form-group" style="max-width:220px;"><label>Recruitment Deadline</label><input type="date" id="hrr-deadline"></div>
+                    <div style="margin-top:10px;">
+                        <button type="button" onclick="confirmApproveRequisition()">Approve & Assign</button>
+                        <button type="button" style="background:#64748b;" onclick="closeReviewPanel()">Cancel</button>
+                        <button type="button" class="action-btn delete" onclick="rejectRequisition(currentReviewId); closeReviewPanel();">Reject Instead</button>
+                    </div>
+                </div>
+
+                <div class="section-header" id="grade-budget-header">Grade Salary Budget Master</div>
+                <div class="access-note" id="grade-budget-hr-note" style="display:none;">HR only: set/update the monthly salary budget for each grade — review as part of the annual increment cycle. This is the budget Production sees when raising a requisition.</div>
+                <div class="table-wrapper" style="margin-bottom:20px;">
+                    <table>
+                        <thead><tr><th>Grade</th><th>Monthly Salary Budget (₹)</th><th id="grade-budget-actions-col" style="display:none;">Action</th></tr></thead>
+                        <tbody id="grade-budget-body"></tbody>
+                    </table>
+                </div>
+
+                <div class="section-header">All Requisitions</div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr><th>Date</th><th>Division</th><th>Position</th><th>Count</th><th>Type</th><th>Status</th><th>Assigned Contractor(s)</th><th>Recruitment Deadline</th></tr></thead>
+                        <tbody id="rt-all-body"></tbody>
+                    </table>
+                </div>
+
+                <div class="section-header" id="rt-assigned-header" style="display:none;">Requirements Assigned To Me</div>
+                <div class="table-wrapper" id="rt-assigned-wrapper" style="display:none;">
+                    <table>
+                        <thead><tr><th>Division</th><th>Position</th><th>Count</th><th>Skill</th><th>Required By</th><th>Deadline</th><th>Action</th></tr></thead>
+                        <tbody id="rt-assigned-body"></tbody>
+                    </table>
+                </div>
+
+                <!-- Candidate submission form (contractor) -->
+                <div id="candidate-form-wrapper" style="display:none; border:2px solid var(--accent-color); border-radius:6px; padding:14px; margin-bottom:20px; background:#fffaf5;">
+                    <div class="section-header" style="margin-top:0;">Select / Submit Candidate — <span id="cf-req-id"></span></div>
+                    <div class="mini-form" style="grid-template-columns: repeat(3,1fr);">
+                        <div class="form-group"><label>Candidate Name</label><input type="text" id="cf-name"></div>
+                        <div class="form-group"><label>Mobile Number</label><input type="tel" id="cf-mobile"></div>
+                        <div class="form-group"><label>Skill / Grade</label>
+                            <select id="cf-skill">
+                                <option>Helper Grade I</option><option>Helper Grade II</option><option>Semi Skilled Grade I</option>
+                                <option>Semi Skilled Grade II</option><option>Skilled Grade I</option><option>Skilled Grade II</option>
+                                <option>Highly Skilled Grade I</option><option>Highly Skilled Grade II</option><option>Highly Skilled Grade III</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>Experience</label><input type="text" id="cf-experience" placeholder="e.g. 2 Yrs"></div>
+                        <div class="form-group"><label>Education</label>
+                            <select id="cf-education"><option>SSLC</option><option>PUC (+2)</option><option>ITI / Diploma</option><option>Bachelor's Degree</option></select>
+                        </div>
+                        <div class="form-group"><label>ID Proof (Aadhaar/PAN etc.)</label><input type="file" id="cf-id-doc"></div>
+                        <div class="form-group full-width"><label>Resume / Certificates</label><input type="file" id="cf-resume-doc" multiple></div>
+                    </div>
+                    <div class="access-note">This is a prototype: uploaded file names are recorded against the candidate, but files themselves are not stored — connect real document storage before going live.</div>
+                    <button type="button" onclick="submitCandidate()">Submit Candidate</button>
+                    <button type="button" style="background:#64748b;" onclick="closeCandidateForm()">Cancel</button>
+                </div>
+
+                <div class="section-header">Candidates Submitted</div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr><th>Candidate</th><th>Mobile</th><th>Skill</th><th>Experience</th><th>Education</th><th>Documents</th><th>Contractor</th><th>For Requisition</th><th>Status</th><th id="cand-actions-col">Action</th></tr></thead>
+                        <tbody id="candidates-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 4. MANPOWER PLANNING -->
+            <div id="manpower" class="tab-content">
+                <div id="manpower-division-view" style="display:none;">
+                    <h2>My Division Workforce</h2>
+                    <div class="access-note">Showing workers allocated to your division only. Salary, wage and other payroll details are not shown here — they are restricted to HR.</div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr><th>Emp ID</th><th>Name</th><th>Contractor</th><th>Skill Level</th><th>Designation</th><th>Department</th><th>Section</th><th>DOJ</th><th>Shift</th><th>Status</th></tr>
+                            </thead>
+                            <tbody id="division-workers-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div id="manpower-hr-view">
+                <h2>KBROS ARISTO MANPOWER DETAILS (AS ON 28-07-2026)</h2>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Sl.No</th>
+                                <th>Location / Department / Skill Level</th>
+                                <th>Approved Manpower</th>
+                                <th>Current Manpower</th>
+                                <th>On Leave</th>
+                                <th>Manpower- Excess/ Short</th>
+                                <th>Requisition Received</th>
+                                <th>Balance Requisition</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr style="background:#e2e8f0; font-weight:bold;"><td colspan="8" class="text-left">Admin - Bangalore</td></tr>
+                            <tr><td>1</td><td class="text-left">Driver</td><td>13</td><td>11</td><td>0</td><td>-2</td><td>2</td><td>One position is currently on hold</td></tr>
+                            <tr><td>2</td><td class="text-left">STP</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td></td></tr>
+                            <tr><td>3</td><td class="text-left">Housekeeping/Pantry</td><td>14</td><td>14</td><td>1</td><td>0</td><td>0</td><td></td></tr>
+                            <tr style="font-weight:bold; background:#f1f5f9;"><td colspan="2">Total</td><td>27</td><td>25</td><td>1</td><td>-2</td><td>2</td><td>0</td></tr>
+
+                            <tr style="background:#e2e8f0; font-weight:bold;"><td colspan="8" class="text-left">Cabinetry - Bangalore</td></tr>
+                            <tr><td>1</td><td class="text-left">Helper Grade I</td><td>21</td><td>26</td><td>2</td><td>+5</td><td>0</td><td>5 member for daily wages</td></tr>
+                            <tr><td>2</td><td class="text-left">Semi Skilled Grade I</td><td>6</td><td>5</td><td>0</td><td>-1</td><td>1</td><td></td></tr>
+                            <tr style="font-weight:bold; background:#f1f5f9;"><td colspan="2">Total Cabinetry</td><td>60</td><td>64</td><td>3</td><td>+4</td><td>1</td><td>0</td></tr>
+
+                            <tr style="background:#0f172a; color:#fff; font-weight:bold;"><td colspan="2">GRAND TOTAL ALL LOCATIONS</td><td>469</td><td>419</td><td>18</td><td>-48</td><td>37</td><td>15</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="section-header">Consolidated Location Summary</div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Sl.No</th>
+                                <th>Location / Business Unit</th>
+                                <th>Approved</th>
+                                <th>Current</th>
+                                <th>Excess / Short</th>
+                                <th>Requisition Received</th>
+                                <th>Balance Requisition</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>1</td><td class="text-left">Admin</td><td>27</td><td>25</td><td>-2</td><td>2</td><td>0</td></tr>
+                            <tr><td>2</td><td class="text-left">Cabinetry - Bangalore</td><td>60</td><td>64</td><td>+4</td><td>1</td><td>0</td></tr>
+                            <tr><td>3</td><td class="text-left">Aristo Vertical - Bangalore</td><td>105</td><td>101</td><td>-4</td><td>4</td><td>0</td></tr>
+                            <tr><td>4</td><td class="text-left">Aristo Vertical - Hyderabad</td><td>58</td><td>54</td><td>-4</td><td>2</td><td>2</td></tr>
+                            <tr><td>5</td><td class="text-left">Aristo Vertical - Mumbai</td><td>24</td><td>12</td><td>-12</td><td>9</td><td>3</td></tr>
+                            <tr><td>6</td><td class="text-left">Aristo Vertical - NCR Delhi</td><td>41</td><td>33</td><td>-8</td><td>+5</td><td>3</td></tr>
+                            <tr><td>7</td><td class="text-left">Aristo Vertical - Kerala</td><td>29</td><td>23</td><td>-6</td><td>+2</td><td>4</td></tr>
+                            <tr style="font-weight:bold; background:#cbd5e1;"><td colspan="2">Total Summary</td><td>469</td><td>421</td><td>-48</td><td>37</td><td>15</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                </div><!-- /#manpower-hr-view -->
+            </div>
+
+            <!-- 5. ATTENDANCE (eSSL INTEGRATION) -->
+            <div id="attendance" class="tab-content">
+                <h2>eSSL Attendance Calculation Sheet</h2>
+                <p>Formula Configuration: Sunday & Holiday OT are calculated as <b>Double OT Hours</b>.</p>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th rowspan="3">Emp ID</th>
+                                <th rowspan="3">Name</th>
+                                <th colspan="6">Daily Logs (Sample Cycle)</th>
+                                <th rowspan="3">Present Days</th>
+                                <th rowspan="3">Half Day</th>
+                                <th rowspan="3">Holiday</th>
+                                <th rowspan="3">Weekly Off</th>
+                                <th rowspan="3">Paid Days</th>
+                                <th rowspan="3">OT HRS</th>
+                                <th rowspan="3">Sunday OT (Double)</th>
+                                <th rowspan="3">Absent</th>
+                            </tr>
+                            <tr>
+                                <th colspan="2">Wed (29 Jul 2026)</th>
+                                <th colspan="2">Thu (30 Jul 2026)</th>
+                                <th colspan="2">Fri (31 Jul 2026)</th>
+                            </tr>
+                            <tr>
+                                <th>AT</th><th>OT</th>
+                                <th>AT</th><th>OT</th>
+                                <th>AT</th><th>OT</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>EMP001</td>
+                                <td>Ramesh Kumar</td>
+                                <td>P</td><td>2</td>
+                                <td>P</td><td>0</td>
+                                <td>P/A</td><td>0</td>
+                                <td>24.5</td><td>1</td><td>1</td><td>4</td><td>29.5</td><td>12</td><td>8</td><td>1.5</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 6. PAYROLL PROCESSING -->
+            <div id="payroll" class="tab-content">
+                <h2>Monthly Payroll Processing & Invoice Master Roll</h2>
+
+                <div style="margin-bottom:12px;">
+                    <label style="font-size:11px; font-weight:bold; color:#475569;">Payroll Period</label>
+                    <select id="period-month" onchange="onPeriodChange()" style="padding:6px 8px; margin-left:6px;"></select>
+                    <select id="period-year" onchange="onPeriodChange()" style="padding:6px 8px; margin-left:4px;"></select>
+                </div>
+
+                <div id="payroll-hr-controls" style="display:none;">
+                    <div class="access-note">Demo workflow: attendance is normally captured via biometric machine import. Statutory rates below are sample/configurable, not legal advice — set them per applicable law and company policy.<br>
+                        <b>Worker deductions:</b> PF <input type="number" id="cfg-pf" value="12" step="0.01" style="width:50px;" onchange="saveRateConfig()">% &nbsp; ESI <input type="number" id="cfg-esi" value="0.75" step="0.01" style="width:50px;" onchange="saveRateConfig()">% &nbsp; PT (flat) <input type="number" id="cfg-pt" value="200" style="width:55px;" onchange="saveRateConfig()"><br>
+                        <b>Employer contributions (billed in invoice):</b> PF <input type="number" id="cfg-pf-er" value="13" step="0.01" style="width:50px;" onchange="saveRateConfig()">% &nbsp; ESI <input type="number" id="cfg-esi-er" value="3.25" step="0.01" style="width:50px;" onchange="saveRateConfig()">% &nbsp; PF wage ceiling ₹ <input type="number" id="cfg-pf-ceiling" value="15000" style="width:70px;" onchange="saveRateConfig()"> (0 = no ceiling) &nbsp; ESI gross limit ₹ <input type="number" id="cfg-esi-limit" value="21000" style="width:70px;" onchange="saveRateConfig()"><br>
+                        <b>Wages &amp; invoice:</b> Paid days per month <input type="number" id="cfg-paid-days" value="26" style="width:45px;" onchange="saveRateConfig()"> &nbsp; Contractor service charge <input type="number" id="cfg-service" value="5" step="0.01" style="width:50px;" onchange="saveRateConfig()">% &nbsp; GST <input type="number" id="cfg-gst" value="18" step="0.01" style="width:50px;" onchange="saveRateConfig()">%
+                    </div>
+                    <button type="button" onclick="generateSampleAttendance()">1. Generate Sample Attendance (Selected Period)</button>
+                    <button type="button" onclick="verifyAttendance()" style="margin-left:8px;">2. Verify Attendance</button>
+                    <button type="button" onclick="generatePayroll()" style="margin-left:8px;">3. Generate Payroll</button>
+                    <span id="attendance-status-note" style="margin-left:10px; font-size:11px; color:#64748b;"></span>
+                </div>
+
+                <div class="section-header">Payroll Sheet<span id="payroll-filter-label"></span></div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr><th>Emp ID</th><th>Name</th><th>Contractor</th><th>Present Days</th><th>OT Hrs</th><th>Basic+DA (Earned)</th><th>HRA (Earned)</th><th>OT Amount</th><th>Gross Earned</th><th>PF (Employee)</th><th>ESI (Employee)</th><th>PT</th><th>Net Payable</th><th>PF (Employer)</th><th>ESI (Employer)</th><th>Status</th><th id="payroll-actions-col">Action</th></tr></thead>
+                        <tbody id="payroll-body"></tbody>
+                    </table>
+                </div>
+
+                <div class="section-header">Wage Register (Per Contractor)</div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr><th>Contractor</th><th>Workers</th><th>Total Gross Wages</th><th>Total Net Payable</th><th>Employer PF + ESI</th><th>Status</th><th>Action</th></tr></thead>
+                        <tbody id="wage-register-body"></tbody>
+                    </table>
+                </div>
+
+                <div class="section-header">Contractor Invoices</div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr><th>Invoice #</th><th>Period</th><th>Contractor</th><th>Gross Wages</th><th>Employer PF + ESI</th><th>Service Charge</th><th>Taxable Value</th><th>GST</th><th>Total Invoice</th><th>Status</th><th>Action</th></tr></thead>
+                        <tbody id="invoices-body"></tbody>
+                    </table>
+                </div>
+
+                <div class="section-header">Sample Reference Format (illustrative)</div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th colspan="20">Workers Details</th>
+                                <th colspan="6">Fixed Salary</th>
+                                <th colspan="6">Attendance Summary</th>
+                                <th colspan="12">Earned Wages</th>
+                                <th colspan="9">CTC Wages & Billing</th>
+                            </tr>
+                            <tr>
+                                <th>Sl</th><th>Emp ID</th><th>Names</th><th>Contractor</th><th>DOJ</th><th>Designation</th><th>Dept</th><th>Section</th><th>Skill</th><th>Exp Yr</th><th>Exp Mo</th><th>Mobile</th><th>DOB</th><th>Age</th><th>State</th><th>Perm Address</th><th>Pres Address</th><th>UAN</th><th>ESIC</th>
+                                <th>Fixed Gross</th><th>Basic+DA</th><th>HRA</th><th>Conveyance</th><th>Special Allow</th><th>Other Allow</th>
+                                <th>Present</th><th>Half Day</th><th>Holiday</th><th>WO</th><th>Paid Days</th><th>Absent</th>
+                                <th>Basic+DA</th><th>HRA</th><th>Conveyance</th><th>Special Allow</th><th>Other Allow</th><th>OT Amount</th><th>Double OT Amount</th><th>Arrears</th><th>Other Deduct</th><th>Mobile Allo</th><th>Uniform</th><th>Total Wage</th>
+                                <th>Emplr EPF 12%</th><th>Emplr EPF 1%</th><th>Emplr ESI 3.25%</th><th>LWF</th><th>Service Charges</th><th>Total CTC Wage</th><th>CGST @ 9%</th><th>SGST @ 9%</th><th>Grand Total Invoice</th><th>Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>1</td><td>EMP001</td><td>Ramesh Kumar</td><td>M/s. HRD Integrated Manpower Solution</td><td>01/01/2024</td><td>Operator</td><td>Vertical</td><td>Production</td><td>Skilled I</td><td>2</td><td>6</td><td>9876543210</td><td>15/05/1995</td><td>31</td><td>KA</td><td>Bangalore</td><td>Bangalore</td><td>1010101010</td><td>31313131</td>
+                                <td>21000</td><td>15000</td><td>3000</td><td>1000</td><td>1000</td><td>1000</td>
+                                <td>26</td><td>0</td><td>1</td><td>4</td><td>31</td><td>0</td>
+                                <td>15000</td><td>3000</td><td>1000</td><td>1000</td><td>1000</td><td>1500</td><td>1000</td><td>0</td><td>0</td><td>200</td><td>0</td><td>22700</td>
+                                <td>1800</td><td>150</td><td>738</td><td>25</td><td>1135</td><td>26548</td><td>2389</td><td>2389</td><td>31326</td><td>Processed</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 7. OVERTIME REPORTS -->
+            <div id="ot-report" class="tab-content">
+                <h2>All Location OT Hours & Amount Consolidated Report</h2>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th rowspan="2">Sl.No</th>
+                                <th rowspan="2">Department & Section</th>
+                                <th colspan="2">Bangalore</th>
+                                <th colspan="2">Hyderabad</th>
+                                <th colspan="2">Mumbai</th>
+                                <th colspan="2">Faridabad (NCR)</th>
+                                <th colspan="2">Kerala</th>
+                            </tr>
+                            <tr>
+                                <th>OT Hrs</th><th>OT Amount</th>
+                                <th>OT Hrs</th><th>OT Amount</th>
+                                <th>OT Hrs</th><th>OT Amount</th>
+                                <th>OT Hrs</th><th>OT Amount</th>
+                                <th>OT Hrs</th><th>OT Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>1</td><td class="text-left">Admin Driver</td><td>45</td><td>5,625</td><td>12</td><td>1,500</td><td>0</td><td>0</td><td>10</td><td>1,250</td><td>8</td><td>1,000</td></tr>
+                            <tr><td>2</td><td class="text-left">Admin House Keeping</td><td>20</td><td>2,000</td><td>10</td><td>1,000</td><td>5</td><td>500</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+                            <tr><td>3</td><td class="text-left">Aristo Vertical Production</td><td>120</td><td>18,000</td><td>80</td><td>12,000</td><td>30</td><td>4,500</td><td>50</td><td>7,500</td><td>40</td><td>6,000</td></tr>
+                            <tr style="font-weight:bold; background:#e2e8f0;">
+                                <td colspan="2">Total</td>
+                                <td>185</td><td>25,625</td><td>102</td><td>14,500</td><td>35</td><td>5,000</td><td>60</td><td>8,750</td><td>48</td><td>7,000</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 8. LEAVE SALARY -->
+            <div id="leave-salary" class="tab-content">
+                <h2>Annual Leave Salary Calculation (Jan 2026 - Dec 2026)</h2>
+                <p>Note: No leaves permitted for contract workers; calculated annually and paid out based on actual worked days excluding Sundays and Holidays.</p>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Sl</th><th>Emp.Code</th><th>Name</th><th>Contractor</th><th>DOJ</th><th>Designation</th><th>Dept</th><th>Section</th><th>Skill</th>
+                                <th>Jan</th><th>Feb</th><th>Mar</th><th>Apr</th><th>May</th><th>Jun</th><th>Jul</th><th>Aug</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Dec</th>
+                                <th>Total Days</th><th>Leaves Claimed</th><th>Total Leaves</th><th>Rate of Wages</th><th>NET Amount</th><th>Fixed Gross</th><th>Basic+DA</th><th>Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>1</td><td>EMP001</td><td>Ramesh Kumar</td><td>M/s. HRD Integrated Manpower Solution</td><td>01/01/2024</td><td>Operator</td><td>Vertical</td><td>Production</td><td>Skilled I</td>
+                                <td>26</td><td>24</td><td>25</td><td>25</td><td>26</td><td>25</td><td>26</td><td>25</td><td>25</td><td>26</td><td>25</td><td>26</td>
+                                <td>304</td><td>0</td><td>15</td><td>576.92</td><td>8,654</td><td>21,000</td><td>15,000</td><td>Eligible</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 9. BONUS ACT -->
+            <div id="bonus" class="tab-content">
+                <h2>Bonus Calculation Sheet (April 2026 to March 2027)</h2>
+                <p>Calculated at <b>8.33%</b> of total earned Basic Salary + DA for employees completing min 30 working days.</p>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th rowspan="2">Sl</th><th rowspan="2">Old Emp ID</th><th rowspan="2">Emp ID</th><th rowspan="2">Employee Name</th><th rowspan="2">Contractor</th><th rowspan="2">DOJ</th><th rowspan="2">Department</th><th rowspan="2">Section</th><th rowspan="2">Designation</th><th rowspan="2">Skill Level</th>
+                                <th colspan="3">Apr-2026</th><th colspan="3">May-2026</th><th colspan="3">Jun-2026</th>
+                                <th rowspan="2">Total Payable Days</th><th rowspan="2">Total Worked Days</th><th rowspan="2">Total Earned Basic+DA</th><th rowspan="2">Bonus @ 8.33%</th><th rowspan="2">Remarks</th>
+                            </tr>
+                            <tr>
+                                <th>Payable</th><th>Worked</th><th>Earned B+DA</th>
+                                <th>Payable</th><th>Worked</th><th>Earned B+DA</th>
+                                <th>Payable</th><th>Worked</th><th>Earned B+DA</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>1</td><td>OLD001</td><td>EMP001</td><td>Ramesh Kumar</td><td>M/s. HRD Integrated Manpower Solution</td><td>01/01/2024</td><td>Vertical</td><td>Production</td><td>Operator</td><td>Skilled I</td>
+                                <td>30</td><td>25</td><td>15000</td>
+                                <td>31</td><td>26</td><td>15000</td>
+                                <td>30</td><td>25</td><td>15000</td>
+                                <td>91</td><td>76</td><td>45,000</td><td>3,748.50</td><td>Eligible</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 10. ANNUAL SALARY REVISION -->
+            <div id="salary-revision" class="tab-content">
+                <h2>Workers Consolidated Increment & Minimum Wage List 2026-27</h2>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th colspan="12">Basic Details</th>
+                                <th colspan="5">Historical Gross Salary</th>
+                                <th>Present Gross</th>
+                                <th colspan="2">Middle Promotion Details</th>
+                                <th colspan="6">Proposed Salary, Skill, Designation - 2026-27</th>
+                            </tr>
+                            <tr>
+                                <th>Sl</th><th>Emp ID</th><th>Names</th><th>Contractor</th><th>Location</th><th>DOJ</th><th>Designation</th><th>Dept</th><th>Section</th><th>Skill Level</th><th>Exp Yr</th><th>Exp Mo</th>
+                                <th>2021-22</th><th>2022-23</th><th>2023-24</th><th>2024-25</th><th>2025-26</th>
+                                <th>GROSS</th><th>Current Grade</th><th>Promoted Grade</th>
+                                <th>Old Salary</th><th>New Salary</th><th>Effective From</th><th>Remarks</th><th>Proposed Hike %</th><th>Proposed Hike Amt</th><th>Revised Total Gross</th><th>Proposed Skill</th><th>Proposed Designation</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>1</td><td>EMP001</td><td>Ramesh Kumar</td><td>M/s. HRD Integrated Manpower Solution</td><td>Bangalore</td><td>01/01/2024</td><td>Operator</td><td>Vertical</td><td>Production</td><td>Skilled I</td><td>2</td><td>6</td>
+                                <td>-</td><td>-</td><td>18000</td><td>19500</td><td>21000</td>
+                                <td>21000</td><td>Skilled I</td><td>Skilled II</td>
+                                <td>21000</td><td>23100</td><td>01/04/2026</td><td>Min Wage Rev</td><td>10%</td><td>2100</td><td>23100</td><td>Skilled Grade II</td><td>Senior Operator</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 11. EXIT & CLEARANCE -->
+            <div id="exit-clearance" class="tab-content">
+                <h2>Resignation, Exit & Clearance</h2>
+
+                <!-- Contractor: raise resignation -->
+                <div id="exit-contractor-section" style="display:none;">
+                    <div class="section-header">Raise Resignation / Report Exit</div>
+                    <div class="mini-form">
+                        <div class="form-group"><label>Worker</label>
+                            <select id="res-worker"><option value="">-- Select your worker --</option></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Type</label>
+                            <select id="res-type" onchange="onResTypeChange()">
+                                <option value="Normal">Normal Resignation (30 days notice)</option>
+                                <option value="Immediate">Immediate / Absconding (report now)</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>Resignation Date</label><input type="date" id="res-date" onchange="onResTypeChange()"></div>
+                        <div class="form-group"><label>Last Working Date</label><input type="date" id="res-lwd"></div>
+                        <div class="form-group full-width"><label>Reason</label><input type="text" id="res-reason"></div>
+                        <div class="form-group full-width"><label>Remarks</label><input type="text" id="res-remarks"></div>
+                        <div class="form-group full-width"><button type="button" onclick="submitResignation()">Submit to HR</button></div>
+                    </div>
+                    <div class="section-header">My Submitted Resignations</div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead><tr><th>Worker</th><th>Type</th><th>Resign Date</th><th>Last Working Date</th><th>Status</th><th>Final Status</th></tr></thead>
+                            <tbody id="my-resignations-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- HR: review resignations + initiate/complete exit clearance -->
+                <div id="exit-hr-section" style="display:none;">
+                    <div class="section-header">Resignations — Pending HR Review</div>
+                    <ul class="notif-list" id="resignation-notif-list"></ul>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead><tr><th>Worker</th><th>Contractor</th><th>Division</th><th>Type</th><th>Resign Date</th><th>Last Working Date</th><th>Reason</th><th>Status</th><th>Action</th></tr></thead>
+                            <tbody id="hr-resignations-body"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="section-header">Exit Clearance Status</div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead><tr><th>Worker</th><th>Division</th><th>Sent to Dept.</th><th>Status</th><th>Dept Remarks</th><th>Action</th></tr></thead>
+                            <tbody id="hr-clearance-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Production Manager / Supervisor: give clearance -->
+                <div id="exit-department-section" style="display:none;">
+                    <div class="section-header">Pending Exit Clearances — My Division</div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead><tr><th>Worker</th><th>Emp ID</th><th>Last Working Date</th><th>Status</th><th>Remarks</th><th>Action</th></tr></thead>
+                            <tbody id="dept-clearance-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="exit-settlement-form-wrapper">
+                <div class="section-header">Settlement & Exit Clearance Form (Reference / Handover Checklist)</div>
+                <form style="grid-template-columns: repeat(4, 1fr);">
+                    <div class="form-group"><label>Worker Name</label><input type="text"></div>
+                    <div class="form-group"><label>Emp ID</label><input type="text"></div>
+                    <div class="form-group"><label>Department</label><input type="text"></div>
+                    <div class="form-group"><label>Section</label><input type="text"></div>
+                    <div class="form-group"><label>Contractor</label><input type="text"></div>
+                    <div class="form-group"><label>Date of Joining</label><input type="date"></div>
+                    <div class="form-group"><label>Date of Leaving</label><input type="date"></div>
+                    <div class="form-group"><label>Notice Served Days</label><input type="number"></div>
+                </form>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Sl. No</th>
+                                <th>Dept</th>
+                                <th>Items</th>
+                                <th>Handover Yes/No</th>
+                                <th>Recovery Amount</th>
+                                <th>Signature / Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>1</td><td class="text-left">Floor in charge/ Production Manager</td><td class="text-left">Tools</td><td><select><option>Yes</option><option>No</option></select></td><td><input type="number" value="0"></td><td><input type="text"></td></tr>
+                            <tr><td>2</td><td class="text-left">Maintenance</td><td class="text-left">Tools & Machinery's</td><td><select><option>Yes</option><option>No</option></select></td><td><input type="number" value="0"></td><td><input type="text"></td></tr>
+                            <tr><td>3</td><td class="text-left">Store</td><td class="text-left">PPE Kit</td><td><select><option>Yes</option><option>No</option></select></td><td><input type="number" value="0"></td><td><input type="text"></td></tr>
+                            <tr><td>4</td><td class="text-left">Contractors</td><td class="text-left">ID Cards</td><td><select><option>Yes</option><option>No</option></select></td><td><input type="number" value="0"></td><td><input type="text"></td></tr>
+                            <tr><td>5</td><td class="text-left">Account</td><td class="text-left">Petty Cash/Others</td><td><select><option>Yes</option><option>No</option></select></td><td><input type="number" value="0"></td><td><input type="text"></td></tr>
+                            <tr><td>6</td><td class="text-left">Admin</td><td class="text-left">PG Clearance / Accomodation</td><td><select><option>Yes</option><option>No</option></select></td><td><input type="number" value="0"></td><td><input type="text"></td></tr>
+                            <tr><td>7</td><td class="text-left">HR</td><td class="text-left">Exit Formalities</td><td><select><option>Yes</option><option>No</option></select></td><td><input type="number" value="0"></td><td><input type="text"></td></tr>
+                            <tr style="font-weight:bold; background:#f1f5f9;"><td colspan="4" class="text-right">Total Deduction Amount</td><td>0.00</td><td></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div style="margin-top: 15px; background: #f8fafc; padding: 10px; border: 1px solid var(--border-color);">
+                    <b>Pending Salary Details:</b>
+                    <ul>
+                        <li>Payable Days: <input type="number" style="width:60px;"></li>
+                        <li>Due Salary Amount: <input type="number" style="width:100px;"></li>
+                    </ul>
+                    <p><i>Note: I have read and understood the above contents in my full and final settlement form and I voluntarily accept and adhere to the same.</i></p>
+                    <div style="display:flex; justify-content:space-between; margin-top:20px;">
+                        <div>Employee Signature: __________________</div>
+                        <div>Date: __________________</div>
+                    </div>
+                </div>
+                </div><!-- /#exit-settlement-form-wrapper -->
+            </div>
+        </main>
+    </div>
+    </div><!-- /#app-shell -->
+
+    <script>
+        /* =========================================================
+           ROLE-BASED ACCESS CONTROL
+           NOTE: this is a client-side demo. Roles gate what the UI
+           shows/allows here, but this file has no server or database,
+           so it is not a substitute for real authentication/authorization.
+           ========================================================= */
+        const ROLE_LABELS = {
+            hr_admin: 'HR Admin',
+            contractor: 'Contractor',
+            production_manager: 'Production Manager',
+            supervisor: 'Supervisor',
+            gm_production: 'GM Production'
+        };
+
+        const ROLE_DEFAULT_TAB = {
+            hr_admin: 'master',
+            contractor: 'master',
+            production_manager: 'requisition-form',
+            supervisor: 'requisition-form',
+            gm_production: 'requisition-tracker'
+        };
+
+        const DIVISIONS = ['Aristo Vertical Production', 'Aristo Cabinetry Production', 'Art of Lacquering', 'Aristo Quality and Service', 'Aristo Cabinetry Site Installation', 'Admin Department'];
+        const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        // Payroll period chosen in the Payroll tab (defaults to the current month); saved with the data
+        let CURRENT_PERIOD = MONTHS[new Date().getMonth()] + ' ' + new Date().getFullYear();
+
+        // Master contractor list (name + base location)
+        const CONTRACTORS = [
+            { name: 'M/s. HRD Integrated Manpower Solution', location: 'Bangalore' },
+            { name: 'M/s.Nanda Enterprises', location: 'Bangalore' },
+            { name: 'M/s.Pragathi Enterprises', location: 'Bangalore' },
+            { name: 'M/s. Captain Security & Investigation Service', location: 'Faridabad' },
+            { name: 'M/s.Prasanna Housekeeping Glass Cleaning & Security Services', location: 'Hyderabad' },
+            { name: 'Chaitanya Services', location: 'Mumbai' },
+            { name: 'Clearway Facility Services', location: 'Kottayam' },
+            { name: 'M/s. Divya Man Power Resources PVT. LTD,', location: 'Bangalore' }
+        ];
+
+        let currentRole = null;
+        let currentContractorName = '';
+        let currentDivision = '';
+        let pendingRole = null;
+        let knownContractors = new Set(CONTRACTORS.map(c => c.name));
+
+        function populateContractorDropdowns() {
+            const names = Array.from(knownContractors);
+            const targets = ['contractor-name-input', 'f-contractor'];
+            targets.forEach(id => {
+                const sel = document.getElementById(id);
+                if (!sel) return;
+                const current = sel.value;
+                sel.innerHTML = '<option value="">-- Select Contractor --</option>';
+                CONTRACTORS.forEach(c => {
+                    sel.innerHTML += '<option value="' + c.name + '">' + c.name + ' — ' + c.location + '</option>';
+                });
+                // include any contractor names picked up later (e.g. typed into the requisition assignment field) that aren't in the master list
+                names.filter(n => !CONTRACTORS.some(c => c.name === n)).forEach(n => {
+                    sel.innerHTML += '<option value="' + n + '">' + n + '</option>';
+                });
+                if (current) sel.value = current;
+            });
+        }
+
+        function selectRole(role) {
+            pendingRole = role;
+            document.querySelectorAll('.role-option').forEach(el => {
+                el.classList.toggle('selected', el.dataset.role === role);
+            });
+            document.getElementById('contractor-name-field').style.display = (role === 'contractor') ? 'block' : 'none';
+            document.getElementById('division-field').style.display = (role === 'production_manager' || role === 'supervisor') ? 'block' : 'none';
+            document.getElementById('login-btn').disabled = false;
+            document.getElementById('login-error').style.display = 'none';
+        }
+
+        function login() {
+            if (!pendingRole) {
+                document.getElementById('login-error').style.display = 'block';
+                return;
+            }
+            const err = document.getElementById('login-error');
+            if (pendingRole === 'contractor') {
+                const name = document.getElementById('contractor-name-input').value.trim();
+                if (!name) {
+                    err.textContent = 'Please enter your Contractor / Agency name.';
+                    err.style.display = 'block';
+                    return;
+                }
+                currentContractorName = name;
+                knownContractors.add(name);
+            }
+            if (pendingRole === 'production_manager' || pendingRole === 'supervisor') {
+                const div = document.getElementById('division-select').value;
+                if (!div) {
+                    err.textContent = 'Please select your assigned division.';
+                    err.style.display = 'block';
+                    return;
+                }
+                currentDivision = div;
+            }
+            currentRole = pendingRole;
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('app-shell').style.display = 'block';
+            applyRolePermissions();
+        }
+
+        function logout() {
+            currentRole = null;
+            pendingRole = null;
+            currentContractorName = '';
+            currentDivision = '';
+            document.getElementById('login-btn').disabled = true;
+            document.querySelectorAll('.role-option').forEach(el => el.classList.remove('selected'));
+            document.getElementById('contractor-name-field').style.display = 'none';
+            document.getElementById('contractor-name-input').value = '';
+            document.getElementById('division-field').style.display = 'none';
+            document.getElementById('division-select').value = '';
+            document.getElementById('app-shell').style.display = 'none';
+            document.getElementById('login-screen').style.display = 'flex';
+        }
+
+        function applyRolePermissions() {
+            const badge = document.getElementById('role-badge');
+            let badgeExtra = '';
+            if (currentRole === 'contractor') badgeExtra = ' — ' + currentContractorName;
+            if (currentRole === 'production_manager' || currentRole === 'supervisor') badgeExtra = ' — ' + currentDivision;
+            badge.textContent = ROLE_LABELS[currentRole] + badgeExtra;
+
+            let firstVisibleTab = null;
+            document.querySelectorAll('nav li[data-roles]').forEach(li => {
+                const roles = li.dataset.roles.split(',');
+                const visible = roles.includes(currentRole);
+                li.style.display = visible ? '' : 'none';
+                if (visible && !firstVisibleTab) {
+                    firstVisibleTab = li.querySelector('a').getAttribute('href').substring(1);
+                }
+            });
+
+            const isContractor = (currentRole === 'contractor');
+            const isHR = (currentRole === 'hr_admin');
+            const isPM = (currentRole === 'production_manager' || currentRole === 'supervisor');
+
+            // ---- Master Data tab ----
+            document.getElementById('master-contractor-note').style.display = isContractor ? 'block' : 'none';
+            document.getElementById('master-contractor-info').style.display = isContractor ? 'block' : 'none';
+            document.getElementById('master-form').style.display = isContractor ? 'grid' : (isHR ? 'grid' : 'none');
+            document.getElementById('master-actions-col').style.display = isHR ? '' : 'none';
+            document.getElementById('f-empid-group').style.display = isContractor ? 'none' : 'block';
+            document.getElementById('master-save-btn').textContent = isContractor ? 'Submit for HR Verification' : 'Save Worker Master Data';
+
+            // ---- Requisition form tab ----
+            document.getElementById('requisition-hr-note').style.display = isHR ? 'block' : 'none';
+            document.getElementById('requisition-own-section').style.display = isHR ? 'none' : 'block';
+            document.getElementById('requisition-form-note').style.display = isPM ? 'block' : 'none';
+            if (isPM) {
+                document.getElementById('rq-division').value = currentDivision;
+                toggleTypeFields();
+                updateReqBudgetDisplay();
+            }
+
+            // ---- Requisition tracker tab ----
+            document.getElementById('rt-approval-header').style.display = isHR ? 'block' : 'none';
+            document.getElementById('rt-approval-wrapper').style.display = isHR ? 'block' : 'none';
+            document.getElementById('rt-assigned-header').style.display = isContractor ? 'block' : 'none';
+            document.getElementById('rt-assigned-wrapper').style.display = isContractor ? 'block' : 'none';
+            document.getElementById('cand-actions-col').style.display = isHR ? '' : 'none';
+
+            // ---- Exit & Clearance tab ----
+            document.getElementById('exit-contractor-section').style.display = isContractor ? 'block' : 'none';
+            document.getElementById('exit-hr-section').style.display = isHR ? 'block' : 'none';
+            document.getElementById('exit-department-section').style.display = isPM ? 'block' : 'none';
+            document.getElementById('exit-settlement-form-wrapper').style.display = isContractor ? 'none' : 'block';
+
+            // ---- Payroll tab ----
+            document.getElementById('payroll-hr-controls').style.display = isHR ? 'block' : 'none';
+            document.getElementById('payroll-actions-col').style.display = isContractor ? '' : 'none';
+
+            renderWorkersTable();
+            renderPendingApprovals();
+            renderDivisionWorkers();
+            renderRequisitions();
+            renderCandidates();
+            renderResignations();
+            renderExitClearance();
+            renderPayroll();
+            renderWageRegister();
+            renderInvoices();
+            updateAttendanceNote();
+
+            const defaultTab = ROLE_DEFAULT_TAB[currentRole] || firstVisibleTab;
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+            const targetContent = document.getElementById(defaultTab);
+            if (targetContent) targetContent.classList.add('active');
+            const targetLink = document.querySelector('nav a[href="#' + defaultTab + '"]');
+            if (targetLink) targetLink.classList.add('active');
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            event.currentTarget.classList.add('active');
+        }
+
+        function statusBadge(status) {
+            let cls = 'badge-neutral';
+            if (status === 'Active') cls = 'badge-active';
+            else if (['Pending HR Verification', 'Returned for Correction', 'Onboarding - Pending Details'].includes(status)) cls = 'badge-pending';
+            else if (['Rejected', 'Absconded', 'Terminated'].includes(status)) cls = 'badge-danger';
+            else if (['Resigned', 'Left'].includes(status)) cls = 'badge-neutral';
+            return '<span class="badge ' + cls + '">' + status + '</span>';
+        }
+
+        /* =========================================================
+           IN-MEMORY DATA STORE (persisted to localStorage as one blob)
+           ========================================================= */
+        let workers = [];
+        let pendingSubmissions = [];
+        let requisitions = [];
+        let candidates = [];
+        let resignations = [];
+        let exitClearances = [];
+        let attendanceRecords = [];
+        let payrollRuns = [];
+        let wageRegisters = [];
+        let invoices = [];
+        let auditLog = [];
+        let empIdCounters = {};
+        let nextReqId = 1, nextCandId = 1, nextResId = 1, nextClearId = 1, nextInvoiceNo = 1001;
+        let verifiedPeriods = {};   // { 'August 2026': true } — attendance verified per payroll period
+        const DEFAULT_RATES = { pf: 12, esi: 0.75, pt: 200, pfEr: 13, esiEr: 3.25, pfCeiling: 15000, esiLimit: 21000, paidDays: 26, service: 5, gst: 18 };
+        let rateConfig = Object.assign({}, DEFAULT_RATES);
+        const RATE_INPUTS = { pf: 'cfg-pf', esi: 'cfg-esi', pt: 'cfg-pt', pfEr: 'cfg-pf-er', esiEr: 'cfg-esi-er', pfCeiling: 'cfg-pf-ceiling', esiLimit: 'cfg-esi-limit', paidDays: 'cfg-paid-days', service: 'cfg-service', gst: 'cfg-gst' };
+        let currentReviewId = null;
+        let currentCandidateReqId = null;
+        let gradeSalaryBudget = {
+            'Helper Grade I': 15000,
+            'Helper Grade II': 16000,
+            'Semi Skilled Grade I': 17500,
+            'Semi Skilled Grade II': 19000,
+            'Skilled Grade I': 21000,
+            'Skilled Grade II': 23000,
+            'Highly Skilled Grade I': 25000,
+            'Highly Skilled Grade II': 27500,
+            'Highly Skilled Grade III': 30000
+        };
+
+        function addAudit(text) {
+            auditLog.unshift({ date: new Date().toLocaleString(), text: text });
+            if (auditLog.length > 200) auditLog.length = 200;
+        }
+
+        function generateEmployeeId(contractorName) {
+            const prefix = ((contractorName || 'XX').replace(/[^a-zA-Z]/g, '').substring(0, 2).toUpperCase()) || 'XX';
+            if (!empIdCounters[prefix]) empIdCounters[prefix] = 1;
+            const num = empIdCounters[prefix]++;
+            return prefix + String(num).padStart(3, '0');
+        }
+
+        function persistAll() {
+            try {
+                localStorage.setItem('kbros_hr_data_v2', JSON.stringify({
+                    workers, pendingSubmissions, requisitions, candidates, resignations, exitClearances,
+                    attendanceRecords, payrollRuns, wageRegisters, invoices, auditLog, empIdCounters,
+                    nextReqId, nextCandId, nextResId, nextClearId, nextInvoiceNo, verifiedPeriods, rateConfig, currentPeriod: CURRENT_PERIOD,
+                    knownContractors: Array.from(knownContractors), gradeSalaryBudget
+                }));
+            } catch (e) { /* ignore — storage unavailable */ }
+        }
+
+        function loadAllData() {
+            try {
+                const raw = localStorage.getItem('kbros_hr_data_v2');
+                if (raw) {
+                    const d = JSON.parse(raw);
+                    workers = d.workers || [];
+                    pendingSubmissions = d.pendingSubmissions || [];
+                    requisitions = d.requisitions || [];
+                    candidates = d.candidates || [];
+                    resignations = d.resignations || [];
+                    exitClearances = d.exitClearances || [];
+                    attendanceRecords = d.attendanceRecords || [];
+                    payrollRuns = d.payrollRuns || [];
+                    wageRegisters = d.wageRegisters || [];
+                    invoices = d.invoices || [];
+                    auditLog = d.auditLog || [];
+                    empIdCounters = d.empIdCounters || {};
+                    nextReqId = d.nextReqId || 1;
+                    nextCandId = d.nextCandId || 1;
+                    nextResId = d.nextResId || 1;
+                    nextClearId = d.nextClearId || 1;
+                    nextInvoiceNo = d.nextInvoiceNo || 1001;
+                    verifiedPeriods = d.verifiedPeriods || {};
+                    // older saved data had a single flag for the old fixed period
+                    if (d.attendanceVerified && !d.verifiedPeriods) verifiedPeriods['August 2026'] = true;
+                    if (d.rateConfig) rateConfig = Object.assign({}, DEFAULT_RATES, d.rateConfig);
+                    if (d.currentPeriod) CURRENT_PERIOD = d.currentPeriod;
+                    else if (d.payrollRuns && d.payrollRuns.length) CURRENT_PERIOD = 'August 2026';
+                    if (d.gradeSalaryBudget) gradeSalaryBudget = Object.assign(gradeSalaryBudget, d.gradeSalaryBudget);
+                    (d.knownContractors || []).forEach(n => knownContractors.add(n));
+                    if (workers.length) return;
+                }
+            } catch (e) { /* fall through to seed data */ }
+            seedSampleData();
+        }
+
+        function seedSampleData() {
+            workers = [
+                { empId: 'EMP001', name: 'Ramesh Kumar', contractor: 'M/s. HRD Integrated Manpower Solution', division: 'Aristo Vertical Production', location: 'Bangalore', doj: '2024-01-01', designation: 'Operator', department: 'Aristo Vertical', section: 'Production', skill: 'Skilled Grade I', expYr: 2, expMo: 6, mobile: '9876543210', emergency: '', dob: '1995-05-15', age: 31, state: 'KA', permAddr: 'Bangalore', presAddr: 'Bangalore', aadhar: '', pan: '', uan: '1010101010', esi: '31313131', ppeDate: '', basicDa: 15000, hra: 3000, gross: 21000, shift: 'General Shift (8:30 AM - 5:00 PM)', status: 'Active' },
+                { empId: 'EMP002', name: 'Suresh Nair', contractor: 'M/s.Nanda Enterprises', division: 'Aristo Cabinetry Production', location: 'Kerala', doj: '2023-11-10', designation: 'Helper', department: 'Cabinetry', section: 'Warehouse', skill: 'Helper Grade I', expYr: 3, expMo: 1, mobile: '9845123456', emergency: '', dob: '1998-02-20', age: 28, state: 'KL', permAddr: 'Kochi', presAddr: 'Kochi', aadhar: '', pan: '', uan: '', esi: '', ppeDate: '', basicDa: 12500, hra: 2500, gross: 17500, shift: 'First Shift (6:00 AM - 2:30 PM)', status: 'Active' },
+                { empId: 'EMP003', name: 'Anjali Reddy', contractor: 'M/s. HRD Integrated Manpower Solution', division: 'Aristo Quality and Service', location: 'Hyderabad', doj: '2025-03-05', designation: 'Quality Checker', department: 'Quality', section: 'Quality', skill: 'Semi Skilled Grade II', expYr: 1, expMo: 4, mobile: '9900112233', emergency: '', dob: '1999-09-09', age: 27, state: 'TG', permAddr: 'Hyderabad', presAddr: 'Hyderabad', aadhar: '', pan: '', uan: '', esi: '', ppeDate: '', basicDa: 13500, hra: 2700, gross: 18700, shift: 'General Shift (8:30 AM - 5:00 PM)', status: 'Active' }
+            ];
+        }
+
+        /* =========================================================
+           WORKERS MASTER DATA + CONTRACTOR SUBMISSIONS / HR APPROVAL
+           ========================================================= */
+        function renderWorkersTable() {
+            const tbody = document.getElementById('workers-table-body');
+            let list = workers;
+            const filterLabel = document.getElementById('master-filter-label');
+            if (currentRole === 'contractor') {
+                list = workers.filter(w => w.contractor.trim().toLowerCase() === currentContractorName.trim().toLowerCase());
+                filterLabel.textContent = ' — showing workers for "' + currentContractorName + '"';
+            } else {
+                filterLabel.textContent = '';
+            }
+            tbody.innerHTML = '';
+            if (list.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="13">No worker records found.</td></tr>';
+                return;
+            }
+            list.forEach((w) => {
+                const realIndex = workers.indexOf(w);
+                let actionsCell = '';
+                if (currentRole === 'hr_admin') {
+                    actionsCell = '<td>' +
+                        '<button type="button" class="action-btn edit" onclick="editWorker(' + realIndex + ')">Edit</button>' +
+                        '<button type="button" class="action-btn delete" onclick="deleteWorker(' + realIndex + ')">Delete</button>' +
+                        '</td>';
+                }
+                const tr = document.createElement('tr');
+                tr.innerHTML =
+                    '<td>' + w.empId + '</td>' +
+                    '<td class="text-left">' + w.name + '</td>' +
+                    '<td>' + w.contractor + '</td>' +
+                    '<td>' + (w.division || '-') + '</td>' +
+                    '<td>' + w.location + '</td>' +
+                    '<td>' + w.designation + '</td>' +
+                    '<td>' + w.department + '</td>' +
+                    '<td>' + w.skill + '</td>' +
+                    '<td>' + w.doj + '</td>' +
+                    '<td>' + w.mobile + '</td>' +
+                    '<td>' + statusBadge(w.status || 'Active') + '</td>' +
+                    '<td>' + w.gross + '</td>' +
+                    actionsCell;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function gatherWorkerFormRecord() {
+            return {
+                name: document.getElementById('f-name').value.trim(),
+                empId: document.getElementById('f-empid').value.trim(),
+                contractor: document.getElementById('f-contractor').value.trim(),
+                division: document.getElementById('f-division').value,
+                location: document.getElementById('f-location').value,
+                doj: document.getElementById('f-doj').value,
+                designation: document.getElementById('f-designation').value.trim(),
+                department: document.getElementById('f-department').value,
+                section: document.getElementById('f-section').value,
+                skill: document.getElementById('f-skill').value,
+                expYr: document.getElementById('f-expyr').value,
+                expMo: document.getElementById('f-expmo').value,
+                mobile: document.getElementById('f-mobile').value.trim(),
+                emergency: document.getElementById('f-emergency').value.trim(),
+                dob: document.getElementById('f-dob').value,
+                age: document.getElementById('f-age').value,
+                state: document.getElementById('f-state').value.trim(),
+                permAddr: document.getElementById('f-permaddr').value.trim(),
+                presAddr: document.getElementById('f-presaddr').value.trim(),
+                aadhar: document.getElementById('f-aadhar').value.trim(),
+                pan: document.getElementById('f-pan').value.trim(),
+                uan: document.getElementById('f-uan').value.trim(),
+                esi: document.getElementById('f-esi').value.trim(),
+                ppeDate: document.getElementById('f-ppedate').value,
+                basicDa: document.getElementById('f-basicda').value,
+                hra: document.getElementById('f-hra').value,
+                gross: document.getElementById('f-gross').value,
+                shift: document.getElementById('f-shift').value
+            };
+        }
+
+        function saveWorker() {
+            const record = gatherWorkerFormRecord();
+
+            if (currentRole === 'hr_admin') {
+                if (!record.empId || !record.name) {
+                    alert('Employee Name and Employee ID are required.');
+                    return;
+                }
+                const idxField = document.getElementById('f-record-index');
+                if (idxField.value !== '') {
+                    const existingStatus = workers[parseInt(idxField.value, 10)].status;
+                    workers[parseInt(idxField.value, 10)] = Object.assign({}, record, { status: existingStatus || 'Active' });
+                    addAudit('HR updated worker master data for ' + record.empId);
+                } else {
+                    record.status = 'Active';
+                    workers.push(record);
+                    addAudit('HR directly added worker ' + record.empId + ' — ' + record.name);
+                }
+                persistAll();
+                clearWorkerForm();
+                renderWorkersTable();
+                return;
+            }
+
+            if (currentRole === 'contractor') {
+                if (!record.name || !record.designation) {
+                    alert('Employee Name and Designation are required.');
+                    return;
+                }
+                record.contractor = currentContractorName;
+                const pendingIdField = document.getElementById('f-pending-id');
+                if (pendingIdField.value) {
+                    const idx = pendingSubmissions.findIndex(p => p.id === pendingIdField.value);
+                    if (idx > -1) {
+                        pendingSubmissions[idx] = Object.assign({}, record, { id: pendingIdField.value, status: 'Pending HR Verification', hrRemarks: '' });
+                    }
+                    addAudit(currentContractorName + ' resubmitted employee ' + record.name + ' for HR verification');
+                } else {
+                    record.id = 'PS' + Date.now();
+                    record.status = 'Pending HR Verification';
+                    record.hrRemarks = '';
+                    pendingSubmissions.push(record);
+                    addAudit(currentContractorName + ' submitted new employee ' + record.name + ' for HR verification');
+                }
+                persistAll();
+                clearWorkerForm();
+                renderPendingApprovals();
+                return;
+            }
+        }
+
+        function editWorker(index) {
+            if (currentRole !== 'hr_admin') return;
+            const w = workers[index];
+            document.getElementById('f-record-index').value = index;
+            document.getElementById('f-pending-id').value = '';
+            document.getElementById('f-empid').value = w.empId;
+            document.getElementById('f-name').value = w.name;
+            document.getElementById('f-contractor').value = w.contractor;
+            document.getElementById('f-division').value = w.division || DIVISIONS[0];
+            document.getElementById('f-location').value = w.location;
+            document.getElementById('f-doj').value = w.doj;
+            document.getElementById('f-designation').value = w.designation;
+            document.getElementById('f-department').value = w.department;
+            document.getElementById('f-section').value = w.section;
+            document.getElementById('f-skill').value = w.skill;
+            document.getElementById('f-expyr').value = w.expYr;
+            document.getElementById('f-expmo').value = w.expMo;
+            document.getElementById('f-mobile').value = w.mobile;
+            document.getElementById('f-emergency').value = w.emergency;
+            document.getElementById('f-dob').value = w.dob;
+            document.getElementById('f-age').value = w.age;
+            document.getElementById('f-state').value = w.state;
+            document.getElementById('f-permaddr').value = w.permAddr;
+            document.getElementById('f-presaddr').value = w.presAddr;
+            document.getElementById('f-aadhar').value = w.aadhar;
+            document.getElementById('f-pan').value = w.pan;
+            document.getElementById('f-uan').value = w.uan;
+            document.getElementById('f-esi').value = w.esi;
+            document.getElementById('f-ppedate').value = w.ppeDate;
+            document.getElementById('f-basicda').value = w.basicDa;
+            document.getElementById('f-hra').value = w.hra;
+            document.getElementById('f-gross').value = w.gross;
+            document.getElementById('f-shift').value = w.shift || DIVISIONS[0];
+            document.getElementById('master-save-btn').textContent = 'Update Worker Master Data';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function deleteWorker(index) {
+            if (currentRole !== 'hr_admin') return;
+            if (!confirm('Remove this worker record?')) return;
+            workers.splice(index, 1);
+            persistAll();
+            renderWorkersTable();
+        }
+
+        function clearWorkerForm() {
+            document.getElementById('master-form').reset();
+            document.getElementById('f-record-index').value = '';
+            document.getElementById('f-pending-id').value = '';
+            document.getElementById('master-save-btn').textContent = (currentRole === 'contractor') ? 'Submit for HR Verification' : 'Save Worker Master Data';
+        }
+
+        function editPendingSubmission(id) {
+            const p = pendingSubmissions.find(x => x.id === id);
+            if (!p) return;
+            document.getElementById('f-record-index').value = '';
+            document.getElementById('f-pending-id').value = id;
+            document.getElementById('f-name').value = p.name || '';
+            document.getElementById('f-contractor').value = p.contractor || currentContractorName;
+            document.getElementById('f-division').value = p.division || DIVISIONS[0];
+            document.getElementById('f-location').value = p.location || DIVISIONS[0];
+            document.getElementById('f-doj').value = p.doj || '';
+            document.getElementById('f-designation').value = p.designation || '';
+            document.getElementById('f-department').value = p.department || '';
+            document.getElementById('f-section').value = p.section || '';
+            document.getElementById('f-skill').value = p.skill || '';
+            document.getElementById('f-expyr').value = p.expYr || '';
+            document.getElementById('f-expmo').value = p.expMo || '';
+            document.getElementById('f-mobile').value = p.mobile || '';
+            document.getElementById('f-emergency').value = p.emergency || '';
+            document.getElementById('f-dob').value = p.dob || '';
+            document.getElementById('f-age').value = p.age || '';
+            document.getElementById('f-state').value = p.state || '';
+            document.getElementById('f-permaddr').value = p.permAddr || '';
+            document.getElementById('f-presaddr').value = p.presAddr || '';
+            document.getElementById('f-aadhar').value = p.aadhar || '';
+            document.getElementById('f-pan').value = p.pan || '';
+            document.getElementById('f-uan').value = p.uan || '';
+            document.getElementById('f-esi').value = p.esi || '';
+            document.getElementById('f-ppedate').value = p.ppeDate || '';
+            document.getElementById('f-basicda').value = p.basicDa || '';
+            document.getElementById('f-hra').value = p.hra || '';
+            document.getElementById('f-gross').value = p.gross || '';
+            document.getElementById('f-shift').value = p.shift || DIVISIONS[0];
+            document.getElementById('master-save-btn').textContent = 'Resubmit for HR Verification';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function renderPendingApprovals() {
+            const header = document.getElementById('pending-approvals-header');
+            const wrapper = document.getElementById('pending-approvals-wrapper');
+            const tbody = document.getElementById('pending-table-body');
+
+            let list = [];
+            if (currentRole === 'hr_admin') list = pendingSubmissions;
+            else if (currentRole === 'contractor') list = pendingSubmissions.filter(p => (p.contractor || '').trim().toLowerCase() === currentContractorName.trim().toLowerCase());
+
+            const show = (currentRole === 'hr_admin') || list.length > 0;
+            header.style.display = show ? 'block' : 'none';
+            wrapper.style.display = show ? 'block' : 'none';
+            if (!show) return;
+
+            tbody.innerHTML = '';
+            if (!list.length) {
+                tbody.innerHTML = '<tr><td colspan="8">No pending submissions.</td></tr>';
+                return;
+            }
+            list.forEach(p => {
+                let actions = '-';
+                if (currentRole === 'hr_admin' && p.status !== 'Rejected') {
+                    actions = '<button type="button" class="action-btn edit" onclick="approveSubmission(\'' + p.id + '\')">Approve</button>' +
+                        '<button type="button" class="action-btn" style="background:#d97706;" onclick="returnForCorrection(\'' + p.id + '\')">Return</button>' +
+                        '<button type="button" class="action-btn delete" onclick="rejectSubmission(\'' + p.id + '\')">Reject</button>';
+                } else if (currentRole === 'contractor' && (p.status === 'Returned for Correction' || p.status === 'Onboarding - Pending Details')) {
+                    actions = '<button type="button" class="action-btn edit" onclick="editPendingSubmission(\'' + p.id + '\')">Edit & Resubmit</button>';
+                }
+                const tr = document.createElement('tr');
+                tr.innerHTML = '<td class="text-left">' + p.name + '</td><td>' + p.contractor + '</td><td>' + (p.division || '-') + '</td><td>' + p.designation + '</td><td>' + p.mobile + '</td>' +
+                    '<td>' + statusBadge(p.status) + '</td><td>' + (p.hrRemarks || '-') + '</td><td>' + actions + '</td>';
+                tbody.appendChild(tr);
+            });
+        }
+
+        function approveSubmission(id) {
+            if (currentRole !== 'hr_admin') return;
+            const idx = pendingSubmissions.findIndex(p => p.id === id);
+            if (idx === -1) return;
+            const rec = pendingSubmissions[idx];
+            const empId = generateEmployeeId(rec.contractor);
+            const worker = Object.assign({}, rec, { empId: empId, status: 'Active' });
+            delete worker.id;
+            delete worker.hrRemarks;
+            workers.push(worker);
+            pendingSubmissions.splice(idx, 1);
+            addAudit('HR approved employee ' + rec.name + ' from ' + rec.contractor + ' — Employee ID ' + empId + ' generated');
+            persistAll();
+            renderPendingApprovals();
+            renderWorkersTable();
+            renderDivisionWorkers();
+            alert('Approved. Employee ID ' + empId + ' generated for ' + rec.name + '.');
+        }
+
+        function returnForCorrection(id) {
+            if (currentRole !== 'hr_admin') return;
+            const p = pendingSubmissions.find(x => x.id === id);
+            if (!p) return;
+            const remarks = prompt('What needs to be corrected?', '');
+            if (remarks === null) return;
+            p.status = 'Returned for Correction';
+            p.hrRemarks = remarks;
+            addAudit('HR returned submission for ' + p.name + ' to ' + p.contractor + ' for correction');
+            persistAll();
+            renderPendingApprovals();
+        }
+
+        function rejectSubmission(id) {
+            if (currentRole !== 'hr_admin') return;
+            const p = pendingSubmissions.find(x => x.id === id);
+            if (!p) return;
+            const remarks = prompt('Reason for rejection (optional):', '') || '';
+            p.status = 'Rejected';
+            p.hrRemarks = remarks;
+            addAudit('HR rejected submission for ' + p.name + ' from ' + p.contractor);
+            persistAll();
+            renderPendingApprovals();
+        }
+
+        /* =========================================================
+           DIVISION-SCOPED WORKFORCE VIEW (Production Manager / Supervisor)
+           ========================================================= */
+        function renderDivisionWorkers() {
+            const isPM = (currentRole === 'production_manager' || currentRole === 'supervisor');
+            document.getElementById('manpower-division-view').style.display = isPM ? 'block' : 'none';
+            document.getElementById('manpower-hr-view').style.display = isPM ? 'none' : 'block';
+            if (!isPM) return;
+            const tbody = document.getElementById('division-workers-body');
+            const list = workers.filter(w => w.division === currentDivision);
+            tbody.innerHTML = '';
+            if (!list.length) {
+                tbody.innerHTML = '<tr><td colspan="10">No workers currently allocated to this division.</td></tr>';
+                return;
+            }
+            list.forEach(w => {
+                tbody.innerHTML += '<tr><td>' + w.empId + '</td><td class="text-left">' + w.name + '</td><td>' + w.contractor + '</td><td>' + w.skill + '</td><td>' + w.designation + '</td><td>' + w.department + '</td><td>' + w.section + '</td><td>' + w.doj + '</td><td>' + (w.shift || '-') + '</td><td>' + statusBadge(w.status || 'Active') + '</td></tr>';
+            });
+        }
+
+        /* =========================================================
+           MANPOWER REQUISITION + RECRUITMENT
+           ========================================================= */
+        function toggleTypeFields() {
+            const type = document.getElementById('rq-type').value;
+            document.getElementById('rq-new-fields').style.display = (type === 'New') ? 'block' : 'none';
+            document.getElementById('rq-replacement-fields').style.display = (type === 'Replacement') ? 'block' : 'none';
+            const sel = document.getElementById('rq-repl-emp');
+            sel.innerHTML = '<option value="">-- Select resigned/exited worker --</option>';
+            workers.filter(w => w.division === currentDivision && w.status && w.status !== 'Active').forEach(w => {
+                sel.innerHTML += '<option value="' + w.empId + '">' + w.name + ' (' + w.empId + ', ' + w.status + ')</option>';
+            });
+        }
+        // kept for backward compatibility with any stale onclick references
+        function toggleReplacementFields() { toggleTypeFields(); }
+
+        function fillReplacementDetails() {
+            const empId = document.getElementById('rq-repl-emp').value;
+            const w = workers.find(x => x.empId === empId);
+            document.getElementById('rq-repl-position').value = w ? w.designation : '';
+            document.getElementById('rq-repl-salary').value = w ? w.gross : '';
+            document.getElementById('rq-repl-status').value = w ? w.status : '';
+        }
+
+        function updateReqBudgetDisplay() {
+            const grade = document.getElementById('rq-skill').value;
+            const el = document.getElementById('rq-budget-display');
+            if (!el) return;
+            const budget = gradeSalaryBudget[grade];
+            el.textContent = budget ? ('Approx. Monthly Salary Budget: ₹' + Number(budget).toLocaleString() + ' (' + grade + ', as fixed by HR)') : '';
+        }
+
+        function submitRequisition() {
+            if (currentRole !== 'production_manager' && currentRole !== 'supervisor') return;
+            const type = document.getElementById('rq-type').value;
+            const position = document.getElementById('rq-position').value.trim();
+            const count = parseInt(document.getElementById('rq-count').value || '1', 10);
+            if (!position || !count) {
+                alert('Please enter the position/department and number of workers required.');
+                return;
+            }
+            const ppeKit = Array.from(document.querySelectorAll('.rq-ppe:checked')).map(cb => cb.value);
+
+            if (type === 'Replacement' && !document.getElementById('rq-repl-emp').value) {
+                alert('Please select the resigned/exited employee being replaced.');
+                return;
+            }
+            let newFields = { project: '', whyNew: '', mgmtApproved: '', justification: '' };
+            if (type === 'New') {
+                newFields.project = document.getElementById('rq-new-project').value.trim();
+                newFields.whyNew = document.getElementById('rq-new-why').value.trim();
+                newFields.mgmtApproved = document.getElementById('rq-new-mgmt-approved').value;
+                newFields.justification = document.getElementById('rq-new-justification').value.trim();
+                if (!newFields.project || !newFields.whyNew || !newFields.mgmtApproved || !newFields.justification) {
+                    alert('For New Manpower requests, Project/Site, Why Needed, Management Approved, and Justification are all mandatory (GM Production will review these).');
+                    return;
+                }
+            }
+
+            const grade = document.getElementById('rq-skill').value;
+            // Supervisor-raised requests need Production Manager approval first.
+            // A Production Manager raising their own request is treated as already PM-approved.
+            const initialStatus = (currentRole === 'production_manager')
+                ? (type === 'New' ? 'Pending GM Approval' : 'Pending HR Approval')
+                : 'Pending PM Approval';
+
+            const rec = {
+                id: 'RQ' + (nextReqId++),
+                date: new Date().toISOString().slice(0, 10),
+                division: currentDivision,
+                position: position,
+                count: count,
+                skill: grade,
+                gradeBudget: gradeSalaryBudget[grade] || 0,
+                exp: document.getElementById('rq-exp').value.trim(),
+                shift: document.getElementById('rq-shift').value,
+                requiredDate: document.getElementById('rq-date').value,
+                education: document.getElementById('rq-education').value,
+                drivingLicense: document.getElementById('rq-driving-license').value,
+                trainingSkill: document.getElementById('rq-training').value.trim(),
+                ppeKit: ppeKit,
+                type: type,
+                replEmpId: type === 'Replacement' ? document.getElementById('rq-repl-emp').value : '',
+                replPosition: type === 'Replacement' ? document.getElementById('rq-repl-position').value : '',
+                replSalary: type === 'Replacement' ? document.getElementById('rq-repl-salary').value : '',
+                replStatus: type === 'Replacement' ? document.getElementById('rq-repl-status').value : '',
+                replReason: type === 'Replacement' ? document.getElementById('rq-repl-reason').value.trim() : '',
+                project: newFields.project,
+                whyNew: newFields.whyNew,
+                mgmtApproved: newFields.mgmtApproved,
+                justification: newFields.justification,
+                remarks: document.getElementById('rq-remarks').value.trim(),
+                raisedBy: ROLE_LABELS[currentRole],
+                raisedByRole: currentRole,
+                pmApprovedBy: currentRole === 'production_manager' ? ROLE_LABELS[currentRole] + ' (self)' : '',
+                gmApprovedBy: '',
+                status: initialStatus,
+                assignedContractors: [],
+                deadline: ''
+            };
+            requisitions.push(rec);
+            addAudit(ROLE_LABELS[currentRole] + ' (' + currentDivision + ') raised requisition ' + rec.id + ' for ' + position + ' x' + count + ' — ' + initialStatus);
+            persistAll();
+            document.getElementById('requisition-form-el').reset();
+            document.getElementById('rq-division').value = currentDivision;
+            toggleTypeFields();
+            updateReqBudgetDisplay();
+            renderRequisitions();
+        }
+
+        function refreshContractorDatalist() {
+            let dl = document.getElementById('contractor-list-dl');
+            if (!dl) {
+                dl = document.createElement('datalist');
+                dl.id = 'contractor-list-dl';
+                document.body.appendChild(dl);
+            }
+            dl.innerHTML = '';
+            knownContractors.forEach(n => { dl.innerHTML += '<option value="' + n + '">'; });
+        }
+
+        // ---- STAGE 1: Production Manager approval ----
+        function approvePM(id) {
+            if (currentRole !== 'production_manager') return;
+            const r = requisitions.find(x => x.id === id);
+            if (!r || r.status !== 'Pending PM Approval') return;
+            r.pmApprovedBy = ROLE_LABELS[currentRole];
+            r.status = (r.type === 'New') ? 'Pending GM Approval' : 'Pending HR Approval';
+            addAudit('Production Manager approved requisition ' + r.id + ' — moved to ' + r.status);
+            persistAll();
+            renderRequisitions();
+        }
+
+        function rejectPM(id) {
+            if (currentRole !== 'production_manager') return;
+            const r = requisitions.find(x => x.id === id);
+            if (!r) return;
+            r.status = 'Rejected';
+            addAudit('Production Manager rejected requisition ' + r.id);
+            persistAll();
+            renderRequisitions();
+        }
+
+        // ---- STAGE 2: GM Production approval (New Manpower only) ----
+        function approveGM(id) {
+            if (currentRole !== 'gm_production') return;
+            const r = requisitions.find(x => x.id === id);
+            if (!r || r.status !== 'Pending GM Approval') return;
+            r.gmApprovedBy = ROLE_LABELS[currentRole];
+            r.status = 'Pending HR Approval';
+            addAudit('GM Production approved New Manpower requisition ' + r.id + ' for project "' + r.project + '"');
+            persistAll();
+            renderRequisitions();
+        }
+
+        function rejectGM(id) {
+            if (currentRole !== 'gm_production') return;
+            const r = requisitions.find(x => x.id === id);
+            if (!r) return;
+            r.status = 'Rejected';
+            addAudit('GM Production rejected requisition ' + r.id);
+            persistAll();
+            renderRequisitions();
+        }
+
+        // ---- STAGE 3: HR review, approve & assign to contractor(s) ----
+        function reviewRequisition(id) {
+            currentReviewId = id;
+            const r = requisitions.find(x => x.id === id);
+            if (!r) return;
+            document.getElementById('hrr-id').textContent = r.id + ' — ' + r.position + ' (' + r.division + ')';
+            document.getElementById('hrr-details').innerHTML =
+                '<b>Raised by:</b> ' + r.raisedBy + ' &nbsp; <b>Date:</b> ' + r.date + ' &nbsp; <b>Type:</b> ' + r.type + '<br>' +
+                '<b>No. Required:</b> ' + r.count + ' &nbsp; <b>Grade:</b> ' + r.skill + ' (Budget ₹' + Number(r.gradeBudget || 0).toLocaleString() + '/month) &nbsp; <b>Experience:</b> ' + (r.exp || '-') + '<br>' +
+                '<b>Shift:</b> ' + r.shift + ' &nbsp; <b>Required By:</b> ' + (r.requiredDate || '-') + '<br>' +
+                '<b>Preferred Education:</b> ' + r.education + ' &nbsp; <b>Driving License Required:</b> ' + r.drivingLicense + '<br>' +
+                '<b>Specific Training/Skill:</b> ' + (r.trainingSkill || '-') + '<br>' +
+                '<b>Required PPE Kit:</b> ' + ((r.ppeKit && r.ppeKit.length) ? r.ppeKit.join(', ') : '-') + '<br>' +
+                (r.type === 'New' ?
+                    ('<b>Project/Site:</b> ' + r.project + '<br><b>Why Needed:</b> ' + r.whyNew + '<br><b>Management Approved:</b> ' + r.mgmtApproved + '<br><b>Justification:</b> ' + r.justification + '<br><b>GM Production Approved By:</b> ' + (r.gmApprovedBy || '-') + '<br>')
+                    :
+                    ('<b>Employee Being Replaced:</b> ' + r.replEmpId + ' (' + r.replPosition + ', exit status: ' + r.replStatus + ')<br><b>Previous Salary:</b> ₹' + r.replSalary + '<br><b>Reason for Replacement:</b> ' + (r.replReason || '-') + '<br>')
+                ) +
+                '<b>Production Manager Approved By:</b> ' + (r.pmApprovedBy || '-') + '<br>' +
+                '<b>Job Description/Remarks:</b> ' + (r.remarks || '-');
+
+            const checksDiv = document.getElementById('hrr-contractor-checks');
+            checksDiv.innerHTML = '';
+            CONTRACTORS.forEach(c => {
+                checksDiv.innerHTML += '<label><input type="checkbox" class="hrr-contractor-cb" value="' + c.name + '"> ' + c.name + ' — ' + c.location + '</label>';
+            });
+            document.getElementById('hrr-all-contractors').checked = false;
+            const d = new Date();
+            d.setDate(d.getDate() + 7);
+            document.getElementById('hrr-deadline').value = d.toISOString().slice(0, 10);
+            document.getElementById('hr-review-panel').style.display = 'block';
+            document.getElementById('hr-review-panel').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function toggleAllContractors() {
+            const checked = document.getElementById('hrr-all-contractors').checked;
+            document.querySelectorAll('.hrr-contractor-cb').forEach(cb => { cb.checked = checked; });
+        }
+
+        function closeReviewPanel() {
+            currentReviewId = null;
+            document.getElementById('hr-review-panel').style.display = 'none';
+        }
+
+        function confirmApproveRequisition() {
+            if (currentRole !== 'hr_admin' || !currentReviewId) return;
+            const r = requisitions.find(x => x.id === currentReviewId);
+            if (!r) return;
+            const names = Array.from(document.querySelectorAll('.hrr-contractor-cb:checked')).map(cb => cb.value);
+            const deadline = document.getElementById('hrr-deadline').value;
+            if (!names.length) {
+                alert('Please select at least one contractor (or check "Select All Contractors") to assign this requisition to.');
+                return;
+            }
+            if (!deadline) {
+                alert('Please set a recruitment deadline.');
+                return;
+            }
+            r.status = 'Approved';
+            r.assignedContractors = names;
+            r.deadline = deadline;
+            names.forEach(n => knownContractors.add(n));
+            addAudit('HR approved requisition ' + r.id + ' and assigned to: ' + names.join(', ') + ' (deadline ' + deadline + ')');
+            persistAll();
+            closeReviewPanel();
+            renderRequisitions();
+        }
+
+        function approveRequisition(id) {
+            // legacy alias — routes through the review panel now
+            reviewRequisition(id);
+        }
+
+        function rejectRequisition(id) {
+            if (currentRole !== 'hr_admin') return;
+            const r = requisitions.find(x => x.id === id);
+            if (!r) return;
+            r.status = 'Rejected';
+            addAudit('HR rejected requisition ' + r.id);
+            persistAll();
+            renderRequisitions();
+        }
+
+        // ---- Grade Salary Budget Master ----
+        function renderGradeBudgetTable() {
+            const tbody = document.getElementById('grade-budget-body');
+            const isHR = (currentRole === 'hr_admin');
+            document.getElementById('grade-budget-hr-note').style.display = isHR ? 'block' : 'none';
+            document.getElementById('grade-budget-actions-col').style.display = isHR ? '' : 'none';
+            tbody.innerHTML = '';
+            Object.keys(gradeSalaryBudget).forEach(grade => {
+                const budgetCell = isHR
+                    ? '<input type="number" id="gb-' + grade.replace(/\s+/g, '_') + '" value="' + gradeSalaryBudget[grade] + '" style="width:110px;">'
+                    : '₹' + Number(gradeSalaryBudget[grade]).toLocaleString();
+                const actionCell = isHR
+                    ? '<button type="button" class="action-btn edit" onclick="updateGradeBudget(\'' + grade + '\')">Update</button>'
+                    : '';
+                tbody.innerHTML += '<tr><td class="text-left">' + grade + '</td><td>' + budgetCell + '</td>' + (isHR ? '<td>' + actionCell + '</td>' : '') + '</tr>';
+            });
+        }
+
+        function updateGradeBudget(grade) {
+            if (currentRole !== 'hr_admin') return;
+            const input = document.getElementById('gb-' + grade.replace(/\s+/g, '_'));
+            const val = parseFloat(input.value);
+            if (isNaN(val) || val <= 0) {
+                alert('Please enter a valid budget amount.');
+                return;
+            }
+            gradeSalaryBudget[grade] = val;
+            addAudit('HR updated salary budget for ' + grade + ' to ₹' + val.toLocaleString());
+            persistAll();
+            renderGradeBudgetTable();
+        }
+
+        function renderRequisitions() {
+            refreshContractorDatalist();
+            renderGradeBudgetTable();
+
+            // STAGE 1 — Production Manager approval queue
+            const pmHeader = document.getElementById('rt-pm-header');
+            const pmWrapper = document.getElementById('rt-pm-wrapper');
+            const showPM = (currentRole === 'production_manager');
+            pmHeader.style.display = showPM ? 'block' : 'none';
+            pmWrapper.style.display = showPM ? 'block' : 'none';
+            if (showPM) {
+                const body = document.getElementById('rt-pm-body');
+                const pending = requisitions.filter(r => r.status === 'Pending PM Approval' && r.division === currentDivision);
+                body.innerHTML = '';
+                if (!pending.length) body.innerHTML = '<tr><td colspan="8">No requisitions awaiting your approval.</td></tr>';
+                pending.forEach(r => {
+                    body.innerHTML += '<tr><td>' + r.date + '</td><td>' + r.raisedBy + '</td><td>' + r.position + '</td><td>' + r.count + '</td><td>' + r.skill + '</td><td>' + r.type + '</td><td>' + (r.type === 'New' ? 'GM Production' : 'HR') + '</td>' +
+                        '<td><button type="button" class="action-btn edit" onclick="approvePM(\'' + r.id + '\')">Approve</button> <button type="button" class="action-btn delete" onclick="rejectPM(\'' + r.id + '\')">Reject</button></td></tr>';
+                });
+            }
+
+            // STAGE 2 — GM Production approval queue (New Manpower only)
+            const gmHeader = document.getElementById('rt-gm-header');
+            const gmWrapper = document.getElementById('rt-gm-wrapper');
+            const showGM = (currentRole === 'gm_production');
+            gmHeader.style.display = showGM ? 'block' : 'none';
+            gmWrapper.style.display = showGM ? 'block' : 'none';
+            if (showGM) {
+                const body = document.getElementById('rt-gm-body');
+                const pending = requisitions.filter(r => r.status === 'Pending GM Approval');
+                body.innerHTML = '';
+                if (!pending.length) body.innerHTML = '<tr><td colspan="9">No New Manpower requisitions awaiting your approval.</td></tr>';
+                pending.forEach(r => {
+                    body.innerHTML += '<tr><td>' + r.date + '</td><td>' + r.division + '</td><td>' + r.position + ' x' + r.count + '</td><td>' + r.count + '</td><td>' + r.project + '</td><td>' + r.whyNew + '</td><td>' + r.mgmtApproved + '</td><td>' + r.justification + '</td>' +
+                        '<td><button type="button" class="action-btn edit" onclick="approveGM(\'' + r.id + '\')">Approve</button> <button type="button" class="action-btn delete" onclick="rejectGM(\'' + r.id + '\')">Reject</button></td></tr>';
+                });
+            }
+
+            // STAGE 3 — HR approval queue
+            const approvalBody = document.getElementById('rt-approval-body');
+            approvalBody.innerHTML = '';
+            const pendingReqs = requisitions.filter(r => r.status === 'Pending HR Approval');
+            if (!pendingReqs.length) approvalBody.innerHTML = '<tr><td colspan="8">No requisitions awaiting approval.</td></tr>';
+            pendingReqs.forEach(r => {
+                approvalBody.innerHTML += '<tr><td>' + r.date + '</td><td>' + r.division + '</td><td>' + r.position + '</td><td>' + r.count + '</td><td>' + r.skill + '</td><td>' + r.type + '</td><td>' + r.raisedBy + '</td>' +
+                    '<td><button type="button" class="action-btn edit" onclick="reviewRequisition(\'' + r.id + '\')">Review &amp; Approve</button> <button type="button" class="action-btn delete" onclick="rejectRequisition(\'' + r.id + '\')">Reject</button></td></tr>';
+            });
+
+            // All requisitions (scoped)
+            let allList = requisitions;
+            if (currentRole === 'production_manager' || currentRole === 'supervisor') allList = requisitions.filter(r => r.division === currentDivision);
+            if (currentRole === 'contractor') allList = requisitions.filter(r => r.assignedContractors.map(n => n.toLowerCase()).includes(currentContractorName.toLowerCase()));
+            const allBody = document.getElementById('rt-all-body');
+            allBody.innerHTML = '';
+            if (!allList.length) allBody.innerHTML = '<tr><td colspan="8">No requisitions found.</td></tr>';
+            allList.forEach(r => {
+                allBody.innerHTML += '<tr><td>' + r.date + '</td><td>' + r.division + '</td><td>' + r.position + '</td><td>' + r.count + '</td><td>' + r.type + '</td><td>' + statusBadge(r.status) + '</td><td>' + (r.assignedContractors.join(', ') || '-') + '</td><td>' + (r.deadline || '-') + '</td></tr>';
+            });
+
+            // My "own submitted" table for PM/Supervisor
+            const myBody = document.getElementById('my-requisitions-body');
+            if (myBody) {
+                const mine = requisitions.filter(r => r.division === currentDivision);
+                myBody.innerHTML = '';
+                if (!mine.length) myBody.innerHTML = '<tr><td colspan="8">No requisitions submitted yet.</td></tr>';
+                mine.forEach(r => {
+                    myBody.innerHTML += '<tr><td>' + r.date + '</td><td>' + r.division + '</td><td>' + r.position + '</td><td>' + r.count + '</td><td>' + r.type + '</td><td>' + (r.requiredDate || '-') + '</td><td>' + statusBadge(r.status) + '</td><td>' + (r.assignedContractors.join(', ') || '-') + '</td></tr>';
+                });
+            }
+
+            // Assigned-to-me (contractor) — opens the candidate submission form
+            const assignedBody = document.getElementById('rt-assigned-body');
+            if (assignedBody) {
+                const assigned = requisitions.filter(r => r.status === 'Approved' && r.assignedContractors.map(n => n.toLowerCase()).includes(currentContractorName.toLowerCase()));
+                assignedBody.innerHTML = '';
+                if (!assigned.length) assignedBody.innerHTML = '<tr><td colspan="7">No requirements assigned to you yet.</td></tr>';
+                assigned.forEach(r => {
+                    assignedBody.innerHTML += '<tr><td>' + r.division + '</td><td>' + r.position + '</td><td>' + r.count + '</td><td>' + r.skill + '</td><td>' + (r.requiredDate || '-') + '</td><td>' + r.deadline + '</td>' +
+                        '<td><button type="button" class="action-btn edit" onclick="openCandidateForm(\'' + r.id + '\')">Select Candidate</button></td></tr>';
+                });
+            }
+        }
+
+        // ---- Candidate submission (contractor) ----
+        function openCandidateForm(reqId) {
+            if (currentRole !== 'contractor') return;
+            currentCandidateReqId = reqId;
+            const req = requisitions.find(r => r.id === reqId);
+            document.getElementById('cf-req-id').textContent = reqId + (req ? ' — ' + req.position + ' (' + req.division + ')' : '');
+            document.getElementById('cf-name').value = '';
+            document.getElementById('cf-mobile').value = '';
+            if (req) document.getElementById('cf-skill').value = req.skill;
+            document.getElementById('cf-experience').value = '';
+            document.getElementById('cf-id-doc').value = '';
+            document.getElementById('cf-resume-doc').value = '';
+            document.getElementById('candidate-form-wrapper').style.display = 'block';
+            document.getElementById('candidate-form-wrapper').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function closeCandidateForm() {
+            currentCandidateReqId = null;
+            document.getElementById('candidate-form-wrapper').style.display = 'none';
+        }
+
+        function submitCandidate() {
+            if (currentRole !== 'contractor' || !currentCandidateReqId) return;
+            const reqId = currentCandidateReqId;
+            const name = document.getElementById('cf-name').value.trim();
+            const mobile = document.getElementById('cf-mobile').value.trim();
+            if (!name || !mobile) {
+                alert('Please enter the candidate name and mobile number.');
+                return;
+            }
+            const req = requisitions.find(r => r.id === reqId);
+            const idDocInput = document.getElementById('cf-id-doc');
+            const resumeInput = document.getElementById('cf-resume-doc');
+            const idDocName = (idDocInput.files && idDocInput.files[0]) ? idDocInput.files[0].name : '';
+            const resumeNames = resumeInput.files ? Array.from(resumeInput.files).map(f => f.name) : [];
+
+            candidates.push({
+                id: 'CD' + (nextCandId++),
+                requisitionId: reqId,
+                name: name,
+                mobile: mobile,
+                skill: document.getElementById('cf-skill').value,
+                experience: document.getElementById('cf-experience').value.trim(),
+                education: document.getElementById('cf-education').value,
+                idDocName: idDocName,
+                resumeNames: resumeNames,
+                contractor: currentContractorName,
+                status: 'Submitted'
+            });
+            addAudit(currentContractorName + ' submitted candidate ' + name + ' for requisition ' + reqId);
+            persistAll();
+            closeCandidateForm();
+            renderRequisitions();
+            renderCandidates();
+        }
+
+        function renderCandidates() {
+            const tbody = document.getElementById('candidates-body');
+            let list = candidates;
+            if (currentRole === 'contractor') list = candidates.filter(c => c.contractor.toLowerCase() === currentContractorName.toLowerCase());
+            if (currentRole === 'production_manager' || currentRole === 'supervisor') {
+                const myReqIds = requisitions.filter(r => r.division === currentDivision).map(r => r.id);
+                list = candidates.filter(c => myReqIds.includes(c.requisitionId));
+            }
+            tbody.innerHTML = '';
+            if (!list.length) {
+                tbody.innerHTML = '<tr><td colspan="10">No candidates submitted yet.</td></tr>';
+                return;
+            }
+            list.forEach(c => {
+                const req = requisitions.find(r => r.id === c.requisitionId);
+                let actions = '-';
+                if (currentRole === 'hr_admin' && c.status === 'Submitted') {
+                    actions = '<button type="button" class="action-btn edit" onclick="selectCandidate(\'' + c.id + '\')">Select</button> <button type="button" class="action-btn delete" onclick="rejectCandidate(\'' + c.id + '\')">Reject</button>';
+                }
+                const docs = [c.idDocName, ...(c.resumeNames || [])].filter(Boolean).join(', ') || '-';
+                tbody.innerHTML += '<tr><td class="text-left">' + c.name + '</td><td>' + c.mobile + '</td><td>' + c.skill + '</td><td>' + c.experience + '</td><td>' + (c.education || '-') + '</td><td>' + docs + '</td><td>' + c.contractor + '</td><td>' + (req ? req.position + ' (' + req.division + ')' : c.requisitionId) + '</td><td>' + statusBadge(c.status) + '</td><td>' + actions + '</td></tr>';
+            });
+        }
+
+        function selectCandidate(id) {
+            if (currentRole !== 'hr_admin') return;
+            const c = candidates.find(x => x.id === id);
+            if (!c) return;
+            c.status = 'Selected';
+            const req = requisitions.find(r => r.id === c.requisitionId);
+            pendingSubmissions.push({
+                id: 'PS' + Date.now(),
+                name: c.name, contractor: c.contractor, division: req ? req.division : '', location: '', doj: '',
+                designation: req ? req.position : '', department: '', section: '', skill: c.skill, expYr: '', expMo: '',
+                mobile: c.mobile, emergency: '', dob: '', age: '', state: '', permAddr: '', presAddr: '', aadhar: '',
+                pan: '', uan: '', esi: '', ppeDate: '', basicDa: '', hra: '', gross: '', shift: req ? req.shift : '',
+                status: 'Onboarding - Pending Details',
+                hrRemarks: 'Candidate selected from requisition ' + (req ? req.id : '') + '. Please complete the remaining onboarding details and resubmit for HR verification.'
+            });
+            addAudit('HR selected candidate ' + c.name + ' — sent to ' + c.contractor + ' to complete onboarding details');
+            persistAll();
+            renderCandidates();
+            renderPendingApprovals();
+            alert(c.name + ' has been marked Selected. ' + c.contractor + ' can now complete their onboarding details in Workers Master Data.');
+        }
+
+        function rejectCandidate(id) {
+            if (currentRole !== 'hr_admin') return;
+            const c = candidates.find(x => x.id === id);
+            if (!c) return;
+            c.status = 'Rejected';
+            addAudit('HR rejected candidate ' + c.name);
+            persistAll();
+            renderCandidates();
+        }
+
+        /* =========================================================
+           RESIGNATION / EXIT WORKFLOW
+           ========================================================= */
+        function onResTypeChange() {
+            const type = document.getElementById('res-type').value;
+            const resignDateVal = document.getElementById('res-date').value;
+            const lwdField = document.getElementById('res-lwd');
+            if (!resignDateVal) return;
+            const base = new Date(resignDateVal);
+            if (type === 'Immediate') {
+                lwdField.value = resignDateVal;
+            } else {
+                base.setDate(base.getDate() + 30);
+                lwdField.value = base.toISOString().slice(0, 10);
+            }
+        }
+
+        function submitResignation() {
+            if (currentRole !== 'contractor') return;
+            const empId = document.getElementById('res-worker').value;
+            const w = workers.find(x => x.empId === empId);
+            if (!w) {
+                alert('Please select a worker.');
+                return;
+            }
+            const type = document.getElementById('res-type').value;
+            const resignDate = document.getElementById('res-date').value || new Date().toISOString().slice(0, 10);
+            const lwd = document.getElementById('res-lwd').value || resignDate;
+            resignations.push({
+                id: 'RS' + (nextResId++), empId: w.empId, name: w.name, contractor: w.contractor, division: w.division,
+                type: type, resignDate: resignDate, lwd: lwd,
+                reason: document.getElementById('res-reason').value.trim(),
+                remarks: document.getElementById('res-remarks').value.trim(),
+                status: 'Pending HR Review', finalStatus: ''
+            });
+            addAudit(w.contractor + ' submitted ' + type + ' resignation/exit report for ' + w.name + ' (' + w.empId + ')');
+            persistAll();
+            document.getElementById('res-worker').value = '';
+            document.getElementById('res-reason').value = '';
+            document.getElementById('res-remarks').value = '';
+            document.getElementById('res-lwd').value = '';
+            renderResignations();
+            alert(type === 'Immediate' ? 'Reported to HR as an immediate/absconding case. HR will review and confirm the final status urgently.' : 'Resignation submitted to HR for review.');
+        }
+
+        function acceptResignation(id) {
+            if (currentRole !== 'hr_admin') return;
+            const r = resignations.find(x => x.id === id);
+            if (!r) return;
+            const suggested = r.type === 'Immediate' ? 'Absconded' : 'Resigned';
+            const finalStatus = prompt('Set final status for ' + r.name + ' (Resigned / Left / Absconded / Terminated):', suggested);
+            if (!finalStatus) return;
+            r.status = 'Accepted';
+            r.finalStatus = finalStatus;
+            const w = workers.find(x => x.empId === r.empId);
+            if (w) w.status = finalStatus;
+            exitClearances.push({ id: 'EC' + (nextClearId++), empId: r.empId, name: r.name, division: r.division, lwd: r.lwd, status: 'Pending Department Clearance', remarks: '' });
+            addAudit('HR accepted exit for ' + r.name + ' — status set to ' + finalStatus + '; exit clearance sent to ' + r.division);
+            persistAll();
+            renderResignations();
+            renderWorkersTable();
+            renderExitClearance();
+            renderDivisionWorkers();
+        }
+
+        function rejectResignationReq(id) {
+            if (currentRole !== 'hr_admin') return;
+            const r = resignations.find(x => x.id === id);
+            if (!r) return;
+            r.status = 'Rejected';
+            addAudit('HR rejected resignation/exit request for ' + r.name);
+            persistAll();
+            renderResignations();
+        }
+
+        function renderResignations() {
+            if (currentRole === 'contractor') {
+                const sel = document.getElementById('res-worker');
+                sel.innerHTML = '<option value="">-- Select your worker --</option>';
+                workers.filter(w => w.contractor.toLowerCase() === currentContractorName.toLowerCase() && (w.status || 'Active') === 'Active').forEach(w => {
+                    sel.innerHTML += '<option value="' + w.empId + '">' + w.name + ' (' + w.empId + ')</option>';
+                });
+                const myBody = document.getElementById('my-resignations-body');
+                const mine = resignations.filter(r => r.contractor.toLowerCase() === currentContractorName.toLowerCase());
+                myBody.innerHTML = '';
+                if (!mine.length) myBody.innerHTML = '<tr><td colspan="6">No resignations submitted.</td></tr>';
+                mine.forEach(r => {
+                    myBody.innerHTML += '<tr><td>' + r.name + '</td><td>' + r.type + '</td><td>' + r.resignDate + '</td><td>' + r.lwd + '</td><td>' + statusBadge(r.status) + '</td><td>' + (r.finalStatus ? statusBadge(r.finalStatus) : '-') + '</td></tr>';
+                });
+            }
+
+            if (currentRole === 'hr_admin') {
+                const notifList = document.getElementById('resignation-notif-list');
+                const pendingOnes = resignations.filter(r => r.status === 'Pending HR Review');
+                notifList.innerHTML = '';
+                if (!pendingOnes.length) {
+                    notifList.innerHTML = '<li class="notif-empty">No resignations awaiting review.</li>';
+                } else {
+                    pendingOnes.forEach(r => {
+                        notifList.innerHTML += '<li class="' + (r.type === 'Immediate' ? 'urgent' : '') + '">' + (r.type === 'Immediate' ? '🔴 URGENT — ' : '') + r.name + ' (' + r.empId + ', ' + r.contractor + ') — ' + r.type + ' resignation, last working date ' + r.lwd + '</li>';
+                    });
+                }
+                const hrBody = document.getElementById('hr-resignations-body');
+                hrBody.innerHTML = '';
+                if (!resignations.length) hrBody.innerHTML = '<tr><td colspan="9">No resignation records.</td></tr>';
+                resignations.forEach(r => {
+                    let actions = r.finalStatus ? statusBadge(r.finalStatus) : '-';
+                    if (r.status === 'Pending HR Review') {
+                        actions = '<button type="button" class="action-btn edit" onclick="acceptResignation(\'' + r.id + '\')">Accept</button> <button type="button" class="action-btn delete" onclick="rejectResignationReq(\'' + r.id + '\')">Reject</button>';
+                    }
+                    hrBody.innerHTML += '<tr' + (r.type === 'Immediate' && r.status === 'Pending HR Review' ? ' style="background:#fee2e2;"' : '') + '><td>' + r.name + '</td><td>' + r.contractor + '</td><td>' + r.division + '</td><td>' + r.type + '</td><td>' + r.resignDate + '</td><td>' + r.lwd + '</td><td>' + (r.reason || '-') + '</td><td>' + statusBadge(r.status) + '</td><td>' + actions + '</td></tr>';
+                });
+            }
+        }
+
+        /* =========================================================
+           EXIT CLEARANCE
+           ========================================================= */
+        function giveClearance(id) {
+            if (currentRole !== 'production_manager' && currentRole !== 'supervisor') return;
+            const c = exitClearances.find(x => x.id === id);
+            if (!c) return;
+            const remarks = prompt('Any remarks (optional)?', '') || '';
+            c.status = 'Cleared';
+            c.remarks = remarks;
+            addAudit(ROLE_LABELS[currentRole] + ' (' + currentDivision + ') gave exit clearance for ' + c.name);
+            persistAll();
+            renderExitClearance();
+        }
+
+        function flagPendingItems(id) {
+            if (currentRole !== 'production_manager' && currentRole !== 'supervisor') return;
+            const c = exitClearances.find(x => x.id === id);
+            if (!c) return;
+            const remarks = prompt('Describe pending items (tools not returned, dues, etc.):', '');
+            if (remarks === null) return;
+            c.status = 'Pending Items';
+            c.remarks = remarks;
+            addAudit(ROLE_LABELS[currentRole] + ' flagged pending items for exit of ' + c.name);
+            persistAll();
+            renderExitClearance();
+        }
+
+        function completeExit(id) {
+            if (currentRole !== 'hr_admin') return;
+            const c = exitClearances.find(x => x.id === id);
+            if (!c) return;
+            c.status = 'Completed';
+            addAudit('HR completed final exit processing for ' + c.name);
+            persistAll();
+            renderExitClearance();
+        }
+
+        function renderExitClearance() {
+            if (currentRole === 'hr_admin') {
+                const body = document.getElementById('hr-clearance-body');
+                body.innerHTML = '';
+                if (!exitClearances.length) body.innerHTML = '<tr><td colspan="6">No exit clearances initiated.</td></tr>';
+                exitClearances.forEach(c => {
+                    let action = '-';
+                    if (c.status === 'Cleared') action = '<button type="button" class="action-btn edit" onclick="completeExit(\'' + c.id + '\')">Complete Exit</button>';
+                    body.innerHTML += '<tr><td>' + c.name + '</td><td>' + c.division + '</td><td>' + c.division + ' Manager/Supervisor</td><td>' + statusBadge(c.status) + '</td><td>' + (c.remarks || '-') + '</td><td>' + action + '</td></tr>';
+                });
+            }
+            if (currentRole === 'production_manager' || currentRole === 'supervisor') {
+                const body = document.getElementById('dept-clearance-body');
+                const list = exitClearances.filter(c => c.division === currentDivision);
+                body.innerHTML = '';
+                if (!list.length) body.innerHTML = '<tr><td colspan="6">No exit clearances pending for your division.</td></tr>';
+                list.forEach(c => {
+                    let action = '-';
+                    if (c.status === 'Pending Department Clearance' || c.status === 'Pending Items') {
+                        action = '<button type="button" class="action-btn edit" onclick="giveClearance(\'' + c.id + '\')">Give Clearance</button> <button type="button" class="action-btn" style="background:#d97706;" onclick="flagPendingItems(\'' + c.id + '\')">Flag Pending Items</button>';
+                    }
+                    body.innerHTML += '<tr><td>' + c.name + '</td><td>' + c.empId + '</td><td>' + c.lwd + '</td><td>' + statusBadge(c.status) + '</td><td>' + (c.remarks || '-') + '</td><td>' + action + '</td></tr>';
+                });
+            }
+        }
+
+        /* =========================================================
+           ATTENDANCE + PAYROLL + WAGE REGISTER + INVOICE (simplified demo)
+           ========================================================= */
+        function renderPeriodSelectors() {
+            const mSel = document.getElementById('period-month');
+            const ySel = document.getElementById('period-year');
+            if (!mSel || !ySel) return;
+            const parts = CURRENT_PERIOD.split(' ');
+            const curMonth = parts[0];
+            const curYear = parseInt(parts[1], 10);
+            const thisYear = new Date().getFullYear();
+            const years = new Set([thisYear - 1, thisYear, thisYear + 1, curYear]);
+            payrollRuns.concat(attendanceRecords).forEach(r => { const y = parseInt((r.period || '').split(' ')[1], 10); if (y) years.add(y); });
+            mSel.innerHTML = MONTHS.map(m => '<option' + (m === curMonth ? ' selected' : '') + '>' + m + '</option>').join('');
+            ySel.innerHTML = Array.from(years).sort().map(y => '<option' + (y === curYear ? ' selected' : '') + '>' + y + '</option>').join('');
+        }
+
+        function onPeriodChange() {
+            CURRENT_PERIOD = document.getElementById('period-month').value + ' ' + document.getElementById('period-year').value;
+            persistAll();
+            updateAttendanceNote();
+            renderPayroll();
+            renderWageRegister();
+            renderInvoices();
+        }
+
+        function fillRateInputs() {
+            Object.keys(RATE_INPUTS).forEach(k => {
+                const el = document.getElementById(RATE_INPUTS[k]);
+                if (el) el.value = rateConfig[k];
+            });
+        }
+
+        function saveRateConfig() {
+            Object.keys(RATE_INPUTS).forEach(k => {
+                const el = document.getElementById(RATE_INPUTS[k]);
+                const v = el ? parseFloat(el.value) : NaN;
+                rateConfig[k] = isNaN(v) ? DEFAULT_RATES[k] : v;
+            });
+            persistAll();
+        }
+
+        function fmt(n) { return Number(n || 0).toLocaleString('en-IN'); }
+
+        function updateAttendanceNote() {
+            const note = document.getElementById('attendance-status-note');
+            if (!note) return;
+            const hasData = attendanceRecords.some(a => a.period === CURRENT_PERIOD);
+            note.textContent = !hasData ? 'No attendance generated yet for ' + CURRENT_PERIOD + '.' :
+                (verifiedPeriods[CURRENT_PERIOD] ? 'Attendance for ' + CURRENT_PERIOD + ' is verified — payroll can be generated.' : 'Attendance generated for ' + CURRENT_PERIOD + ' — pending verification.');
+        }
+
+        function generateSampleAttendance() {
+            if (currentRole !== 'hr_admin') return;
+            if (wageRegisters.some(w => w.period === CURRENT_PERIOD)) {
+                alert('A wage register for ' + CURRENT_PERIOD + ' is already finalized. Attendance for this period is locked.');
+                return;
+            }
+            if (payrollRuns.some(p => p.period === CURRENT_PERIOD) && !confirm('Payroll already exists for ' + CURRENT_PERIOD + '. New attendance means payroll must be generated again. Continue?')) return;
+            attendanceRecords = attendanceRecords.filter(a => a.period !== CURRENT_PERIOD);
+            const maxDays = rateConfig.paidDays || 26;
+            workers.filter(w => (w.status || 'Active') === 'Active').forEach(w => {
+                attendanceRecords.push({
+                    period: CURRENT_PERIOD, empId: w.empId,
+                    presentDays: Math.max(0, maxDays - 4) + Math.floor(Math.random() * 5),
+                    otHrs: Math.floor(Math.random() * 12)
+                });
+            });
+            delete verifiedPeriods[CURRENT_PERIOD];
+            addAudit('HR imported/generated sample biometric attendance for ' + CURRENT_PERIOD);
+            persistAll();
+            updateAttendanceNote();
+            alert('Sample attendance generated for ' + CURRENT_PERIOD + ' (' + attendanceRecords.filter(a => a.period === CURRENT_PERIOD).length + ' workers). This simulates a biometric machine import.');
+        }
+
+        function verifyAttendance() {
+            if (currentRole !== 'hr_admin') return;
+            if (!attendanceRecords.some(a => a.period === CURRENT_PERIOD)) {
+                alert('Generate attendance for ' + CURRENT_PERIOD + ' first.');
+                return;
+            }
+            verifiedPeriods[CURRENT_PERIOD] = true;
+            addAudit('HR verified attendance for ' + CURRENT_PERIOD);
+            persistAll();
+            updateAttendanceNote();
+        }
+
+        function generatePayroll() {
+            if (currentRole !== 'hr_admin') return;
+            if (!verifiedPeriods[CURRENT_PERIOD]) {
+                alert('Attendance for ' + CURRENT_PERIOD + ' must be verified before payroll can be generated.');
+                return;
+            }
+            if (wageRegisters.some(w => w.period === CURRENT_PERIOD)) {
+                alert('A wage register for ' + CURRENT_PERIOD + ' is already finalized. Payroll for this period is locked.');
+                return;
+            }
+            saveRateConfig();
+            const R = rateConfig;
+            const paidDays = R.paidDays > 0 ? R.paidDays : 26;
+
+            payrollRuns = payrollRuns.filter(p => p.period !== CURRENT_PERIOD);
+            workers.filter(w => (w.status || 'Active') === 'Active').forEach(w => {
+                const att = attendanceRecords.find(a => a.empId === w.empId && a.period === CURRENT_PERIOD);
+                if (!att) return;
+                const fixedBasic = parseFloat(w.basicDa) || 0;
+                const fixedHra = parseFloat(w.hra) || 0;
+                // Earned wages are pro-rated on days present out of paid days
+                const ratio = Math.min(att.presentDays / paidDays, 1);
+                const basicDa = Math.round(fixedBasic * ratio);
+                const hra = Math.round(fixedHra * ratio);
+                const hourlyRate = fixedBasic / paidDays / 8;
+                const otAmount = Math.round(att.otHrs * hourlyRate * 2);
+                const gross = basicDa + hra + otAmount;
+                // PF on earned Basic+DA, capped at the PF wage ceiling (0 = no ceiling)
+                const pfWage = R.pfCeiling > 0 ? Math.min(basicDa, R.pfCeiling) : basicDa;
+                const pf = Math.round(pfWage * R.pf / 100);
+                const pfEr = Math.round(pfWage * R.pfEr / 100);
+                // ESI applies when the fixed monthly wage is within the ESI limit
+                const esiCovered = (fixedBasic + fixedHra) <= R.esiLimit;
+                const esi = esiCovered ? Math.ceil(gross * R.esi / 100) : 0;
+                const esiEr = esiCovered ? Math.ceil(gross * R.esiEr / 100) : 0;
+                const pt = gross > 15000 ? R.pt : 0;
+                const net = Math.round(gross - pf - esi - pt);
+                payrollRuns.push({
+                    period: CURRENT_PERIOD, empId: w.empId, name: w.name, contractor: w.contractor,
+                    presentDays: att.presentDays, otHrs: att.otHrs, basicDa, hra, otAmount, gross, pf, esi, pt, net, pfEr, esiEr,
+                    status: 'Generated'
+                });
+            });
+            addAudit('HR generated payroll for ' + CURRENT_PERIOD);
+            persistAll();
+            renderPeriodSelectors();
+            renderPayroll();
+            renderWageRegister();
+        }
+
+        function confirmPayrollRow(empId) {
+            if (currentRole !== 'contractor') return;
+            const p = payrollRuns.find(x => x.empId === empId && x.period === CURRENT_PERIOD);
+            if (!p) return;
+            p.status = 'Contractor Confirmed';
+            addAudit(currentContractorName + ' confirmed payroll for ' + p.name);
+            persistAll();
+            renderPayroll();
+            renderWageRegister();
+        }
+
+        function raisePayrollQuery(empId) {
+            if (currentRole !== 'contractor') return;
+            const p = payrollRuns.find(x => x.empId === empId && x.period === CURRENT_PERIOD);
+            if (!p) return;
+            const remarks = prompt('Describe your query about this payroll entry:', '');
+            if (remarks === null) return;
+            p.status = 'Query Raised';
+            p.queryRemarks = remarks;
+            addAudit(currentContractorName + ' raised a payroll query for ' + p.name + ': ' + remarks);
+            persistAll();
+            renderPayroll();
+        }
+
+        function renderPayroll() {
+            const tbody = document.getElementById('payroll-body');
+            let list = payrollRuns.filter(p => p.period === CURRENT_PERIOD);
+            const label = document.getElementById('payroll-filter-label');
+            if (currentRole === 'contractor') {
+                list = list.filter(p => p.contractor.toLowerCase() === currentContractorName.toLowerCase());
+                label.textContent = ' — ' + CURRENT_PERIOD + ' — ' + currentContractorName;
+            } else {
+                label.textContent = ' — ' + CURRENT_PERIOD;
+            }
+            tbody.innerHTML = '';
+            if (!list.length) {
+                tbody.innerHTML = '<tr><td colspan="17">No payroll generated for this period yet.</td></tr>';
+                return;
+            }
+            list.forEach(p => {
+                let actions = '-';
+                if (currentRole === 'contractor' && (p.status === 'Generated' || p.status === 'Query Raised')) {
+                    actions = '<button type="button" class="action-btn edit" onclick="confirmPayrollRow(\'' + p.empId + '\')">Confirm</button> <button type="button" class="action-btn" style="background:#d97706;" onclick="raisePayrollQuery(\'' + p.empId + '\')">Query</button>';
+                }
+                tbody.innerHTML += '<tr><td>' + p.empId + '</td><td class="text-left">' + p.name + '</td><td>' + p.contractor + '</td><td>' + p.presentDays + '</td><td>' + p.otHrs + '</td><td>' + fmt(p.basicDa) + '</td><td>' + fmt(p.hra) + '</td><td>' + fmt(p.otAmount) + '</td><td>' + fmt(p.gross) + '</td><td>' + fmt(p.pf) + '</td><td>' + fmt(p.esi) + '</td><td>' + fmt(p.pt) + '</td><td><b>' + fmt(p.net) + '</b></td><td>' + fmt(p.pfEr) + '</td><td>' + fmt(p.esiEr) + '</td><td>' + statusBadge(p.status) + '</td><td>' + actions + '</td></tr>';
+            });
+        }
+
+        function wageTotals(rows) {
+            return {
+                gross: rows.reduce((s, r) => s + (r.gross || 0), 0),
+                net: rows.reduce((s, r) => s + (r.net || 0), 0),
+                employer: rows.reduce((s, r) => s + (r.pfEr || 0) + (r.esiEr || 0), 0)
+            };
+        }
+
+        function finalizeWageRegister(contractor) {
+            if (currentRole !== 'hr_admin') return;
+            const rows = payrollRuns.filter(p => p.period === CURRENT_PERIOD && p.contractor === contractor);
+            if (!rows.length || rows.some(r => r.status !== 'Contractor Confirmed')) {
+                alert('All workers for this contractor must be Contractor Confirmed before the wage register can be finalized.');
+                return;
+            }
+            const t = wageTotals(rows);
+            let wr = wageRegisters.find(w => w.contractor === contractor && w.period === CURRENT_PERIOD);
+            if (!wr) { wr = { contractor, period: CURRENT_PERIOD }; wageRegisters.push(wr); }
+            Object.assign(wr, { total: t.net, gross: t.gross, net: t.net, employer: t.employer, status: 'Final Approved' });
+            addAudit('HR approved the final wage register for ' + contractor + ' (' + CURRENT_PERIOD + ')');
+            persistAll();
+            renderWageRegister();
+        }
+
+        function renderWageRegister() {
+            const tbody = document.getElementById('wage-register-body');
+            const period = CURRENT_PERIOD;
+            let contractors = Array.from(new Set(payrollRuns.filter(p => p.period === period).map(p => p.contractor)));
+            if (currentRole === 'contractor') contractors = contractors.filter(c => c.toLowerCase() === currentContractorName.toLowerCase());
+            tbody.innerHTML = '';
+            if (!contractors.length) {
+                tbody.innerHTML = '<tr><td colspan="7">No wage register data for this period yet.</td></tr>';
+                return;
+            }
+            contractors.forEach(c => {
+                const rows = payrollRuns.filter(p => p.period === period && p.contractor === c);
+                const t = wageTotals(rows);
+                const wr = wageRegisters.find(w => w.contractor === c && w.period === period);
+                const allConfirmed = rows.every(r => r.status === 'Contractor Confirmed');
+                let status = wr ? wr.status : (allConfirmed ? 'Ready to Finalize' : 'Pending Contractor Confirmation');
+                let action = '-';
+                if (currentRole === 'hr_admin' && !wr && allConfirmed) {
+                    action = '<button type="button" class="action-btn edit" onclick="finalizeWageRegister(\'' + c + '\')">Finalize</button>';
+                }
+                if (currentRole === 'contractor' && wr && wr.status === 'Final Approved') {
+                    const existingInvoice = invoices.find(i => i.contractor === c && i.period === period);
+                    if (!existingInvoice) action = '<button type="button" class="action-btn edit" onclick="raiseInvoice(\'' + c + '\')">Raise Invoice</button>';
+                    else action = 'Invoice ' + existingInvoice.invoiceNo + ' raised';
+                }
+                tbody.innerHTML += '<tr><td>' + c + '</td><td>' + rows.length + '</td><td>' + fmt(t.gross) + '</td><td>' + fmt(t.net) + '</td><td>' + fmt(t.employer) + '</td><td>' + statusBadge(status) + '</td><td>' + action + '</td></tr>';
+            });
+        }
+
+        function raiseInvoice(contractor) {
+            if (currentRole !== 'contractor') return;
+            const wr = wageRegisters.find(w => w.contractor === contractor && w.period === CURRENT_PERIOD && w.status === 'Final Approved');
+            if (!wr) {
+                alert('Wage register must be finalized before an invoice can be raised.');
+                return;
+            }
+            if (invoices.some(i => i.contractor === contractor && i.period === CURRENT_PERIOD)) {
+                alert('An invoice for ' + CURRENT_PERIOD + ' has already been raised.');
+                return;
+            }
+            // Built from the confirmed payroll rows: gross wages + employer PF/ESI + service charge, then GST
+            const t = wageTotals(payrollRuns.filter(p => p.period === CURRENT_PERIOD && p.contractor === contractor));
+            const R = rateConfig;
+            const wageAmount = t.gross;
+            const employerContrib = t.employer;
+            const serviceCharge = Math.round(wageAmount * R.service / 100);
+            const taxableValue = wageAmount + employerContrib + serviceCharge;
+            const gst = Math.round(taxableValue * R.gst / 100);
+            const total = taxableValue + gst;
+            const inv = {
+                invoiceNo: 'INV' + (nextInvoiceNo++), contractor, period: CURRENT_PERIOD,
+                wageAmount, employerContrib, serviceCharge, serviceRate: R.service, taxableValue, gst, gstRate: R.gst, total,
+                status: 'Submitted to HR'
+            };
+            invoices.push(inv);
+            addAudit(contractor + ' raised invoice ' + inv.invoiceNo + ' for ' + CURRENT_PERIOD + ' — ₹' + fmt(total));
+            persistAll();
+            renderWageRegister();
+            renderInvoices();
+        }
+
+        function approveInvoice(invoiceNo) {
+            if (currentRole !== 'hr_admin') return;
+            const inv = invoices.find(i => i.invoiceNo === invoiceNo);
+            if (!inv) return;
+            inv.status = 'Approved — Forwarded to Accounts';
+            addAudit('HR verified and approved invoice ' + invoiceNo + '; forwarded to Accounts for payment');
+            persistAll();
+            renderInvoices();
+        }
+
+        function renderInvoices() {
+            const tbody = document.getElementById('invoices-body');
+            let list = invoices;
+            if (currentRole === 'contractor') list = list.filter(i => i.contractor.toLowerCase() === currentContractorName.toLowerCase());
+            tbody.innerHTML = '';
+            if (!list.length) {
+                tbody.innerHTML = '<tr><td colspan="11">No invoices raised yet.</td></tr>';
+                return;
+            }
+            list.forEach(inv => {
+                let action = '-';
+                if (currentRole === 'hr_admin' && inv.status === 'Submitted to HR') {
+                    action = '<button type="button" class="action-btn edit" onclick="approveInvoice(\'' + inv.invoiceNo + '\')">Verify & Approve</button>';
+                }
+                const taxable = inv.taxableValue != null ? inv.taxableValue : (inv.wageAmount + inv.serviceCharge);
+                const svc = fmt(inv.serviceCharge) + (inv.serviceRate != null ? ' (' + inv.serviceRate + '%)' : '');
+                const gst = inv.gst != null ? fmt(inv.gst) + ' (' + inv.gstRate + '%)' : 'Not charged';
+                tbody.innerHTML += '<tr><td>' + inv.invoiceNo + '</td><td>' + (inv.period || '-') + '</td><td>' + inv.contractor + '</td><td>' + fmt(inv.wageAmount) + '</td><td>' + fmt(inv.employerContrib) + '</td><td>' + svc + '</td><td>' + fmt(taxable) + '</td><td>' + gst + '</td><td><b>' + fmt(inv.total) + '</b></td><td>' + statusBadge(inv.status) + '</td><td>' + action + '</td></tr>';
+            });
+        }
+
+        // Initialize data on load
+        loadAllData();
+        populateContractorDropdowns();
+        renderPeriodSelectors();
+        fillRateInputs();
+    </script>
+</body>
+</html>
