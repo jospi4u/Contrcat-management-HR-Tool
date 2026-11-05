@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Admin Portal · Aristo Contract Manpower</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#080807">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Playfair+Display:ital,wght@0,500;0,700;1,500&display=swap">
+<style>
+:root{color-scheme:dark;--bg:#1a1917;--side:#131512;--card:#24221f;--hover:#2c2925;--black:#080807;--ink:#fff;--cream:#f5f0e8;--muted:#a39d94;
+  --gold:#c4a882;--gold-hover:#d4bc9a;--gold-line:rgba(196,168,130,.6);--gold-tint:rgba(196,168,130,.1);--line:rgba(255,255,255,.1);--line2:rgba(255,255,255,.16);
+  --green:#3fbf7f;--danger:#ef5f64;--warn:#e8b04a;--display:"Playfair Display",Georgia,serif;--sans:"DM Sans",system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--cream);font:13px/1.55 var(--sans)}
+a{color:var(--gold)}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:14px 24px;background:var(--black);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:14px}
+.mark{font-weight:600;letter-spacing:4px;color:var(--ink);font-size:13px;padding-right:14px;border-right:2px solid var(--gold)}
+.brand h1{font-family:var(--display);font-size:20px;color:var(--ink);margin:0}
+.hdr{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.pill{display:inline-block;border:1px solid var(--gold-line);color:var(--gold);background:var(--gold-tint);border-radius:999px;padding:3px 10px;font-size:10px;letter-spacing:.8px;text-transform:uppercase}
+.btn,button{font:600 11px var(--sans);letter-spacing:1.5px;text-transform:uppercase;border:0;border-radius:0;padding:9px 16px;cursor:pointer;background:var(--gold);color:#000;min-height:36px}
+.btn:hover,button:hover{background:var(--gold-hover)}
+.ghost{background:transparent;color:var(--gold);border:1px solid var(--gold-line)}.ghost:hover{background:var(--gold-tint);color:var(--gold-hover)}
+.danger{background:transparent;color:var(--danger);border:1px solid var(--danger)}.danger:hover{background:rgba(239,95,100,.12)}
+.sm{padding:5px 10px;min-height:28px;font-size:9.5px;letter-spacing:1px}
+a.btn{text-decoration:none;display:inline-flex;align-items:center}
+.wrap{display:flex;min-height:calc(100vh - 62px)}
+nav{width:210px;flex-shrink:0;background:var(--side);border-right:1px solid var(--line);padding-top:14px}
+nav a{display:block;padding:11px 20px;color:var(--muted);text-decoration:none;border-left:2px solid transparent}
+nav a:hover{color:var(--ink);background:var(--hover)}
+nav a.on{color:var(--ink);background:var(--gold-tint);border-left-color:var(--gold);font-weight:600}
+main{flex:1;min-width:0;padding:26px 30px}
+section{display:none}section.on{display:block}
+h2{font-family:var(--display);color:var(--ink);font-size:24px;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:18px}
+.card h3{font-family:var(--display);font-style:italic;font-weight:500;color:var(--gold);font-size:16px;margin:0 0 12px}
+.six{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin-bottom:18px}
+.metric{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;display:flex;flex-direction:column;gap:6px}
+.metric .k{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.metric .v{font-family:var(--display);font-size:34px;line-height:40px;color:var(--ink)}
+.metric .d{font-size:12px;color:var(--muted)}
+.metric .d b{color:var(--cream);font-weight:500}
+.bar{height:6px;background:var(--line2);border-radius:3px;overflow:hidden}.bar span{display:block;height:100%;background:var(--gold)}
+.funnel{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.funnel div{display:grid;grid-template-columns:110px 1fr 34px;gap:8px;align-items:center;font-size:11px}
+.funnel .worst{color:var(--warn)}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{background:var(--black);color:var(--muted);font-weight:500;font-size:10px;letter-spacing:.8px;text-transform:uppercase;text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+tbody tr:hover td{background:var(--hover)}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+.ok{color:var(--green)}.bad{color:var(--danger)}.warn{color:var(--warn)}.mut{color:var(--muted)}
+.badge{display:inline-block;border:1px solid currentColor;border-radius:999px;padding:1px 8px;font-size:9.5px;font-weight:600;letter-spacing:.6px;text-transform:uppercase}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px 16px}
+label{display:block;font-size:10.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+input,select{width:100%;font:inherit;color:var(--ink);background:var(--black);border:1px solid var(--line2);border-radius:8px;padding:8px 10px;min-height:38px}
+input:focus,select:focus{border-color:var(--gold);outline:none}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.toolbar input,.toolbar select{width:auto;min-width:180px}
+.note{border:1px solid var(--gold-line);background:var(--gold-tint);border-radius:8px;padding:10px 12px;font-size:12px;margin:10px 0}
+.note.bad{border-color:var(--danger);background:rgba(239,95,100,.1);color:var(--danger)}
+.secret{font-family:ui-monospace,Consolas,monospace;font-size:15px;color:var(--ink);letter-spacing:1px;background:var(--black);padding:6px 10px;border-radius:6px;display:inline-block}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--gold-line);color:var(--cream);padding:10px 16px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
+#toast.show{opacity:1}
+dialog{background:var(--card);color:var(--cream);border:1px solid var(--gold-line);border-top:2px solid var(--gold);border-radius:12px;padding:22px;max-width:560px;width:calc(100% - 32px)}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog h3{font-family:var(--display);color:var(--ink);font-size:20px;margin:0 0 14px}
+@media (max-width:760px){.wrap{flex-direction:column}nav{width:auto;display:flex;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);padding:0}
+  nav a{white-space:nowrap;border-left:0;border-bottom:2px solid transparent}nav a.on{border-bottom-color:var(--gold)}main{padding:16px}header{padding:12px 16px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="mark">ARISTO</span><h1>Admin Portal</h1></div>
+  <div class="hdr"><span id="me" class="pill">System Admin</span><a class="btn ghost sm" href="/">Open the app</a><a class="btn ghost sm" href="/logout">Sign out</a></div>
+</header>
+<div class="wrap">
+  <nav id="nav">
+    <a href="#dashboard" class="on">Dashboard</a>
+    <a href="#users">Users</a>
+    <a href="#contractors">Contractors</a>
+    <a href="#logins">Login history</a>
+    <a href="#activity">Activity</a>
+  </nav>
+  <main>
+    <div id="load-error" class="note bad" style="display:none"></div>
+
+    <!-- DASHBOARD: the six numbers -->
+    <section id="dashboard" class="on">
+      <h2>Six numbers. No more.</h2>
+      <p class="sub">How the app is being used. <span class="toolbar" style="display:inline-flex;margin:0 0 0 8px"><select id="period" onchange="render()"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option></select></span></p>
+      <div class="six" id="six"></div>
+      <div class="card"><h3>Who used it</h3><div class="scroll"><table><thead><tr><th>Person</th><th>Role</th><th>Sign-ins</th><th>Last sign-in</th><th>Reached aha</th></tr></thead><tbody id="who-body"></tbody></table></div></div>
+    </section>
+
+    <!-- USERS -->
+    <section id="users">
+      <h2>Users</h2>
+      <p class="sub">Every login to the app. Changes take effect at once: a deactivated, deleted or reset login is signed out on its next click.</p>
+      <div class="toolbar"><button onclick="editUser()">+ Add user</button><input id="user-q" placeholder="Search name, ID, contractor…" oninput="renderUsers()"><select id="user-role" onchange="renderUsers()"><option value="">All roles</option></select></div>
+      <div class="scroll"><table><thead><tr><th>User ID</th><th>Name</th><th>Role</th><th>Contractor / Division</th><th>Status</th><th>Last sign-in</th><th>Actions</th></tr></thead><tbody id="users-body"></tbody></table></div>
+    </section>
+
+    <!-- CONTRACTORS -->
+    <section id="contractors">
+      <h2>Contractors</h2>
+      <p class="sub">The contractor list used across the app. Renaming updates every worker, candidate, requisition, payroll row, invoice, document and login that uses the old name.</p>
+      <div class="card"><h3>Add a contractor</h3><div class="grid"><div><label>Contractor name</label><input id="c-name" placeholder="e.g. M/s. ABC Manpower Services"></div><div><label>Location</label><input id="c-loc" placeholder="e.g. Bangalore"></div></div><div class="row"><button onclick="addContractor()">Add contractor</button></div></div>
+      <div class="scroll"><table><thead><tr><th>Contractor</th><th>Location</th><th>Logins</th><th>Status</th><th>Actions</th></tr></thead><tbody id="contractors-body"></tbody></table></div>
+    </section>
+
+    <!-- LOGIN HISTORY -->
+    <section id="logins">
+      <h2>Login history</h2>
+      <p class="sub">Every sign-in attempt, newest first (last 500).</p>
+      <div class="toolbar"><input id="login-q" placeholder="Filter by user ID…" oninput="renderLogins()"><select id="login-ok" onchange="renderLogins()"><option value="">All attempts</option><option value="1">Successful</option><option value="0">Failed</option></select></div>
+      <div class="scroll"><table><thead><tr><th>When</th><th>User ID</th><th>Result</th><th>Note</th><th>Device</th><th>IP</th></tr></thead><tbody id="logins-body"></tbody></table></div>
+    </section>
+
+    <!-- ACTIVITY -->
+    <section id="activity">
+      <h2>Activity</h2>
+      <p class="sub">What people did in the app, newest first. To change any data yourself, use <a href="/">Open the app</a>: your admin login has full HR rights there.</p>
+      <div class="toolbar"><input id="act-q" placeholder="Filter by person or words…" oninput="renderActivity()"></div>
+      <div class="card"><h3>Actions</h3><div class="scroll"><table><thead><tr><th>When</th><th>Who</th><th>What happened</th></tr></thead><tbody id="audit-body"></tbody></table></div></div>
+      <div class="card"><h3>Records changed recently</h3><div class="scroll"><table><thead><tr><th>When</th><th>Changed by</th><th>Area</th><th>Record</th></tr></thead><tbody id="changes-body"></tbody></table></div></div>
+    </section>
+  </main>
+</div>
+
+<dialog id="user-dlg">
+  <h3 id="u-title">Add user</h3>
+  <div class="grid">
+    <div><label>User ID</label><input id="u-id" autocapitalize="none" spellcheck="false" placeholder="e.g. pm.lacquer"></div>
+    <div><label>Name</label><input id="u-name" placeholder="Full name or job title"></div>
+    <div><label>Role</label><select id="u-role" onchange="roleFields()"></select></div>
+    <div id="u-con-wrap"><label>Contractor</label><select id="u-con"></select></div>
+    <div id="u-div-wrap"><label>Division</label><select id="u-div"></select></div>
+    <div><label>Status</label><select id="u-active"><option value="1">Active</option><option value="0">Switched off</option></select></div>
+  </div>
+  <div style="margin-top:12px"><label>Password <span id="u-pw-hint" class="mut" style="text-transform:none;letter-spacing:0"></span></label>
+    <div class="row" style="margin-top:0"><input id="u-pw" style="flex:1;min-width:200px" autocomplete="new-password" placeholder="At least 8 characters, letters and numbers"><button class="ghost sm" type="button" onclick="genPw()">Generate</button></div></div>
+  <div id="u-err" class="note bad" style="display:none"></div>
+  <div class="row"><button onclick="saveUser()">Save</button><button class="ghost" onclick="document.getElementById('user-dlg').close()">Cancel</button></div>
+</dialog>
+
+<dialog id="pw-dlg">
+  <h3>Password set</h3>
+  <p>Give this to <b id="pw-user"></b>. It is shown only now — it isn't stored anywhere.</p>
+  <p><span class="secret" id="pw-value"></span> <button class="ghost sm" onclick="copyPw()">Copy</button></p>
+  <div class="row"><button onclick="document.getElementById('pw-dlg').close()">Done</button></div>
+</dialog>
+<div id="toast"></div>
+
+<script>
+'use strict';
+const ROLES = { admin: 'System Admin', hr_admin: 'HR Admin', gm_production: 'GM Production', production_manager: 'Production Manager', supervisor: 'Supervisor', contractor: 'Contractor' };
+const DIVISIONS = ['Aristo Vertical Production', 'Aristo Cabinetry Production', 'Art of Lacquering', 'Aristo Quality and Service', 'Aristo Cabinetry Site Installation', 'Admin Department'];
+const AHA_LABEL = { contractor: 'submitted a candidate', hr_admin: 'acted on a candidate or requisition', admin: 'acted on a candidate or requisition', gm_production: 'approved a requisition', production_manager: 'interview decision or requisition', supervisor: 'interview decision or requisition' };
+let D = null, editing = null;
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const when = t => { if (!t) return '—'; const d = new Date(t); return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); };
+const ago = t => { if (!t) return 'never'; const s = (Date.now() - new Date(t)) / 1000; return s < 90 ? 'just now' : s < 5400 ? Math.round(s / 60) + ' min ago' : s < 129600 ? Math.round(s / 3600) + ' h ago' : Math.round(s / 86400) + ' days ago'; };
+const toast = m => { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2600); };
+const device = ua => !ua ? '—' : /iPhone|iPad/.test(ua) ? 'iPhone / iPad' : /Android/.test(ua) ? 'Android phone' : /Windows/.test(ua) ? 'Windows PC' : /Mac OS/.test(ua) ? 'Mac' : 'Other';
+const median = a => { if (!a.length) return null; const s = a.slice().sort((x, y) => x - y), m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+const nameOf = id => { const u = D.users.find(x => x.user === id); return u ? (u.name || u.user) : id; };
+const contractors = () => (Array.isArray(D.contractors) ? D.contractors : []);
+
+async function api(path, body) {
+  const r = await fetch(path, body ? { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : { credentials: 'same-origin', cache: 'no-store' });
+  if (r.status === 401) { location.href = '/'; throw new Error('signed out'); }
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.message || d.error || ('Error ' + r.status));
+  return d;
+}
+async function load() {
+  try { D = await api('/api/admin/overview'); document.getElementById('load-error').style.display = 'none'; render(); }
+  catch (e) { const el = document.getElementById('load-error'); el.textContent = 'Could not load: ' + e.message + '. If you just set up the Admin Portal, run supabase/setup.sql again in Supabase.'; el.style.display = 'block'; }
+}
+
+/* ---------- navigation ---------- */
+function show(id) {
+  document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === id));
+  document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + id));
+}
+window.addEventListener('hashchange', () => show(location.hash.slice(1) || 'dashboard'));
+if (location.hash) show(location.hash.slice(1));
+
+/* ---------- dashboard ---------- */
+function render() { if (!D) return; renderSix(); renderUsers(); renderContractors(); renderLogins(); renderActivity(); }
+function renderSix() {
+  const days = +document.getElementById('period').value, since = Date.now() - days * 864e5;
+  const logins = D.logins.filter(l => l.success && new Date(l.at) >= since);
+  const users = [...new Set(logins.map(l => l.user_id))];
+  const ev = D.events.filter(e => new Date(e.at) >= since);
+  const ahaUsers = [...new Set(ev.filter(e => e.kind === 'aha').map(e => e.user_id))];
+  const reached = users.filter(u => ahaUsers.includes(u));
+  const times = ev.filter(e => e.kind === 'aha' && e.meta && e.meta.secondsFromOpen != null).map(e => +e.meta.secondsFromOpen).filter(n => n >= 0 && n < 86400);
+  const med = median(times);
+  // candidate pipeline drop-off
+  const C = D.candidates, W = D.workers;
+  const passedHR = c => ['Forwarded to Production', 'On Hold', 'Selected', 'Rejected by Production'].includes(c.status);
+  const stages = [
+    ['Submitted', C.length],
+    ['HR forwarded', C.filter(passedHR).length],
+    ['Selected', C.filter(c => c.status === 'Selected').length],
+    ['Profile made', C.filter(c => c.workerEmpId).length],
+    ['Active', W.filter(w => w.candidateId && w.status === 'Active').length]
+  ];
+  let worst = -1, worstDrop = 0;
+  for (let i = 1; i < stages.length; i++) { const drop = stages[i - 1][1] - stages[i][1]; if (drop > worstDrop) { worstDrop = drop; worst = i; } }
+  const auto = C.reduce((n, c) => n + (c.autoFilled && +c.autoFilled.fields || 0), 0);
+  const docs = ev.filter(e => e.kind === 'docs_read').reduce((n, e) => n + (e.meta && +e.meta.docs || 0), 0);
+  const returned = C.filter(c => (c.history || []).some(h => /Sent back/.test(h.what || ''))).length;
+  const minutes = Math.round(auto * 0.5 + C.length * 10);   // ~30 s per field typed + ~10 min of email/paper chasing per candidate
+  const metric = (k, v, d, extra = '') => `<div class="metric"><span class="k">${k}</span><span class="v">${v}</span><span class="d">${d}</span>${extra}</div>`;
+  const pct = users.length ? Math.round(reached.length / users.length * 100) : 0;
+  document.getElementById('six').innerHTML =
+    metric('Who used it', users.length, `<b>${logins.length}</b> sign-ins by <b>${users.length}</b> people in the last ${days} days`) +
+    metric('Reached aha', `${reached.length} <span style="font-size:18px;color:var(--muted)">of ${users.length}</span>`, 'did their key action: submitted, forwarded, approved or decided', `<div class="bar"><span style="width:${pct}%"></span></div>`) +
+    metric('Time to aha', med == null ? '—' : (med < 120 ? Math.round(med) + ' s' : Math.round(med / 60) + ' min'), med == null ? 'no key actions yet in this period' : `median seconds from opening the app to the first key action (${times.length} sessions)`) +
+    metric('Drop-off', worst > 0 ? stages[worst - 1][0] + ' →' : '—', worst > 0 ? `most candidates stop after <b>${stages[worst - 1][0]}</b> (${worstDrop} of ${stages[worst - 1][1]})` : 'not enough candidates yet',
+      '<div class="funnel">' + stages.map((s, i) => `<div class="${i === worst ? 'worst' : ''}"><span>${s[0]}</span><div class="bar"><span style="width:${stages[0][1] ? Math.round(s[1] / stages[0][1] * 100) : 0}%"></span></div><span>${s[1]}</span></div>`).join('') + '</div>') +
+    metric('Cost per run', '0 <span style="font-size:18px;color:var(--muted)">tokens</span>', 'documents are read on the phone or PC itself; no AI service is called, so there is no usage cost') +
+    metric('Outcome per run', '~' + minutes + ' min', `saved: <b>${auto}</b> fields filled from <b>${docs}</b> documents; <b>${returned}</b> candidates sent back to fix errors before reaching Production`);
+  // who used it — people table
+  const rows = users.map(u => {
+    const mine = logins.filter(l => l.user_id === u), acct = D.users.find(x => x.user === u) || {};
+    return { u, name: acct.name || u, role: acct.role, n: mine.length, last: mine[0] && mine[0].at, aha: ahaUsers.includes(u) };
+  }).sort((a, b) => new Date(b.last) - new Date(a.last));
+  document.getElementById('who-body').innerHTML = rows.length ? rows.map(r => `<tr><td>${esc(r.name)} <span class="mut">(${esc(r.u)})</span></td><td>${esc(ROLES[r.role] || r.role || '—')}</td><td>${r.n}</td><td>${when(r.last)} <span class="mut">· ${ago(r.last)}</span></td><td>${r.aha ? '<span class="ok">Yes</span>' : '<span class="mut">Not yet</span>'}</td></tr>`).join('')
+    : '<tr><td colspan="5" class="mut">Nobody has signed in during this period.</td></tr>';
+}
+
+/* ---------- users ---------- */
+function roleOptions(sel, withAll) { sel.innerHTML = (withAll ? '<option value="">All roles</option>' : '') + Object.entries(ROLES).map(([k, v]) => `<option value="${k}">${v}</option>`).join(''); }
+roleOptions(document.getElementById('user-role'), true); roleOptions(document.getElementById('u-role'));
+document.getElementById('u-div').innerHTML = DIVISIONS.map(d => `<option>${esc(d)}</option>`).join('');
+function renderUsers() {
+  const q = document.getElementById('user-q').value.toLowerCase(), r = document.getElementById('user-role').value;
+  const list = D.users.filter(u => (!r || u.role === r) && (!q || [u.user, u.name, u.contractor, u.division].join(' ').toLowerCase().includes(q)));
+  document.getElementById('users-body').innerHTML = list.map(u => `<tr>
+    <td><b>${esc(u.user)}</b></td><td>${esc(u.name || '—')}</td><td>${esc(ROLES[u.role] || u.role)}</td><td>${esc(u.contractor || u.division || '—')}</td>
+    <td>${u.active ? '<span class="badge ok">Active</span>' : '<span class="badge bad">Off</span>'}</td><td>${u.last_login ? when(u.last_login) + ' <span class="mut">· ' + ago(u.last_login) + '</span>' : '<span class="mut">never</span>'}</td>
+    <td style="white-space:nowrap"><button class="ghost sm" onclick="editUser('${esc(u.user)}')">Edit</button> <button class="ghost sm" onclick="resetPw('${esc(u.user)}')">Reset password</button>
+      <button class="ghost sm" onclick="toggleUser('${esc(u.user)}')">${u.active ? 'Switch off' : 'Switch on'}</button> <button class="danger sm" onclick="deleteUser('${esc(u.user)}')">Delete</button></td></tr>`).join('')
+    || '<tr><td colspan="7" class="mut">No users match.</td></tr>';
+}
+function roleFields() {
+  const r = document.getElementById('u-role').value;
+  document.getElementById('u-con-wrap').style.display = r === 'contractor' ? '' : 'none';
+  document.getElementById('u-div-wrap').style.display = (r === 'production_manager' || r === 'supervisor') ? '' : 'none';
+}
+function genPw() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789', b = crypto.getRandomValues(new Uint8Array(14));
+  let p = Array.from(b, x => chars[x % chars.length]).join(''); if (!/\d/.test(p)) p = p.slice(0, -1) + '7'; if (!/[A-Za-z]/.test(p)) p = 'a' + p.slice(1);
+  document.getElementById('u-pw').value = p;
+}
+function editUser(id) {
+  editing = id ? D.users.find(u => u.user === id) : null;
+  document.getElementById('u-title').textContent = editing ? 'Edit ' + editing.user : 'Add user';
+  document.getElementById('u-id').value = editing ? editing.user : ''; document.getElementById('u-id').disabled = !!editing;
+  document.getElementById('u-name').value = editing ? editing.name || '' : '';
+  document.getElementById('u-role').value = editing ? editing.role : 'contractor';
+  document.getElementById('u-con').innerHTML = contractors().map(c => `<option${c.active === false ? ' disabled' : ''}>${esc(c.name)}</option>`).join('');
+  document.getElementById('u-con').value = editing && editing.contractor || (contractors()[0] || {}).name || '';
+  document.getElementById('u-div').value = editing && editing.division || DIVISIONS[0];
+  document.getElementById('u-active').value = !editing || editing.active ? '1' : '0';
+  document.getElementById('u-pw').value = ''; if (!editing) genPw();
+  document.getElementById('u-pw-hint').textContent = editing ? '— leave empty to keep the current password' : '';
+  document.getElementById('u-err').style.display = 'none';
+  roleFields(); document.getElementById('user-dlg').showModal();
+}
+async function saveUser(overrides) {
+  const v = id => document.getElementById(id).value.trim();
+  const body = Object.assign({ user: v('u-id').toLowerCase(), name: v('u-name'), role: v('u-role'), contractor: v('u-con'), division: v('u-div'), active: v('u-active') === '1', password: v('u-pw') }, overrides || {});
+  if (body.role !== 'contractor') body.contractor = '';
+  if (body.role !== 'production_manager' && body.role !== 'supervisor') body.division = '';
+  try {
+    await api('/api/admin/save-user', body);
+    document.getElementById('user-dlg').close();
+    if (body.password) { document.getElementById('pw-user').textContent = body.user; document.getElementById('pw-value').textContent = body.password; document.getElementById('pw-dlg').showModal(); }
+    else toast('Saved ' + body.user);
+    load();
+  } catch (e) { const el = document.getElementById('u-err'); el.textContent = e.message; el.style.display = 'block'; if (overrides) alert(e.message); }
+}
+function userBody(u, extra) { return Object.assign({ user: u.user, name: u.name || '', role: u.role, contractor: u.contractor || '', division: u.division || '', active: u.active }, extra); }
+async function resetPw(id) {
+  const u = D.users.find(x => x.user === id); if (!u || !confirm('Make a new password for ' + id + '? Their current password stops working at once.')) return;
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'; let p = Array.from(crypto.getRandomValues(new Uint8Array(14)), x => chars[x % chars.length]).join('').slice(0, 13) + '7';
+  try { await api('/api/admin/save-user', userBody(u, { password: p })); document.getElementById('pw-user').textContent = id; document.getElementById('pw-value').textContent = p; document.getElementById('pw-dlg').showModal(); load(); }
+  catch (e) { alert(e.message); }
+}
+async function toggleUser(id) {
+  const u = D.users.find(x => x.user === id); if (!u) return;
+  if (u.active && !confirm('Switch off ' + id + '? They are signed out straight away and can\'t sign in until you switch them on again.')) return;
+  try { await api('/api/admin/save-user', userBody(u, { active: !u.active })); toast((u.active ? 'Switched off ' : 'Switched on ') + id); load(); } catch (e) { alert(e.message); }
+}
+async function deleteUser(id) {
+  if (!confirm('Delete the login ' + id + '? This can\'t be undone. Their past records and history stay.')) return;
+  try { await api('/api/admin/delete-user', { user: id }); toast('Deleted ' + id); load(); } catch (e) { alert(e.message); }
+}
+function copyPw() { navigator.clipboard.writeText(document.getElementById('pw-value').textContent).then(() => toast('Copied')); }
+
+/* ---------- contractors ---------- */
+function renderContractors() {
+  const list = contractors();
+  document.getElementById('contractors-body').innerHTML = list.map((c, i) => {
+    const logins = D.users.filter(u => (u.contractor || '').toLowerCase() === c.name.toLowerCase()).length;
+    return `<tr><td><b>${esc(c.name)}</b></td><td><input value="${esc(c.location || '')}" style="min-width:130px" onchange="setLoc(${i}, this.value)"></td><td>${logins}</td>
+      <td>${c.active === false ? '<span class="badge bad">Off</span>' : '<span class="badge ok">Active</span>'}</td>
+      <td style="white-space:nowrap"><button class="ghost sm" onclick="renameContractor(${i})">Rename</button> <button class="ghost sm" onclick="toggleContractor(${i})">${c.active === false ? 'Switch on' : 'Switch off'}</button> <button class="danger sm" onclick="deleteContractor(${i})">Delete</button></td></tr>`;
+  }).join('') || '<tr><td colspan="5" class="mut">No contractors yet.</td></tr>';
+}
+async function saveContractors(list, msg) { try { await api('/api/admin/contractors', { list }); toast(msg); load(); } catch (e) { alert(e.message); load(); } }
+function addContractor() {
+  const name = document.getElementById('c-name').value.trim(), location = document.getElementById('c-loc').value.trim();
+  if (!name) return alert('Enter the contractor name.');
+  if (contractors().some(c => c.name.toLowerCase() === name.toLowerCase())) return alert('That contractor is already in the list.');
+  document.getElementById('c-name').value = ''; document.getElementById('c-loc').value = '';
+  saveContractors(contractors().concat([{ name, location, active: true }]), 'Added ' + name + '. Now add a login for them under Users.');
+}
+function setLoc(i, loc) { const l = contractors().map(c => Object.assign({}, c)); l[i].location = loc.trim(); saveContractors(l, 'Location updated'); }
+function toggleContractor(i) { const l = contractors().map(c => Object.assign({}, c)); l[i].active = l[i].active === false; saveContractors(l, l[i].name + (l[i].active ? ' switched on' : ' switched off — no new requisitions can be assigned to them')); }
+function deleteContractor(i) {
+  const c = contractors()[i], logins = D.users.filter(u => (u.contractor || '').toLowerCase() === c.name.toLowerCase());
+  if (logins.length) return alert(c.name + ' still has ' + logins.length + ' login(s): ' + logins.map(u => u.user).join(', ') + '. Delete or move those logins first, or use Switch off instead.');
+  if (!confirm('Remove ' + c.name + ' from the contractor list? Their past workers and records keep the name.')) return;
+  saveContractors(contractors().filter((_, j) => j !== i), 'Removed ' + c.name);
+}
+async function renameContractor(i) {
+  const c = contractors()[i], nn = prompt('New name for "' + c.name + '"\n\nEvery record, document and login using the old name will be updated.', c.name);
+  if (!nn || !nn.trim() || nn.trim() === c.name) return;
+  try { const r = await api('/api/admin/rename-contractor', { old: c.name, new: nn.trim() }); toast('Renamed — ' + r.records + ' records and ' + r.logins + ' logins updated'); load(); } catch (e) { alert(e.message); }
+}
+
+/* ---------- login history + activity ---------- */
+function renderLogins() {
+  const q = document.getElementById('login-q').value.toLowerCase(), ok = document.getElementById('login-ok').value;
+  const list = D.logins.filter(l => (!q || (l.user_id || '').includes(q)) && (ok === '' || String(+l.success) === ok));
+  document.getElementById('logins-body').innerHTML = list.map(l => `<tr><td>${when(l.at)}</td><td><b>${esc(l.user_id || '—')}</b> <span class="mut">${esc(l.user_id ? nameOf(l.user_id) === l.user_id ? '' : nameOf(l.user_id) : '')}</span></td>
+    <td>${l.success ? '<span class="ok">Signed in</span>' : '<span class="bad">Failed</span>'}</td><td class="mut">${esc(l.note || '')}</td><td>${esc(device(l.user_agent))}</td><td class="mut">${esc(l.ip || '—')}</td></tr>`).join('')
+    || '<tr><td colspan="6" class="mut">No sign-ins recorded yet.</td></tr>';
+}
+function renderActivity() {
+  const q = document.getElementById('act-q').value.toLowerCase();
+  const audit = D.audit.filter(a => !q || (a.user_id + ' ' + nameOf(a.user_id) + ' ' + a.text).toLowerCase().includes(q));
+  document.getElementById('audit-body').innerHTML = audit.slice(0, 300).map(a => `<tr><td style="white-space:nowrap">${when(a.at)}</td><td>${esc(nameOf(a.user_id))}</td><td>${esc(a.text)}</td></tr>`).join('') || '<tr><td colspan="3" class="mut">Nothing yet.</td></tr>';
+  const area = { workers: 'Worker master', pendingSubmissions: 'Onboarding submission', requisitions: 'Requisition', candidates: 'Candidate', resignations: 'Resignation', exitClearances: 'Exit clearance', attendanceRecords: 'Attendance', payrollRuns: 'Payroll', wageRegisters: 'Wage register', invoices: 'Invoice' };
+  const ch = D.recent_changes.filter(c => !q || (c.updated_by + ' ' + nameOf(c.updated_by) + ' ' + c.collection + ' ' + c.id).toLowerCase().includes(q));
+  document.getElementById('changes-body').innerHTML = ch.map(c => `<tr><td style="white-space:nowrap">${when(c.updated_at)}</td><td>${esc(nameOf(c.updated_by))}</td><td>${esc(area[c.collection] || c.collection)}</td><td class="mut">${esc(c.id)}</td></tr>`).join('') || '<tr><td colspan="4" class="mut">Nothing yet.</td></tr>';
+}
+
+fetch('/whoami', { credentials: 'same-origin' }).then(r => r.json()).then(me => { const n = me.name || me.user; document.getElementById('me').textContent = n === 'System Admin' ? 'System Admin' : n + ' · System Admin'; }).catch(() => {});
+load();
+setInterval(() => { if (document.visibilityState === 'visible') load(); }, 60000);
+</script>
+</body>
+</html>

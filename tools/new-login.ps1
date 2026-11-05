@@ -3,10 +3,11 @@
 #   powershell -ExecutionPolicy Bypass -File tools\new-login.ps1 -User pm.lacquer -Role production_manager -Division "Art of Lacquering"
 # Roles: hr_admin, gm_production, production_manager, supervisor, contractor
 #
+# Normally you add logins in the Admin Portal (/admin) instead. This script is a fallback.
 # Prints:
 #   Password  give it to the person (it is not stored anywhere)
-#   Line      paste into USERS in middleware.js
-#   Sql       run in Supabase → SQL Editor so the shared database knows the login too
+#   Line      (not used any more: logins now live in the database)
+#   Sql       run in Supabase → SQL Editor to add the login
 # Only salted one-way fingerprints go into the code and database, never the password.
 param(
   [Parameter(Mandatory = $true)][string]$User,
@@ -45,5 +46,5 @@ if ($Name)       { $extra += ", name: $(& $js $Name)" }
   User     = $User
   Password = $Password
   Line     = "  '$User': { salt: '$saltHex', fp: '$fp'$extra },"
-  Sql      = "insert into app_users (user_id, fp, role, contractor, division, name) values ('$User', '$fp', $(& $sq $Role), $(& $sq $Contractor), $(& $sq $Division), $(& $sq $Name)) on conflict (user_id) do update set fp = excluded.fp, role = excluded.role, contractor = excluded.contractor, division = excluded.division, name = excluded.name;"
+  Sql      = "insert into app_users (user_id, fp, salt, role, contractor, division, name) values ('$User', '$fp', '$saltHex', $(& $sq $Role), $(& $sq $Contractor), $(& $sq $Division), $(& $sq $Name)) on conflict (user_id) do update set fp = excluded.fp, salt = excluded.salt, role = excluded.role, contractor = excluded.contractor, division = excluded.division, name = excluded.name;"
 }

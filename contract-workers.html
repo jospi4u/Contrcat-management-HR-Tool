@@ -3250,6 +3250,13 @@
                 if (s.rateConfig) rateConfig = Object.assign({}, DEFAULT_RATES, s.rateConfig);
                 if (s.gradeSalaryBudget) gradeSalaryBudget = Object.assign(gradeSalaryBudget, s.gradeSalaryBudget);
                 (s.knownContractors || []).forEach(n => knownContractors.add(n));
+                // the contractor list is managed in the Admin Portal; switched-off contractors drop out of new assignments
+                if (Array.isArray(s.contractors) && s.contractors.length) {
+                    const active = s.contractors.filter(c => c && c.name && c.active !== false).map(c => ({ name: c.name, location: c.location || '' }));
+                    CONTRACTORS.splice(0, CONTRACTORS.length, ...active);
+                    active.forEach(c => knownContractors.add(c.name));
+                    try { populateContractorDropdowns(); } catch (e) {}
+                }
             },
             // contractor / division a record belongs to (used by the database's access rules)
             owner(c, x) {
@@ -3541,6 +3548,9 @@
                     this.renderFiles(kind);
                 }
                 this.status(this.allRead() ? 'Details filled in from the documents — please check them.' : '');
+                if (this.allRead() && list.length) {
+                    try { USAGE.send('docs_read', { docs: list.length, kind, fields: Object.keys(this.auto).length }); } catch (e) {}
+                }
             },
             allRead() { return Object.values(this.files).flat().every(f => f.status !== 'Reading…'); },
             clearForm() {
@@ -3620,7 +3630,8 @@
                         permAddr: v('cf-address'), state: v('cf-state'), pincode: v('cf-pincode'),
                         education: v('cf-education'), board: v('cf-board'), passYear: v('cf-passyear'),
                         experience: v('cf-experience'), skills: v('cf-skills'), skill: v('cf-skill'), remarks: v('cf-remarks'),
-                        docs, submittedOn: (prev && prev.submittedOn) || todayStr()
+                        docs, submittedOn: (prev && prev.submittedOn) || todayStr(),
+                        autoFilled: { fields: Object.keys(this.auto).length, docs: docs.length }
                     });
                     rec.history = ((prev && prev.history) || []).concat([{ at: new Date().toLocaleString(), by: currentContractorName, what: prev ? 'Resubmitted to HR' : 'Submitted to HR' }]);
                     if (prev) Object.assign(prev, rec); else candidates.push(rec);
@@ -3853,14 +3864,42 @@
             }
         }
 
+        /* ---------- usage signals for the Admin Portal dashboard ---------- */
+        const USAGE = {
+            openedAt: Date.now(), ahaSent: false,
+            send(kind, meta) {
+                if (!SYNC.on) return;
+                fetch('/api/event', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind, meta: meta || {} }) }).catch(() => {});
+            },
+            // the first "key action" of a session: the moment the app proved useful to this person
+            KEY: /submitted candidate|resubmitted candidate|forwarded to Production|Sent back to contractor|Rejected by HR|Selected in Production|Rejected in Production|Put on hold|approved requisition|approved New Manpower|Production Manager approved|raised requisition|approved employee|confirmed payroll|raised invoice|approved the final wage register|generated payroll/i,
+            check(text) {
+                if (this.ahaSent || !this.KEY.test(text)) return;
+                this.ahaSent = true;
+                this.send('aha', { action: String(text).slice(0, 120), secondsFromOpen: Math.round((Date.now() - this.openedAt) / 1000), role: currentRole });
+            }
+        };
+        const addAuditForUsage = addAudit;
+        addAudit = function (text) { addAuditForUsage(text); try { USAGE.check(text); } catch (e) {} };
+
         fetch('/whoami', { cache: 'no-store', credentials: 'same-origin' })
             .then(r => r.ok ? r.json() : Promise.reject(r.status))
             .then(async me => {
+                // a System Admin uses the app with full HR rights, plus a link to the Admin Portal
+                const isAdmin = me.role === 'admin';
+                if (isAdmin) me = Object.assign({}, me, { role: 'hr_admin', name: me.name || 'System Admin' });
                 if (!ROLE_LABELS[me.role]) throw new Error('no role');
                 const shared = await connectDatabase(me);
                 startAs(me);
                 SYNC.rerender();
+                if (isAdmin) {
+                    document.getElementById('role-badge').textContent = (me.name && me.name !== 'System Admin' ? me.name + ' · ' : '') + 'System Admin';
+                    const a = document.createElement('a'); a.href = '/admin'; a.id = 'admin-link'; a.textContent = 'Admin Portal';
+                    a.style.cssText = 'color:#000;background:var(--aw-gold);padding:6px 12px;font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;text-decoration:none';
+                    document.querySelector('.header-right').appendChild(a);
+                }
                 if (!shared) SYNC.status('Shared database not connected — saving on this computer only', true);
+                else USAGE.send('open', { role: me.role });
             })
             .catch(err => {
                 document.body.classList.remove('identity-pending');
