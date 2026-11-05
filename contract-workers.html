@@ -1027,6 +1027,9 @@
                     </table>
                 </div>
 
+                <!-- Requisition review (Production Manager / GM Production / anyone viewing) -->
+                <div id="req-review-panel" class="cw-panel" style="display:none;"></div>
+
                 <!-- HR Review & Assign panel -->
                 <div id="hr-review-panel" style="display:none; border:2px solid var(--accent-color); border-radius:6px; padding:14px; margin-bottom:20px; background:#fffaf5;">
                     <div class="section-header" style="margin-top:0;">Requisition Details — <span id="hrr-id"></span></div>
@@ -1038,7 +1041,7 @@
                     <div style="margin-top:10px;">
                         <button type="button" onclick="confirmApproveRequisition()">Approve & Assign</button>
                         <button type="button" style="background:#64748b;" onclick="closeReviewPanel()">Cancel</button>
-                        <button type="button" class="action-btn delete" onclick="rejectRequisition(currentReviewId); closeReviewPanel();">Reject Instead</button>
+                        <button type="button" class="action-btn delete" onclick="if (rejectRequisition(currentReviewId) !== 'stop') closeReviewPanel();">Reject Instead</button>
                     </div>
                 </div>
 
@@ -1054,7 +1057,7 @@
                 <div class="section-header">All Requisitions</div>
                 <div class="table-wrapper">
                     <table>
-                        <thead><tr><th>Date</th><th>Division</th><th>Position</th><th>Count</th><th>Type</th><th>Status</th><th>Assigned Contractor(s)</th><th>Recruitment Deadline</th></tr></thead>
+                        <thead><tr><th>Date</th><th>Division</th><th>Position</th><th>Count</th><th>Type</th><th>Status</th><th>Assigned Contractor(s)</th><th>Recruitment Deadline</th><th>Details</th></tr></thead>
                         <tbody id="rt-all-body"></tbody>
                     </table>
                 </div>
@@ -3794,6 +3797,147 @@
                 const gaps = []; if (!w.doj) gaps.push('date of joining'); if (!(parseFloat(w.basicDa) > 0)) gaps.push('Basic+DA'); if (!(parseFloat(w.gross) > 0)) gaps.push('gross salary');
                 if (gaps.length) { alert('Before activating, click Edit and fill in: ' + gaps.join(', ') + '.'); return; }
                 w.status = 'Active'; addAudit('HR activated ' + w.name + ' (' + w.empId + ') — joined ' + w.doj); persistAll(); renderWorkersTable(); renderDivisionWorkers();
+            }
+        };
+
+        /* =========================================================
+           REQUISITION REVIEW — every approver (Production Manager, GM Production, HR) opens the full
+           requisition before deciding. Approve / Reject sit inside the review with remarks (required to
+           reject), and each decision is added to the requisition's approval trail.
+           ========================================================= */
+        const REQREVIEW = {
+            me() { return (typeof signedInUser !== 'undefined' && signedInUser && signedInUser.name) || ROLE_LABELS[currentRole] || 'User'; },
+            trail(r) {
+                const t = (r.approvals || []).slice();
+                if (!t.length || t[0].stage !== 'Raised') t.unshift({ stage: 'Raised', decision: 'Raised', by: r.raisedBy || '-', at: r.date || '' });
+                // older requisitions only have the "approved by" names
+                if (r.pmApprovedBy && !t.some(x => x.stage === 'Production Manager')) t.push({ stage: 'Production Manager', decision: 'Approved', by: r.pmApprovedBy, at: '' });
+                if (r.gmApprovedBy && !t.some(x => x.stage === 'GM Production')) t.push({ stage: 'GM Production', decision: 'Approved', by: r.gmApprovedBy, at: '' });
+                return t;
+            },
+            record(r, stage, decision, remarks) {
+                r.approvals = this.trail(r);
+                r.approvals.push({ stage, decision, by: this.me(), at: new Date().toLocaleString(), remarks: remarks || '' });
+            },
+            nextStage(r) {
+                return { 'Pending PM Approval': 'Production Manager', 'Pending GM Approval': 'GM Production', 'Pending HR Approval': 'HR', 'Approved': 'Assigned to contractor(s)', 'Rejected': 'Closed' }[r.status] || r.status;
+            },
+            detailsHtml(r) {
+                const f = (l, v) => '<div><span>' + l + '</span>' + escH(v === 0 ? '0' : (v || '-')) + '</div>';
+                const money = n => n ? '₹ ' + Number(n).toLocaleString('en-IN') + ' / month' : '-';
+                const repl = r.type === 'Replacement'
+                    ? f('Employee being replaced', r.replEmpId) + f('Their position', r.replPosition) + f('Their salary', r.replSalary ? '₹ ' + r.replSalary : '') + f('Exit status', r.replStatus) + f('Reason for replacement', r.replReason)
+                    : f('Project / site', r.project) + f('Why new manpower is needed', r.whyNew) + f('Management approved?', r.mgmtApproved) + f('Justification', r.justification);
+                const trail = this.trail(r).map(t => '<li><b>' + escH(t.stage) + ' — ' + escH(t.decision) + '</b> · ' + escH(t.by) + (t.at ? ' · ' + escH(t.at) : '') + (t.remarks ? ' · “' + escH(t.remarks) + '”' : '') + '</li>').join('');
+                const cands = candidates.filter(c => c.requisitionId === r.id);
+                return '<div class="cw-detail-grid">' + f('Requisition', r.id) + f('Raised on', r.date) + f('Raised by', r.raisedBy) + f('Division', r.division) +
+                    f('Type', r.type === 'New' ? 'New manpower' : r.type) + f('Position / department', r.position) + f('Number required', r.count) + f('Skill grade', r.skill) +
+                    f('Grade budget', money(r.gradeBudget)) + f('Total monthly budget', r.gradeBudget && r.count ? money(r.gradeBudget * r.count) : '') +
+                    f('Experience', r.exp) + f('Shift', r.shift) + f('Required by', r.requiredDate) + f('Preferred education', r.education) +
+                    f('Driving licence', r.drivingLicense) + f('Training / skill needed', r.trainingSkill) + f('PPE kit', (r.ppeKit || []).join(', ')) +
+                    f('Status', r.status) + f('Next step', this.nextStage(r)) +
+                    (r.assignedContractors && r.assignedContractors.length ? f('Assigned to', r.assignedContractors.join(', ')) + f('Recruitment deadline', r.deadline) : '') +
+                    (cands.length ? f('Candidates so far', cands.length + ' (' + cands.filter(c => c.status === 'Selected').length + ' selected)') : '') + '</div>' +
+                    '<div class="cw-detail-grid">' + repl + f('Job description / remarks', r.remarks) + '</div>' +
+                    '<div class="section-header">Approval trail</div><ul class="cw-history">' + trail + '</ul>';
+            },
+            canDecide(r) {
+                if (currentRole === 'production_manager') return r.status === 'Pending PM Approval' && r.division === currentDivision;
+                if (currentRole === 'gm_production') return r.status === 'Pending GM Approval';
+                return false;
+            },
+            open(id) {
+                const r = requisitions.find(x => x.id === id); if (!r) return;
+                if (currentRole === 'hr_admin' && r.status === 'Pending HR Approval') return reviewRequisition(id);   // HR's panel adds contractor assignment
+                const panel = document.getElementById('req-review-panel');
+                const who = currentRole === 'production_manager' ? 'Production Manager' : 'GM Production';
+                const next = currentRole === 'production_manager' ? (r.type === 'New' ? 'GM Production' : 'HR') : 'HR';
+                const decide = this.canDecide(r)
+                    ? '<div class="section-header">' + who + ' decision</div><div class="cw-decision"><div class="form-group" style="flex:1"><label>Remarks (required to reject)</label><input type="text" id="rr-remarks"></div></div>' +
+                      '<div class="cw-decision"><button type="button" onclick="REQREVIEW.decide(\'' + r.id + '\', true)">Approve — send to ' + next + '</button>' +
+                      '<button type="button" class="cw-btn-danger" onclick="REQREVIEW.decide(\'' + r.id + '\', false)">Reject</button></div>'
+                    : '';
+                panel.innerHTML = '<div class="section-header" style="margin-top:0">' + escH(r.id) + ' — ' + escH(r.position) + ' × ' + escH(r.count) + ' (' + escH(r.division) + ') &nbsp;' + statusBadge(r.status) + '</div>' +
+                    this.detailsHtml(r) + decide +
+                    '<button type="button" class="cw-btn-ghost" style="margin-top:8px" onclick="document.getElementById(\'req-review-panel\').style.display=\'none\'">Close</button>';
+                panel.style.display = 'block'; panel.scrollIntoView({ behavior: 'smooth' });
+            },
+            decide(id, approve) {
+                const r = requisitions.find(x => x.id === id); if (!r || !this.canDecide(r)) return;
+                const remarks = (document.getElementById('rr-remarks').value || '').trim();
+                if (!approve && !remarks) { alert('Please add a remark saying why it is rejected.'); return; }
+                document.getElementById('req-review-panel').style.display = 'none';
+                const stage = currentRole === 'production_manager' ? 'Production Manager' : 'GM Production';
+                this.record(r, stage, approve ? 'Approved' : 'Rejected', remarks);
+                if (currentRole === 'production_manager') (approve ? approvePMBase : rejectPMBase)(id); else (approve ? approveGMBase : rejectGMBase)(id);
+            },
+            // adds the full details and a remarks box to HR's existing review panel
+            enhanceHR(id) {
+                const r = requisitions.find(x => x.id === id); if (!r) return;
+                document.getElementById('hrr-details').innerHTML = this.detailsHtml(r);
+                if (!document.getElementById('hrr-remarks')) {
+                    const dl = document.getElementById('hrr-deadline').closest('.form-group');
+                    dl.insertAdjacentHTML('afterend', '<div class="form-group" style="max-width:520px;margin-top:8px"><label>HR remarks (required to reject)</label><input type="text" id="hrr-remarks"></div>');
+                }
+                document.getElementById('hrr-remarks').value = '';
+            },
+            render() {
+                // approver queues: one Review button instead of instant Approve / Reject
+                [['rt-pm-body', /approvePM\('([^']+)'\)/], ['rt-gm-body', /approveGM\('([^']+)'\)/], ['rt-approval-body', /reviewRequisition\('([^']+)'\)/]].forEach(([bodyId, re]) => {
+                    document.querySelectorAll('#' + bodyId + ' tr').forEach(tr => {
+                        const btn = [...tr.querySelectorAll('button')].find(b => re.test(b.getAttribute('onclick') || '')); if (!btn) return;
+                        const id = (btn.getAttribute('onclick').match(re) || [])[1];
+                        tr.lastElementChild.innerHTML = '<button type="button" class="action-btn edit" onclick="REQREVIEW.open(\'' + id + '\')">Review</button>';
+                    });
+                });
+                // every list of requisitions gets a View button
+                const allBody = document.getElementById('rt-all-body');
+                let allList = requisitions;
+                if (currentRole === 'production_manager' || currentRole === 'supervisor') allList = requisitions.filter(r => r.division === currentDivision);
+                if (currentRole === 'contractor') allList = requisitions.filter(r => (r.assignedContractors || []).map(n => n.toLowerCase()).includes(currentContractorName.toLowerCase()));
+                allBody.innerHTML = allList.length ? allList.map(r => '<tr><td>' + escH(r.date) + '</td><td>' + escH(r.division) + '</td><td>' + escH(r.position) + '</td><td>' + escH(r.count) + '</td><td>' + escH(r.type) +
+                    '</td><td>' + statusBadge(r.status) + '</td><td>' + escH((r.assignedContractors || []).join(', ') || '-') + '</td><td>' + escH(r.deadline || '-') +
+                    '</td><td><button type="button" class="action-btn cw-btn-ghost" onclick="REQREVIEW.open(\'' + r.id + '\')">' + (this.canDecide(r) || (currentRole === 'hr_admin' && r.status === 'Pending HR Approval') ? 'Review' : 'View') + '</button></td></tr>').join('')
+                    : '<tr><td colspan="9">No requisitions found.</td></tr>';
+                document.querySelectorAll('#rt-assigned-body tr').forEach(tr => {
+                    const btn = tr.querySelector('button[onclick^="openCandidateForm"]'); if (!btn || tr.querySelector('.req-view')) return;
+                    const id = (btn.getAttribute('onclick').match(/openCandidateForm\('([^']+)'\)/) || [])[1];
+                    btn.insertAdjacentHTML('afterend', ' <button type="button" class="action-btn cw-btn-ghost req-view" onclick="REQREVIEW.open(\'' + id + '\')">View</button>');
+                });
+            }
+        };
+        const approvePMBase = approvePM, rejectPMBase = rejectPM, approveGMBase = approveGM, rejectGMBase = rejectGM;
+        // direct calls (old buttons) now open the review first
+        approvePM = id => REQREVIEW.open(id); rejectPM = id => REQREVIEW.open(id);
+        approveGM = id => REQREVIEW.open(id); rejectGM = id => REQREVIEW.open(id);
+        const reviewRequisitionBase = reviewRequisition;
+        reviewRequisition = function (id) { reviewRequisitionBase(id); REQREVIEW.enhanceHR(id); };
+        const confirmApproveBase = confirmApproveRequisition;
+        confirmApproveRequisition = function () {
+            const r = requisitions.find(x => x.id === currentReviewId), remarks = ((document.getElementById('hrr-remarks') || {}).value || '').trim();
+            const before = r && r.status;
+            confirmApproveBase();
+            if (r && before !== 'Approved' && r.status === 'Approved') { REQREVIEW.record(r, 'HR', 'Approved & assigned to ' + r.assignedContractors.join(', '), remarks); persistAll(); renderRequisitions(); }
+        };
+        const rejectRequisitionBase = rejectRequisition;
+        rejectRequisition = function (id) {
+            const r = requisitions.find(x => x.id === id); if (!r || currentRole !== 'hr_admin') return;
+            const box = document.getElementById('hrr-remarks'), remarks = box && document.getElementById('hr-review-panel').style.display !== 'none' ? box.value.trim() : '';
+            if (!remarks) { alert('Please add an HR remark saying why it is rejected, then click Reject Instead.'); return 'stop'; }
+            REQREVIEW.record(r, 'HR', 'Rejected', remarks);
+            rejectRequisitionBase(id);
+        };
+        const renderRequisitionsBase = renderRequisitions;
+        renderRequisitions = function () { renderRequisitionsBase(); try { REQREVIEW.render(); } catch (e) { console.warn(e); } };
+        // record the person's name (not just the role) as the one who raised it
+        const submitRequisitionBase = submitRequisition;
+        submitRequisition = function () {
+            const n = requisitions.length; submitRequisitionBase();
+            if (requisitions.length > n) {
+                const r = requisitions[requisitions.length - 1], me = REQREVIEW.me();
+                if (me && me !== r.raisedBy) r.raisedBy = me + ' (' + r.raisedBy + ')';
+                r.approvals = [{ stage: 'Raised', decision: 'Raised', by: r.raisedBy, at: new Date().toLocaleString(), remarks: r.remarks || '' }];
+                persistAll(); renderRequisitions();
             }
         };
 
