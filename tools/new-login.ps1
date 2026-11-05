@@ -1,13 +1,23 @@
 # Creates a login for the Aristo site.
-#   powershell -ExecutionPolicy Bypass -File tools\new-login.ps1 -User hr.office
-# Prints the password (give it to the person; it is not stored anywhere) and a
-# line to paste into USERS in middleware.js. Only that line goes into the code:
-# it holds a salted, one-way fingerprint, never the password.
+#   powershell -ExecutionPolicy Bypass -File tools\new-login.ps1 -User nanda2 -Role contractor -Contractor "M/s.Nanda Enterprises"
+#   powershell -ExecutionPolicy Bypass -File tools\new-login.ps1 -User pm.lacquer -Role production_manager -Division "Art of Lacquering"
+# Roles: hr_admin, gm_production, production_manager, supervisor, contractor
+#
+# Prints:
+#   Password  give it to the person (it is not stored anywhere)
+#   Line      paste into USERS in middleware.js
+#   Sql       run in Supabase → SQL Editor so the shared database knows the login too
+# Only salted one-way fingerprints go into the code and database, never the password.
 param(
   [Parameter(Mandatory = $true)][string]$User,
+  [string]$Role = 'hr_admin',
+  [string]$Contractor = '',
+  [string]$Division = '',
+  [string]$Name = '',
   [string]$Password = ''
 )
 $Iterations = 150000
+$User = $User.ToLower()
 
 if ($Password -eq '') {
   # 16 characters, no look-alikes (0/O, 1/l/I)
@@ -24,8 +34,16 @@ $sha = [Security.Cryptography.SHA256]::Create()
 $fp = -join ($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($keyHex)) | ForEach-Object { $_.ToString('x2') })
 $saltHex = -join ($salt | ForEach-Object { $_.ToString('x2') })
 
+$js = { param($s) "'" + $s.Replace('\', '\\').Replace("'", "\'") + "'" }
+$sq = { param($s) if ($s -eq '') { 'null' } else { "'" + $s.Replace("'", "''") + "'" } }
+$extra = ", role: $(& $js $Role)"
+if ($Contractor) { $extra += ", contractor: $(& $js $Contractor)" }
+if ($Division)   { $extra += ", division: $(& $js $Division)" }
+if ($Name)       { $extra += ", name: $(& $js $Name)" }
+
 [pscustomobject]@{
-  User     = $User.ToLower()
+  User     = $User
   Password = $Password
-  Line     = "  '$($User.ToLower())': { salt: '$saltHex', fp: '$fp' },"
+  Line     = "  '$User': { salt: '$saltHex', fp: '$fp'$extra },"
+  Sql      = "insert into app_users (user_id, fp, role, contractor, division, name) values ('$User', '$fp', $(& $sq $Role), $(& $sq $Contractor), $(& $sq $Division), $(& $sq $Name)) on conflict (user_id) do update set fp = excluded.fp, role = excluded.role, contractor = excluded.contractor, division = excluded.division, name = excluded.name;"
 }

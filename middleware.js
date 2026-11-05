@@ -64,7 +64,45 @@ async function readSession(req) {
   const key = m[1].slice(dot + 1);
   const u = Object.prototype.hasOwnProperty.call(USERS, user) ? USERS[user] : null;
   if (!u || !/^[0-9a-f]{64}$/.test(key)) return null;
-  return equal(await fingerprint(key), u.fp) ? user : null;
+  return equal(await fingerprint(key), u.fp) ? { user, key } : null;
+}
+
+// ---------------------------------------------------------------------
+// Shared database (Supabase). The publishable key is public by design: the tables are
+// locked, and the database functions check each person's sign-in key and role themselves
+// (see supabase/setup.sql). The sign-in key stays in the HttpOnly cookie; the browser's
+// scripts never see it.
+// ---------------------------------------------------------------------
+const SUPABASE_URL = 'https://fqohuttxrdkhmqafewwv.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_lslZNovqtGJSFENcrCTUvw_hJ0qssdg';
+
+async function rpc(fn, args) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, 'content-type': 'application/json' },
+    body: JSON.stringify(args)
+  });
+  const text = await res.text();
+  return new Response(res.ok ? text : JSON.stringify({ error: 'database', status: res.status, detail: text.slice(0, 300) }), {
+    status: res.ok ? 200 : 502,
+    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+  });
+}
+
+async function api(req, url, s) {
+  if (url.pathname === '/api/load' && req.method === 'GET') {
+    return rpc('cw_load', { p_user: s.user, p_key: s.key });
+  }
+  if (url.pathname === '/api/save' && req.method === 'POST') {
+    const body = await req.json().catch(() => null);
+    if (!body) return new Response('{"error":"bad request"}', { status: 400, headers: { 'content-type': 'application/json' } });
+    return rpc('cw_save', {
+      p_user: s.user, p_key: s.key,
+      p_upserts: body.upserts || [], p_deletes: body.deletes || [],
+      p_settings: body.settings || {}, p_audit: body.audit || []
+    });
+  }
+  return new Response('{"error":"not found"}', { status: 404, headers: { 'content-type': 'application/json' } });
 }
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -145,8 +183,9 @@ export default async function middleware(req) {
     return page({ error: 'That user ID and password don’t match. Check and try again.', user }, 401);
   }
 
-  const who = await readSession(req);
-  if (who) {
+  const session = await readSession(req);
+  if (session) {
+    const who = session.user;
     if (url.pathname === '/login') return redirect('/');
     // Tells the page who is signed in and in which role
     if (url.pathname === '/whoami') {
@@ -155,9 +194,10 @@ export default async function middleware(req) {
         user: who, name: u.name || who, role: u.role || '', contractor: u.contractor || '', division: u.division || ''
       }), { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
     }
+    if (url.pathname.startsWith('/api/')) return api(req, url, session);
     return pass();
   }
-  if (url.pathname === '/whoami') {
+  if (url.pathname === '/whoami' || url.pathname.startsWith('/api/')) {
     return new Response('{"error":"signed out"}', { status: 401, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
   }
   return page({}, 401);

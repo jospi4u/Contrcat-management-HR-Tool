@@ -585,6 +585,8 @@
         [style*="border-color:#fdba74"] { border-color: var(--aw-gold-line) !important; }
 
         body.identity-pending #login-screen { visibility: hidden; }
+        #sync-status { font-size: 11px; color: var(--aw-green); letter-spacing: .3px; }
+        #sync-status.bad { color: var(--aw-warn); }
 
         @media (max-width: 760px) {
             .container { flex-direction: column; }
@@ -3104,13 +3106,171 @@
         }
         // "Switch role" / any logout now ends the real sign-in
         const roleScreenLogout = logout;
-        logout = function () { if (signedInUser) { location.href = '/logout'; } else { roleScreenLogout(); } };
+        logout = function () {
+            if (!signedInUser) return roleScreenLogout();
+            try { localStorage.removeItem('kbros_hr_data_v2'); } catch (e) {} // don't leave this person's data on a shared PC
+            location.href = '/logout';
+        };
+        document.getElementById('signout-link').addEventListener('click', () => { try { localStorage.removeItem('kbros_hr_data_v2'); } catch (e) {} });
+
+        /* ---------- Shared database (Supabase, via /api on this site) ----------
+           Every record (worker, requisition, payroll row, …) is stored on its own, so people
+           working at the same time don't overwrite each other. After each change only what
+           changed is sent; every 30 seconds (and when the window regains focus) the tool pulls
+           in other people's changes. The database decides what each role may see and change. */
+        const SYNC = {
+            on: false, me: null, rows: new Map(), settings: {}, audit: [],
+            timer: null, busy: false, again: false, lastPull: 0,
+            collections: {
+                workers:            { get: () => workers,            set: v => { workers = v; },            key: x => x.empId },
+                pendingSubmissions: { get: () => pendingSubmissions, set: v => { pendingSubmissions = v; }, key: x => x.id },
+                requisitions:       { get: () => requisitions,       set: v => { requisitions = v; },       key: x => x.id },
+                candidates:         { get: () => candidates,         set: v => { candidates = v; },         key: x => x.id },
+                resignations:       { get: () => resignations,       set: v => { resignations = v; },       key: x => x.id },
+                exitClearances:     { get: () => exitClearances,     set: v => { exitClearances = v; },     key: x => x.id },
+                attendanceRecords:  { get: () => attendanceRecords,  set: v => { attendanceRecords = v; },  key: x => x.period + '|' + x.empId },
+                payrollRuns:        { get: () => payrollRuns,        set: v => { payrollRuns = v; },        key: x => x.period + '|' + x.empId },
+                wageRegisters:      { get: () => wageRegisters,      set: v => { wageRegisters = v; },      key: x => x.contractor + '|' + x.period },
+                invoices:           { get: () => invoices,           set: v => { invoices = v; },           key: x => x.invoiceNo },
+            },
+            settingsNow() {
+                return { empIdCounters, nextReqId, nextCandId, nextResId, nextClearId, nextInvoiceNo,
+                         verifiedPeriods, rateConfig, gradeSalaryBudget, knownContractors: Array.from(knownContractors) };
+            },
+            applySettings(s) {
+                if (s.empIdCounters) empIdCounters = s.empIdCounters;
+                ['nextReqId', 'nextCandId', 'nextResId', 'nextClearId', 'nextInvoiceNo'].forEach(k => {
+                    if (s[k] != null) { const v = Number(s[k]);
+                        if (k === 'nextReqId') nextReqId = v; if (k === 'nextCandId') nextCandId = v; if (k === 'nextResId') nextResId = v;
+                        if (k === 'nextClearId') nextClearId = v; if (k === 'nextInvoiceNo') nextInvoiceNo = v; } });
+                if (s.verifiedPeriods) verifiedPeriods = s.verifiedPeriods;
+                if (s.rateConfig) rateConfig = Object.assign({}, DEFAULT_RATES, s.rateConfig);
+                if (s.gradeSalaryBudget) gradeSalaryBudget = Object.assign(gradeSalaryBudget, s.gradeSalaryBudget);
+                (s.knownContractors || []).forEach(n => knownContractors.add(n));
+            },
+            // contractor / division a record belongs to (used by the database's access rules)
+            owner(c, x) {
+                const w = x.empId ? workers.find(w => w.empId === x.empId) : null;
+                return { contractor: x.contractor || (w && w.contractor) || null, division: x.division || (w && w.division) || null };
+            },
+            current() {
+                const m = new Map();
+                for (const [c, def] of Object.entries(this.collections)) {
+                    (def.get() || []).forEach(x => { const id = def.key(x); if (id != null && id !== '') m.set(c + '\u0001' + id, { c, id: String(id), d: x }); });
+                }
+                return m;
+            },
+            snapshot() {
+                this.rows = new Map([...this.current()].map(([k, r]) => [k, JSON.stringify(r.d)]));
+                this.settings = Object.fromEntries(Object.entries(this.settingsNow()).map(([k, v]) => [k, JSON.stringify(v)]));
+            },
+            dirty() {
+                const cur = this.current(), upserts = [], deletes = [], settings = {};
+                cur.forEach((r, k) => { const s = JSON.stringify(r.d); if (this.rows.get(k) !== s) upserts.push(Object.assign({ c: r.c, id: r.id, d: r.d }, this.owner(r.c, r.d))); });
+                this.rows.forEach((_, k) => { if (!cur.has(k)) { const [c, id] = k.split('\u0001'); deletes.push({ c, id }); } });
+                Object.entries(this.settingsNow()).forEach(([k, v]) => { if (this.settings[k] !== JSON.stringify(v)) settings[k] = v; });
+                return { upserts, deletes, settings, audit: this.audit.slice() };
+            },
+            apply(state) {
+                const by = {};
+                (state.records || []).forEach(r => { (by[r.c] = by[r.c] || []).push(r.d); });
+                for (const [c, def] of Object.entries(this.collections)) def.set(by[c] || []);
+                this.applySettings(state.settings || {});
+                this.snapshot();
+                try { localStorage.setItem('kbros_hr_data_v2', JSON.stringify(Object.assign({ currentPeriod: CURRENT_PERIOD }, this.settingsNow(),
+                    Object.fromEntries(Object.entries(this.collections).map(([c, d]) => [c, d.get()]))))); } catch (e) {}
+            },
+            rerender() {
+                if (!currentRole) return; // still on the role screen
+                [renderWorkersTable, renderPendingApprovals, renderDivisionWorkers, renderGradeBudgetTable, renderRequisitions,
+                 renderCandidates, renderResignations, renderExitClearance, renderPeriodSelectors, fillRateInputs,
+                 updateAttendanceNote, renderPayroll, renderWageRegister, renderInvoices]
+                    .forEach(fn => { try { fn(); } catch (e) { console.warn('refresh', e); } });
+            },
+            status(text, bad) {
+                let el = document.getElementById('sync-status');
+                if (!el) { el = document.createElement('span'); el.id = 'sync-status'; document.querySelector('.header-right').prepend(el); }
+                el.textContent = text; el.className = bad ? 'bad' : '';
+            },
+            schedule() { if (!this.on) return; clearTimeout(this.timer); this.timer = setTimeout(() => this.push(), 400); this.status('Saving…'); },
+            async push() {
+                if (this.busy) { this.again = true; return; }
+                const ch = this.dirty();
+                if (!ch.upserts.length && !ch.deletes.length && !Object.keys(ch.settings).length && !ch.audit.length) { this.status('Saved'); return; }
+                this.busy = true;
+                let refresh = false;
+                try {
+                    const r = await fetch('/api/save', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(ch) });
+                    if (r.status === 401) { location.href = '/'; return; }
+                    const res = await r.json();
+                    if (!r.ok) throw new Error(res.detail || res.error || r.status);
+                    // what was sent is now the server's copy
+                    ch.upserts.forEach(u => this.rows.set(u.c + '\u0001' + u.id, JSON.stringify(u.d)));
+                    ch.deletes.forEach(d => this.rows.delete(d.c + '\u0001' + d.id));
+                    Object.entries(ch.settings).forEach(([k, v]) => { this.settings[k] = JSON.stringify(v); });
+                    this.audit.splice(0, ch.audit.length);
+                    if (res.rejected && res.rejected.length) refresh = true;   // reload what is really stored
+                    else this.status('Saved');
+                } catch (e) {
+                    this.status('Not saved — will retry', true);
+                    setTimeout(() => this.schedule(), 5000);
+                } finally {
+                    this.busy = false;
+                    if (refresh) {
+                        await this.pull(true);
+                        this.status('Some changes were not allowed for your role and were undone', true);
+                    } else if (this.again) { this.again = false; this.schedule(); }
+                }
+            },
+            async pull(force) {
+                if (!this.on || this.busy) return;
+                if (!force) { const ch = this.dirty(); if (ch.upserts.length || ch.deletes.length || Object.keys(ch.settings).length) return; }
+                try {
+                    const r = await fetch('/api/load', { cache: 'no-store', credentials: 'same-origin' });
+                    if (r.status === 401) { location.href = '/'; return; }
+                    if (!r.ok) throw new Error(r.status);
+                    this.apply(await r.json()); this.rerender(); this.lastPull = Date.now(); this.status('Up to date');
+                } catch (e) { this.status('Offline — showing last saved copy', true); }
+            }
+        };
+        // every save now also goes to the shared database
+        const saveLocally = persistAll;
+        persistAll = function () { saveLocally(); SYNC.schedule(); };
+        const addAuditLocal = addAudit;
+        addAudit = function (text) { addAuditLocal(text); if (SYNC.on) SYNC.audit.push(text); };
+        setInterval(() => { if (document.visibilityState === 'visible') SYNC.pull(); }, 30000);
+        window.addEventListener('focus', () => { if (Date.now() - SYNC.lastPull > 5000) SYNC.pull(); });
+
+        async function connectDatabase(me) {
+            try {
+                const r = await fetch('/api/load', { cache: 'no-store', credentials: 'same-origin' });
+                if (!r.ok) throw new Error(r.status);
+                const state = await r.json();
+                if (state.empty && me.role === 'hr_admin') {
+                    // first HR sign-in on an empty database: upload what this computer has (sample data included)
+                    SYNC.rows = new Map(); SYNC.settings = {}; SYNC.on = true;
+                    SYNC.applySettings(state.settings || {});
+                    await SYNC.push();
+                    SYNC.status('Shared database set up');
+                } else {
+                    SYNC.apply(state); SYNC.on = true; SYNC.lastPull = Date.now();
+                    SYNC.status('Up to date');
+                }
+                return true;
+            } catch (e) {
+                SYNC.on = false;
+                return false;
+            }
+        }
 
         fetch('/whoami', { cache: 'no-store', credentials: 'same-origin' })
             .then(r => r.ok ? r.json() : Promise.reject(r.status))
-            .then(me => {
+            .then(async me => {
                 if (!ROLE_LABELS[me.role]) throw new Error('no role');
+                const shared = await connectDatabase(me);
                 startAs(me);
+                SYNC.rerender();
+                if (!shared) SYNC.status('Shared database not connected — saving on this computer only', true);
             })
             .catch(err => {
                 document.body.classList.remove('identity-pending');
