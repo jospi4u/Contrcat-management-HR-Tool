@@ -68,6 +68,38 @@ input:focus,select:focus{border-color:var(--gold);outline:none}
 .note{border:1px solid var(--gold-line);background:var(--gold-tint);border-radius:8px;padding:10px 12px;font-size:12px;margin:10px 0}
 .note.bad{border-color:var(--danger);background:rgba(239,95,100,.1);color:var(--danger)}
 .secret{font-family:ui-monospace,Consolas,monospace;font-size:15px;color:var(--ink);letter-spacing:1px;background:var(--black);padding:6px 10px;border-radius:6px;display:inline-block}
+/* ---------- adoption funnel ---------- */
+.adopt-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.adopt-head h3{margin-bottom:4px}
+.adopt-head select{width:auto;min-width:170px}
+.adopt-msg{margin:0;color:var(--cream);font-size:14px}
+.adopt-msg b{color:var(--gold);font-weight:600}
+.adopt-body{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(240px,1fr);gap:22px;align-items:start}
+.funnel-viz{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 0}
+.f-step{position:relative;display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:58px;padding:8px 18px;
+  background:linear-gradient(180deg,#2e2b27,#24221f);border:1px solid var(--line2);border-radius:6px;transition:width .6s cubic-bezier(.2,.8,.2,1);min-width:240px;max-width:100%}
+.f-step .f-label{display:flex;flex-direction:column;line-height:1.25}
+.f-step .f-name{color:var(--ink);font-weight:600;font-size:13px}
+.f-step .f-hint{color:var(--muted);font-size:11px}
+.f-step .f-num{text-align:right;line-height:1.1}
+.f-step .f-num b{font-family:var(--display);font-size:24px;color:var(--ink);font-weight:700}
+.f-step .f-num span{display:block;color:var(--muted);font-size:11px}
+.f-conv{font-size:10.5px;color:var(--muted);letter-spacing:.4px}
+.f-conv b{color:var(--cream);font-weight:500}
+.f-step.aha{background:linear-gradient(180deg,rgba(196,168,130,.32),rgba(196,168,130,.14));border-color:var(--gold);box-shadow:0 0 0 1px rgba(196,168,130,.25),0 0 28px rgba(196,168,130,.28)}
+.f-step.aha .f-name{color:var(--gold-hover)}
+.f-step.aha .f-num b{color:var(--gold-hover)}
+.f-step.aha::before{content:"✦";position:absolute;left:-22px;top:50%;transform:translateY(-50%);color:var(--gold);font-size:16px;animation:twinkle 2.4s ease-in-out infinite}
+.f-step.habit{border-color:rgba(63,191,127,.55)}.f-step.habit .f-num b{color:var(--green)}
+@keyframes twinkle{0%,100%{opacity:.45;transform:translateY(-50%) scale(.9)}50%{opacity:1;transform:translateY(-50%) scale(1.15)}}
+@media (prefers-reduced-motion:reduce){.f-step{transition:none}.f-step.aha::before{animation:none}}
+.aha-feed h4{font-family:var(--display);font-style:italic;font-weight:500;color:var(--gold);margin:4px 0 10px;font-size:15px}
+.aha-feed ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;max-height:330px;overflow:auto}
+.aha-feed li{background:var(--black);border:1px solid var(--line);border-left:2px solid var(--gold);border-radius:6px;padding:8px 10px;font-size:12px}
+.aha-feed li b{color:var(--ink);font-weight:600}
+.aha-feed li .t{display:block;color:var(--muted);font-size:10.5px;margin-top:2px}
+.aha-feed li .fast{color:var(--green)}
+@media (max-width:900px){.adopt-body{grid-template-columns:1fr}.f-step{min-width:0;width:100% !important}.f-step.aha::before{display:none}}
 #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--gold-line);color:var(--cream);padding:10px 16px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
 #toast.show{opacity:1}
 dialog{background:var(--card);color:var(--cream);border:1px solid var(--gold-line);border-top:2px solid var(--gold);border-radius:12px;padding:22px;max-width:560px;width:calc(100% - 32px)}
@@ -97,6 +129,16 @@ dialog h3{font-family:var(--display);color:var(--ink);font-size:20px;margin:0 0 
     <section id="dashboard" class="on">
       <h2>Dashboard</h2>
       <p class="sub">How the app is being used. <span class="toolbar" style="display:inline-flex;margin:0 0 0 8px"><select id="period" onchange="render()"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option></select></span></p>
+      <div class="adopt card">
+        <div class="adopt-head">
+          <div><h3>Adoption funnel</h3><p class="adopt-msg" id="adopt-msg"></p></div>
+          <select id="adopt-role" onchange="renderFunnel()"><option value="">Everyone</option><option value="contractor">Contractors</option><option value="hr_admin">HR</option><option value="production_manager">Production Managers</option><option value="supervisor">Supervisors</option><option value="gm_production">GM Production</option></select>
+        </div>
+        <div class="adopt-body">
+          <div class="funnel-viz" id="funnel-viz"></div>
+          <div class="aha-feed"><h4>Recent aha moments</h4><ul id="aha-feed"></ul></div>
+        </div>
+      </div>
       <div class="six" id="six"></div>
       <div class="card"><h3>Who used it</h3><div class="scroll"><table><thead><tr><th>Person</th><th>Role</th><th>Sign-ins</th><th>Last sign-in</th><th>Reached aha</th></tr></thead><tbody id="who-body"></tbody></table></div></div>
     </section>
@@ -196,7 +238,61 @@ window.addEventListener('hashchange', () => show(location.hash.slice(1) || 'dash
 if (location.hash) show(location.hash.slice(1));
 
 /* ---------- dashboard ---------- */
-function render() { if (!D) return; renderSix(); renderUsers(); renderContractors(); renderLogins(); renderActivity(); }
+/* ---------- adoption funnel: invited → signed in → opened → aha → came back ---------- */
+const AHA_WORDS = [[/resubmitted candidate/i, 'resubmitted a candidate'], [/submitted candidate/i, 'submitted a candidate'], [/forwarded to Production/i, 'forwarded a candidate to Production'],
+  [/Sent back to contractor/i, 'sent a candidate back for correction'], [/Selected in Production/i, 'selected a candidate'], [/Rejected in Production|Rejected by HR/i, 'made an interview decision'],
+  [/Put on hold/i, 'put a candidate on hold'], [/approved New Manpower|GM Production approved/i, 'approved a new-manpower requisition'], [/Production Manager approved/i, 'approved a requisition'],
+  [/raised requisition/i, 'raised a requisition'], [/approved requisition/i, 'approved and assigned a requisition'], [/approved employee/i, 'approved a new worker'],
+  [/confirmed payroll/i, 'confirmed payroll'], [/raised invoice/i, 'raised an invoice'], [/wage register/i, 'finalised a wage register'], [/generated payroll/i, 'generated payroll']];
+const ahaPhrase = a => { for (const [re, w] of AHA_WORDS) if (re.test(a || '')) return w; return 'did their first key action'; };
+const dur = s => s == null ? '' : s < 90 ? Math.round(s) + ' seconds' : s < 5400 ? Math.round(s / 60) + ' min' : Math.round(s / 3600) + ' h';
+function renderFunnel() {
+  const days = +document.getElementById('period').value, since = Date.now() - days * 864e5, role = document.getElementById('adopt-role').value;
+  const people = D.users.filter(u => u.role !== 'admin' && (!role || u.role === role));
+  const ids = new Set(people.map(u => u.user)), inP = x => ids.has(x.user_id) && new Date(x.at) >= since;
+  const logins = D.logins.filter(l => l.success && inP(l)), ev = D.events.filter(inP);
+  const signed = new Set(logins.map(l => l.user_id));
+  const opened = new Set(ev.filter(e => e.kind === 'open').map(e => e.user_id).filter(u => signed.has(u)));
+  // a key action counts even if the "open" signal was missed, as long as they signed in
+  const aha = new Set(ev.filter(e => e.kind === 'aha').map(e => e.user_id).filter(u => signed.has(u)));
+  aha.forEach(u => opened.add(u));
+  const daysBy = {}; logins.forEach(l => { (daysBy[l.user_id] = daysBy[l.user_id] || new Set()).add(new Date(l.at).toDateString()); });
+  const back = new Set([...aha].filter(u => daysBy[u] && daysBy[u].size >= 2));
+  const steps = [
+    ['Invited', 'has a login', people.filter(u => u.active).length, ''],
+    ['Signed in', 'at least once in this period', signed.size, ''],
+    ['Opened the app', 'reached their screens', opened.size, ''],
+    ['Aha moment', 'did their first key action', aha.size, 'aha'],
+    ['Came back', 'had their aha and signed in on 2+ days', back.size, 'habit']
+  ];
+  const top = Math.max(steps[0][2], 1);
+  document.getElementById('funnel-viz').innerHTML = steps.map((s, i) => {
+    const pct = Math.round(s[2] / top * 100), width = 46 + 54 * (1 - i / (steps.length - 1)) * 0.98;   // taper 100% → ~46%
+    const prev = i ? steps[i - 1][2] : 0, conv = i ? (prev ? Math.round(s[2] / prev * 100) : 0) : null;
+    return (i ? `<div class="f-conv">↓ <b>${conv}%</b> of the step above</div>` : '') +
+      `<div class="f-step ${s[3]}" style="width:${width}%"><span class="f-label"><span class="f-name">${s[3] === 'aha' ? '✦ ' : ''}${s[0]}</span><span class="f-hint">${s[1]}</span></span>` +
+      `<span class="f-num"><b>${s[2]}</b><span>${pct}% of invited</span></span></div>`;
+  }).join('');
+  // the feel-good line
+  const a = aha.size, inv = steps[0][2], s1 = signed.size;
+  const GROUP = { '': ['person', 'people'], contractor: ['contractor', 'contractors'], hr_admin: ['HR user', 'HR users'], production_manager: ['Production Manager', 'Production Managers'], supervisor: ['Supervisor', 'Supervisors'], gm_production: ['GM', 'GMs'] }[role];
+  const who = n => n === 1 ? GROUP[0] : GROUP[1], has = n => n === 1 ? 'has' : 'have';
+  document.getElementById('adopt-msg').innerHTML =
+    !inv ? 'No logins in this group yet.'
+    : !s1 ? `${inv === 1 ? 'Your ' + GROUP[0] + ' hasn’t' : 'None of the ' + inv + ' ' + GROUP[1] + ' have'} signed in in the last ${days} days yet — share the login${inv === 1 ? '' : 's'} to get started.`
+    : !a ? `<b>${s1}</b> of ${inv} ${who(inv)} ${has(s1)} signed in. The first aha moment is one click away.`
+    : a === inv ? (inv === 1 ? `✦ Your ${GROUP[0]} has had their aha moment. Brilliant.` : `✦ All ${inv} ${GROUP[1]} have had their aha moment. Brilliant.`)
+    : `✦ <b>${a}</b> of ${inv} ${who(inv)} ${has(a)} had their aha moment${back.size ? `, and <b>${back.size}</b> ${back.size === 1 ? 'keeps' : 'keep'} coming back` : ''}.`;
+  // recent wins
+  const wins = ev.filter(e => e.kind === 'aha').slice().sort((x, y) => new Date(y.at) - new Date(x.at)).slice(0, 12);
+  document.getElementById('aha-feed').innerHTML = wins.length ? wins.map(e => {
+    const s = e.meta && e.meta.secondsFromOpen != null ? +e.meta.secondsFromOpen : null;
+    return `<li><b>${esc(nameOf(e.user_id))}</b> ${esc(ahaPhrase(e.meta && e.meta.action))}` +
+      `<span class="t">${ago(e.at)}${s != null ? ` · <span class="${s <= 180 ? 'fast' : ''}">${dur(s)} after opening</span>` : ''}</span></li>`;
+  }).join('') : '<li class="mut" style="border-left-color:var(--line2)">Aha moments will appear here as people do their first key action.</li>';
+}
+
+function render() { if (!D) return; renderFunnel(); renderSix(); renderUsers(); renderContractors(); renderLogins(); renderActivity(); }
 function renderSix() {
   const days = +document.getElementById('period').value, since = Date.now() - days * 864e5;
   const logins = D.logins.filter(l => l.success && new Date(l.at) >= since);
