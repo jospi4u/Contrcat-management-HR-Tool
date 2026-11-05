@@ -459,9 +459,150 @@
         .notif-empty { padding:10px; font-size:11px; color:#94a3b8; }
 
         .subsection-title { font-weight:700; color:var(--primary-color); margin:18px 0 8px 0; font-size:13px; border-bottom:2px solid var(--accent-color); padding-bottom:4px; }
+
+        /* =====================================================================
+           ARISTO THEME — the same dark, cream and gold look as the Aristo
+           Contract Manpower app. Layout and features above are unchanged;
+           this layer only restyles colours, type and shape.
+           ===================================================================== */
+        :root {
+            color-scheme: dark;
+            --aw-bg: #1a1917; --aw-side: #131512; --aw-card: #24221f; --aw-hover: #2c2925; --aw-black: #080807;
+            --aw-ink: #ffffff; --aw-cream: #f5f0e8; --aw-muted: #a39d94;
+            --aw-gold: #c4a882; --aw-gold-hover: #d4bc9a; --aw-gold-line: rgba(196,168,130,.6); --aw-gold-tint: rgba(196,168,130,.1);
+            --aw-line: rgba(255,255,255,.1); --aw-line-strong: rgba(255,255,255,.16);
+            --aw-green: #3fbf7f; --aw-danger: #ef5f64; --aw-warn: #e8b04a; --aw-info: #8fb3e8;
+            --aw-display: "Playfair Display", Georgia, "Times New Roman", serif;
+            --aw-sans: "DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+            /* old variable names, remapped so any remaining uses pick up the theme */
+            --primary-color: var(--aw-ink); --secondary-color: var(--aw-side);
+            --accent-color: var(--aw-gold); --accent-color-dark: var(--aw-gold-hover);
+            --accent-yellow: var(--aw-gold); --accent-yellow-dark: var(--aw-gold);
+            --background-color: var(--aw-bg); --text-color: var(--aw-cream);
+            --border-color: var(--aw-line-strong); --white: var(--aw-card); --table-header: var(--aw-black);
+        }
+        body { font-family: var(--aw-sans); background: var(--aw-bg); color: var(--aw-cream); font-size: 13px; line-height: 1.55; }
+        :focus-visible { outline: 2px solid var(--aw-gold); outline-offset: 2px; }
+        a { color: var(--aw-gold); }
+        ::placeholder { color: var(--aw-muted); opacity: .8; }
+
+        /* header + side navigation */
+        header { background: var(--aw-black); color: var(--aw-cream); border-bottom: 1px solid var(--aw-line); padding: 14px 24px; flex-wrap: wrap; gap: 10px; }
+        header h1 { font-family: var(--aw-display); font-weight: 700; color: var(--aw-ink); font-size: 20px; letter-spacing: -.2px; }
+        header h1::before { content: "ARISTO"; font-family: var(--aw-sans); font-weight: 600; font-size: 13px; letter-spacing: 4px; color: var(--aw-ink); padding-right: 14px; margin-right: 14px; border-right: 2px solid var(--aw-gold); }
+        .header-right { color: var(--aw-muted); font-size: 12px; flex-wrap: wrap; }
+        #role-badge { background: var(--aw-gold-tint); color: var(--aw-gold); border: 1px solid var(--aw-gold-line); border-radius: 999px; text-transform: uppercase; letter-spacing: .8px; font-size: 10px; }
+        #logout-btn, #signout-link { background: transparent; color: var(--aw-gold); border: 1px solid var(--aw-gold-line); border-radius: 0; letter-spacing: 1.5px; font-size: 10px; text-transform: uppercase; font-weight: 600; padding: 6px 12px; }
+        #logout-btn:hover, #signout-link:hover { background: var(--aw-gold-tint); color: var(--aw-gold-hover); }
+        nav { background: var(--aw-side); border-right: 1px solid var(--aw-line); padding-top: 14px; }
+        nav ul li a { color: var(--aw-muted); border-bottom: 0; border-left: 2px solid transparent; padding: 11px 20px; font-size: 13px; }
+        nav ul li a:hover { color: var(--aw-ink); background: var(--aw-hover); }
+        nav ul li a.active { color: var(--aw-ink); background: var(--aw-gold-tint); border-left: 2px solid var(--aw-gold); font-weight: 600; }
+
+        /* content cards and headings */
+        main { padding: 28px 32px; }
+        .tab-content { background: var(--aw-card); border: 1px solid var(--aw-line); border-radius: 12px; box-shadow: none; padding: 24px; }
+        h2 { font-family: var(--aw-display); color: var(--aw-ink); font-size: 22px; font-weight: 700; letter-spacing: -.3px; border-bottom: 1px solid var(--aw-line); padding-bottom: 12px; margin-bottom: 14px; }
+        h3, h4 { font-family: var(--aw-display); color: var(--aw-ink); }
+        p { color: var(--aw-cream); }
+        .section-header { background: transparent; color: var(--aw-gold); border-left: 2px solid var(--aw-gold); font-family: var(--aw-display); font-style: italic; font-weight: 500; font-size: 15px; padding: 4px 12px; margin-top: 22px; }
+        .subsection-title { color: var(--aw-ink); border-bottom: 1px solid var(--aw-line); font-family: var(--aw-display); font-size: 15px; }
+        .access-note { background: var(--aw-gold-tint); border: 1px solid var(--aw-gold-line); border-left: 2px solid var(--aw-gold); color: var(--aw-cream); border-radius: 8px; }
+        .metric-card { background: var(--aw-bg); border: 1px solid var(--aw-line); border-radius: 12px; }
+        .metric-card .value { color: var(--aw-ink); font-family: var(--aw-display); font-size: 26px; }
+        .metric-card .label { color: var(--aw-muted); text-transform: uppercase; letter-spacing: 1px; font-size: 10px; }
+
+        /* tables */
+        table { font-variant-numeric: tabular-nums; }
+        table, th, td { border-color: var(--aw-line); }
+        th { background: var(--aw-black); color: var(--aw-muted); font-weight: 500; font-size: 10.5px; letter-spacing: .8px; text-transform: uppercase; padding: 9px 8px; }
+        td { color: var(--aw-cream); padding: 7px 8px; }
+        tbody tr:hover td { background: var(--aw-hover); }
+        .table-wrapper { border-radius: 8px; }
+
+        /* forms */
+        form, .mini-form { background: var(--aw-bg); border: 1px solid var(--aw-line); border-radius: 12px; }
+        .form-group label, label { color: var(--aw-muted); letter-spacing: .4px; }
+        input, select, textarea { font-family: var(--aw-sans); background: var(--aw-bg); color: var(--aw-ink); border: 1px solid var(--aw-line-strong); border-radius: 8px; }
+        .form-group input, .form-group select, .form-group textarea { background: var(--aw-black); color: var(--aw-ink); border-color: var(--aw-line-strong); border-radius: 8px; padding: 8px 10px; }
+        input:focus, select:focus, textarea:focus { border-color: var(--aw-gold); outline: none; }
+        input[type="checkbox"], input[type="radio"] { accent-color: var(--aw-gold); }
+        .checkbox-group { background: var(--aw-black); border-color: var(--aw-line-strong); border-radius: 8px; }
+        fieldset.readonly-fieldset input, fieldset.readonly-fieldset select, fieldset.readonly-fieldset textarea { background: var(--aw-card); color: var(--aw-muted); }
+
+        /* buttons: gold primary, square, uppercase — as in the Aristo app */
+        button { background: var(--aw-gold); color: #000; border-radius: 0; font-family: var(--aw-sans); font-weight: 600; letter-spacing: 1.5px; font-size: 11px; padding: 9px 18px; }
+        button:hover { background: var(--aw-gold-hover); color: #000; }
+        button:disabled { opacity: .4; }
+        .action-btn { padding: 4px 10px; font-size: 9.5px; letter-spacing: 1px; }
+        .action-btn.edit { background: transparent; color: var(--aw-gold); border: 1px solid var(--aw-gold-line); }
+        .action-btn.edit:hover { background: var(--aw-gold-tint); color: var(--aw-gold-hover); }
+        .action-btn.delete { background: transparent; color: var(--aw-danger); border: 1px solid var(--aw-danger); }
+        .action-btn.delete:hover { background: rgba(239,95,100,.12); }
+
+        /* status badges: outlined pills */
+        .badge { background: transparent !important; border: 1px solid currentColor; border-radius: 999px; text-transform: uppercase; letter-spacing: .6px; font-weight: 600; font-size: 9.5px; padding: 2px 9px; }
+        .badge-active { color: var(--aw-green); }
+        .badge-pending { color: var(--aw-warn); }
+        .badge-warn { color: var(--aw-warn); }
+        .badge-danger { color: var(--aw-danger); }
+        .badge-info { color: var(--aw-info); }
+        .badge-neutral { color: var(--aw-muted); }
+
+        /* notifications */
+        .notif-list { border-color: var(--aw-line); background: var(--aw-bg); }
+        .notif-list li { border-bottom-color: var(--aw-line); color: var(--aw-cream); }
+        .notif-list li.urgent { background: rgba(239,95,100,.12); color: var(--aw-danger); }
+        .notif-empty { color: var(--aw-muted); }
+
+        /* role selection screen */
+        #login-screen { background: radial-gradient(ellipse at top, #24221f 0%, var(--aw-bg) 55%); }
+        .login-card { background: var(--aw-card); border: 1px solid var(--aw-line); border-top: 2px solid var(--aw-gold); border-radius: 12px; box-shadow: none; padding: 32px; }
+        .login-card h1 { font-family: var(--aw-display); color: var(--aw-ink); text-transform: none; letter-spacing: -.3px; font-size: 26px; }
+        .login-card h1::before { content: "ARISTO"; display: block; font-family: var(--aw-sans); font-size: 13px; font-weight: 600; letter-spacing: 4px; color: var(--aw-ink); margin-bottom: 14px; padding-bottom: 14px; border-bottom: 2px solid var(--aw-gold); width: 64px; }
+        .login-card p.sub { color: var(--aw-muted); }
+        .role-option { background: var(--aw-bg); border-color: var(--aw-line-strong); border-radius: 8px; }
+        .role-option:hover { border-color: var(--aw-gold-line); background: var(--aw-hover); }
+        .role-option.selected { border-color: var(--aw-gold); background: var(--aw-gold-tint); box-shadow: none; }
+        .role-option .role-name { color: var(--aw-ink); }
+        .role-option .role-desc { color: var(--aw-muted); }
+        #contractor-name-field input, #contractor-name-field select, #division-select { background: var(--aw-black) !important; color: var(--aw-ink); border-color: var(--aw-line-strong) !important; border-radius: 8px !important; }
+        .login-error { color: var(--aw-danger); }
+
+        /* inline light colours written directly in the page and in its scripts */
+        [style*="color:#475569"], [style*="color: #475569"], [style*="color:#64748b"], [style*="color: #64748b"] { color: var(--aw-muted) !important; }
+        [style*="color:#5c4610"] { color: var(--aw-cream) !important; }
+        [style*="background:#f1f5f9"], [style*="background:#f8fafc"], [style*="background:#e2e8f0"], [style*="background:#cbd5e1"],
+        [style*="background:#fffaf5"], [style*="background:#fff7ed"], [style*="background:#fbf1d9"], [style*="background: #f1f5f9"],
+        [style*="background: #f8fafc"], [style*="background: #e2e8f0"], [style*="background: #fffaf5"], [style*="background: #fff7ed"],
+        [style*="background: #fbf1d9"], [style*="background: #cbd5e1"], [style*="background-color: #f"], [style*="background-color:#f"],
+        [style*="background: #fff;"], [style*="background:#fff;"], [style*="background: white"], [style*="background:white"] { background: var(--aw-bg) !important; color: var(--aw-cream) !important; border-color: var(--aw-line-strong) !important; }
+        [style*="background:#fee2e2"] { background: rgba(239,95,100,.12) !important; color: var(--aw-danger) !important; }
+        [style*="background:#e2e8f0"] td, tr[style*="background:#e2e8f0"] td { background: var(--aw-black) !important; color: var(--aw-ink); }
+        [style*="background:#d97706"] { background: transparent !important; color: var(--aw-warn) !important; border: 1px solid var(--aw-warn) !important; }
+        [style*="background:#64748b"] { background: transparent !important; color: var(--aw-muted) !important; border: 1px solid var(--aw-line-strong) !important; }
+        [style*="background:#0f172a"] { background: var(--aw-black) !important; }
+        [style*="border-color:#fdba74"] { border-color: var(--aw-gold-line) !important; }
+
+        body.identity-pending #login-screen { visibility: hidden; }
+
+        @media (max-width: 760px) {
+            .container { flex-direction: column; }
+            nav { width: auto; border-right: 0; border-bottom: 1px solid var(--aw-line); padding-top: 0; }
+            nav ul { display: flex; overflow-x: auto; }
+            nav ul li a { white-space: nowrap; border-left: 0; border-bottom: 2px solid transparent; padding: 10px 14px; }
+            nav ul li a.active { border-left: 0; border-bottom: 2px solid var(--aw-gold); }
+            main { padding: 16px; }
+            .tab-content { padding: 16px; }
+            header h1 { font-size: 16px; }
+            .mini-form { grid-template-columns: 1fr 1fr; }
+        }
     </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=Playfair+Display:ital,wght@0,500;0,700;1,500&display=swap">
 </head>
-<body>
+<body class="identity-pending">
 
     <!-- ============ LOGIN / ROLE SELECTION ============ -->
     <div id="login-screen">
@@ -2937,6 +3078,46 @@
         populateContractorDropdowns();
         renderPeriodSelectors();
         fillRateInputs();
+
+        /* ---------- Per-person sign-in ----------
+           The site's sign-in (middleware.js) knows each person's role. The tool asks /whoami and
+           opens straight in that role, so nobody can pick a different one. If there is no
+           sign-in (e.g. the file opened locally), the original role picker is shown instead. */
+        let signedInUser = null;
+        function startAs(me) {
+            signedInUser = me;
+            selectRole(me.role);
+            if (me.role === 'contractor') {
+                const sel = document.getElementById('contractor-name-input');
+                if (![...sel.options].some(o => o.value === me.contractor)) sel.add(new Option(me.contractor, me.contractor));
+                sel.value = me.contractor;
+            }
+            if (me.role === 'production_manager' || me.role === 'supervisor') {
+                document.getElementById('division-select').value = me.division;
+            }
+            login();
+            const badge = document.getElementById('role-badge');
+            const showName = me.name && me.role !== 'contractor' && me.name !== ROLE_LABELS[me.role];
+            badge.textContent = (showName ? me.name + ' · ' : '') + badge.textContent;
+            document.getElementById('logout-btn').style.display = 'none';   // no role switching
+            document.body.classList.remove('identity-pending');
+        }
+        // "Switch role" / any logout now ends the real sign-in
+        const roleScreenLogout = logout;
+        logout = function () { if (signedInUser) { location.href = '/logout'; } else { roleScreenLogout(); } };
+
+        fetch('/whoami', { cache: 'no-store', credentials: 'same-origin' })
+            .then(r => r.ok ? r.json() : Promise.reject(r.status))
+            .then(me => {
+                if (!ROLE_LABELS[me.role]) throw new Error('no role');
+                startAs(me);
+            })
+            .catch(err => {
+                document.body.classList.remove('identity-pending');
+                if (err && err.message === 'no role') {
+                    document.querySelector('.login-card').innerHTML = '<h1>No access yet</h1><p class="sub">Your login has no role set. Ask HR to assign one.</p><p style="font-size:12px"><a href="/logout">Sign out</a></p>';
+                }
+            });
     </script>
 </body>
 </html>
