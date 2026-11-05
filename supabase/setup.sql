@@ -1,6 +1,6 @@
 -- =====================================================================
--- Aristo Contract Manpower â€” shared database (Supabase)
--- Run ONCE in your Supabase project: SQL Editor â†’ New query â†’ paste all â†’ Run.
+-- Aristo Contract Manpower — shared database (Supabase)
+-- Run ONCE in your Supabase project: SQL Editor → New query → paste all → Run.
 -- Safe to run again: it only adds what is missing and refreshes the functions.
 --
 -- How access works
@@ -205,6 +205,9 @@ begin
 end $$;
 
 revoke all on function cw_auth(text, text), cw_load(text, text), cw_save(text, text, jsonb, jsonb, jsonb, jsonb) from public;
+-- only cw_load and cw_save are meant to be called from outside; Supabase grants new functions to its API roles by default
+revoke execute on function cw_auth(text, text), cw_norm(text), cw_can_read(app_users, records),
+  cw_can_write(app_users, text, records, text, text) from anon, authenticated;
 grant execute on function cw_load(text, text) to anon, authenticated;
 grant execute on function cw_save(text, text, jsonb, jsonb, jsonb, jsonb) to anon, authenticated;
 

@@ -73,8 +73,8 @@ async function readSession(req) {
 // (see supabase/setup.sql). The sign-in key stays in the HttpOnly cookie; the browser's
 // scripts never see it.
 // ---------------------------------------------------------------------
-const SUPABASE_URL = 'https://fqohuttxrdkhmqafewwv.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_lslZNovqtGJSFENcrCTUvw_hJ0qssdg';
+const SUPABASE_URL = 'https://ciodjmejeazhsbmsnreg.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_1pFhbHwJ76v-Q6DnToJfoQ_k3KU8Ibf';
 
 async function rpc(fn, args) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
