@@ -113,6 +113,12 @@ create or replace function cw_user_json(u app_users) returns jsonb language sql 
   select jsonb_build_object('user', u.user_id, 'role', u.role, 'contractor', u.contractor, 'division', u.division, 'name', u.name)
 $$;
 
+-- where events are copied to (the admin's Google Sheet); only the sign-in layer and admins receive it
+create or replace function cw_sheet() returns jsonb language sql stable security definer set search_path = public as $$
+  select coalesce((select jsonb_build_object('sheet', value) from app_settings
+                   where key = 'admin_sheet' and coalesce(value->>'url', '') <> '' and coalesce((value->>'enabled')::boolean, true)), '{}'::jsonb)
+$$;
+
 -- ---------------------------------------------------------------------
 -- signing in (called by middleware.js)
 -- ---------------------------------------------------------------------
@@ -164,7 +170,7 @@ begin
   if p_kind not in ('open', 'aha', 'docs_read') then return '{"ok":false}'::jsonb; end if;
   insert into app_events (user_id, kind, meta)
   values (u.user_id, p_kind, case when length(coalesce(p_meta, '{}'::jsonb)::text) > 2000 then '{}'::jsonb else coalesce(p_meta, '{}'::jsonb) end);
-  return '{"ok":true}'::jsonb;
+  return jsonb_build_object('ok', true) || cw_user_json(u);
 end $$;
 
 -- may this person see this row?
@@ -221,7 +227,7 @@ begin
     'me', jsonb_build_object('user', u.user_id, 'role', u.role, 'contractor', u.contractor, 'division', u.division, 'name', u.name),
     'records', coalesce((select jsonb_agg(jsonb_build_object('c', r.collection, 'id', r.id, 'd', r.data))
                          from records r where cw_can_read(u, r)), '[]'::jsonb),
-    'settings', coalesce((select jsonb_object_agg(key, value) from app_settings), '{}'::jsonb),
+    'settings', coalesce((select jsonb_object_agg(key, value) from app_settings where key not like 'admin_%'), '{}'::jsonb),  -- admin-only settings stay private
     'empty', not exists (select 1 from records)
   );
 end $$;
@@ -300,6 +306,8 @@ begin
     elsif k = 'knownContractors' then
       v := (select coalesce(jsonb_agg(distinct e), '[]'::jsonb)
             from jsonb_array_elements(coalesce(cur, '[]'::jsonb) || coalesce(v, '[]'::jsonb)) e);
+    elsif k like 'admin_%' then
+      continue; -- admin-only settings are changed in the Admin Portal
     elsif u.role not in ('hr_admin', 'admin') then
       continue; -- pay rates, grade budgets and attendance verification are HR-only
     end if;
@@ -417,8 +425,102 @@ begin
     'recent_changes', coalesce((select jsonb_agg(x order by x.updated_at desc) from
                                 (select collection, id, updated_at, updated_by from records order by updated_at desc limit 200) x), '[]'::jsonb),
     'contractors', (select value from app_settings where key = 'contractors'),
-    'documents', (select count(*) from documents)
+    'documents', (select count(*) from documents),
+    'sheet', (select value from app_settings where key = 'admin_sheet')
   );
+end $$;
+
+-- the Google Sheet that events are copied to: {url, token, enabled}
+create or replace function cw_admin_set_sheet(p_user text, p_key text, p_url text, p_token text, p_enabled boolean) returns jsonb
+language plpgsql volatile security definer set search_path = public as $$
+declare u app_users;
+begin
+  u := cw_admin(p_user, p_key);
+  if coalesce(p_url, '') <> '' and p_url !~ '^https://script\.google\.com/macros/s/[A-Za-z0-9_-]+/exec$' then
+    raise exception 'Paste the web app link from Apps Script: it starts with https://script.google.com/macros/s/ and ends with /exec' using errcode = '22023';
+  end if;
+  if coalesce(p_url, '') <> '' and coalesce(p_token, '') !~ '^[A-Za-z0-9]{16,64}$' then raise exception 'bad secret code' using errcode = '22023'; end if;
+  insert into app_settings (key, value, updated_at, updated_by)
+  values ('admin_sheet', jsonb_build_object('url', coalesce(p_url, ''), 'token', coalesce(p_token, ''), 'enabled', coalesce(p_enabled, true)), now(), u.user_id)
+  on conflict (key) do update set value = excluded.value, updated_at = now(), updated_by = u.user_id;
+  insert into audit_log (user_id, text) values (u.user_id, case when coalesce(p_url, '') = '' then 'Admin disconnected the Google Sheet' else 'Admin connected the Google Sheet for events' end);
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Events → Google Sheet. The database itself posts each new event to the admin's Apps Script
+-- web app (Supabase's pg_net), so the sheet link and secret never leave the database.
+-- ---------------------------------------------------------------------
+create extension if not exists pg_net;
+
+create or replace function cw_sheet_send(p_payload jsonb) returns void
+language plpgsql volatile security definer set search_path = public as $$
+declare s jsonb;
+begin
+  select value into s from app_settings where key = 'admin_sheet';
+  if s is null or coalesce(s->>'url', '') = '' or not coalesce((s->>'enabled')::boolean, true) then return; end if;
+  perform net.http_post(url := s->>'url', body := jsonb_build_object('token', s->>'token') || p_payload,
+                        headers := '{"Content-Type": "application/json"}'::jsonb, timeout_milliseconds := 8000);
+exception when others then
+  null;  -- a sheet problem must never stop people signing in or working
+end $$;
+
+create or replace function cw_login_row(e login_events) returns jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('at', e.at, 'user', e.user_id, 'name', a.name, 'role', a.role,
+    'event', case when e.success then 'Signed in' else 'Sign-in failed' end, 'detail', coalesce(e.note, ''),
+    'seconds', null, 'device', left(coalesce(e.user_agent, ''), 140), 'ip', coalesce(e.ip, ''))
+  from (select 1) one left join app_users a on a.user_id = e.user_id
+$$;
+create or replace function cw_event_row(e app_events) returns jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('at', e.at, 'user', e.user_id, 'name', a.name, 'role', a.role,
+    'event', case e.kind when 'open' then 'Opened the app' when 'aha' then 'Aha moment' when 'docs_read' then 'Documents read' else e.kind end,
+    'detail', case e.kind when 'aha' then coalesce(e.meta->>'action', '')
+                          when 'docs_read' then coalesce(e.meta->>'docs', '0') || ' documents, ' || coalesce(e.meta->>'fields', '0') || ' fields filled' else '' end,
+    'seconds', case when e.kind = 'aha' then e.meta->'secondsFromOpen' end, 'device', '', 'ip', '')
+  from (select 1) one left join app_users a on a.user_id = e.user_id
+$$;
+
+create or replace function cw_login_to_sheet() returns trigger language plpgsql security definer set search_path = public as $$
+begin perform cw_sheet_send(jsonb_build_object('rows', jsonb_build_array(cw_login_row(new)))); return new; end $$;
+create or replace function cw_event_to_sheet() returns trigger language plpgsql security definer set search_path = public as $$
+begin perform cw_sheet_send(jsonb_build_object('rows', jsonb_build_array(cw_event_row(new)))); return new; end $$;
+
+drop trigger if exists login_events_to_sheet on login_events;
+create trigger login_events_to_sheet after insert on login_events for each row execute function cw_login_to_sheet();
+drop trigger if exists app_events_to_sheet on app_events;
+create trigger app_events_to_sheet after insert on app_events for each row execute function cw_event_to_sheet();
+
+-- Admin Portal buttons: send a test row, copy all past events, or write the six numbers to a Summary tab
+create or replace function cw_admin_sheet_send(p_user text, p_key text, p_what text, p_summary jsonb) returns jsonb
+language plpgsql volatile security definer set search_path = public as $$
+declare u app_users; s jsonb; batch jsonb; n int := 0;
+begin
+  u := cw_admin(p_user, p_key);
+  select value into s from app_settings where key = 'admin_sheet';
+  if s is null or coalesce(s->>'url', '') = '' then raise exception 'Connect the Google Sheet first' using errcode = '22023'; end if;
+  if p_what = 'test' then
+    perform cw_sheet_send(jsonb_build_object('rows', jsonb_build_array(jsonb_build_object('at', now(), 'user', u.user_id, 'name', u.name, 'role', u.role,
+      'event', 'Test row', 'detail', 'Sent from the Admin Portal — the sheet is connected', 'seconds', null, 'device', '', 'ip', ''))));
+    n := 1;
+  elsif p_what = 'backfill' then
+    for batch in
+      select jsonb_agg(r order by r->>'at') from (
+        select cw_login_row(l) r, row_number() over (order by l.at) rn from login_events l
+        union all
+        select cw_event_row(e) r, 1000000 + row_number() over (order by e.at) rn from app_events e
+      ) x group by (rn % 1000000) / 200, rn >= 1000000
+    loop
+      perform cw_sheet_send(jsonb_build_object('rows', batch));
+      n := n + jsonb_array_length(batch);
+    end loop;
+  elsif p_what = 'summary' then
+    perform cw_sheet_send(jsonb_build_object('summary', coalesce(p_summary, '{}'::jsonb) || jsonb_build_object('at', now())));
+    n := 1;
+  else
+    raise exception 'unknown action' using errcode = '22023';
+  end if;
+  insert into audit_log (user_id, text) values (u.user_id, 'Admin sent ' || n || ' row(s) to the Google Sheet (' || p_what || ')');
+  return jsonb_build_object('ok', true, 'rows', n);
 end $$;
 
 -- add or change a login. p_fp / p_salt are null to keep the current password.
@@ -505,11 +607,12 @@ begin
   return jsonb_build_object('ok', true, 'records', n_rec, 'logins', n_users);
 end $$;
 
-revoke all on function cw_admin(text, text), cw_user_json(app_users) from public;
-revoke execute on function cw_admin(text, text), cw_user_json(app_users) from anon, authenticated;
+revoke all on function cw_admin(text, text), cw_user_json(app_users), cw_sheet(), cw_sheet_send(jsonb), cw_login_row(login_events), cw_event_row(app_events) from public;
+revoke execute on function cw_admin(text, text), cw_user_json(app_users), cw_sheet(), cw_sheet_send(jsonb), cw_login_row(login_events), cw_event_row(app_events) from anon, authenticated;
 grant execute on function cw_login_salt(text), cw_login(text, text, text, text), cw_whoami(text, text), cw_event(text, text, text, jsonb),
   cw_admin_overview(text, text), cw_admin_save_user(text, text, text, text, text, text, text, boolean, text, text),
-  cw_admin_delete_user(text, text, text), cw_admin_set_contractors(text, text, jsonb), cw_admin_rename_contractor(text, text, text, text)
+  cw_admin_delete_user(text, text, text), cw_admin_set_contractors(text, text, jsonb), cw_admin_rename_contractor(text, text, text, text),
+  cw_admin_set_sheet(text, text, text, text, boolean), cw_admin_sheet_send(text, text, text, jsonb)
   to anon, authenticated;
 
 revoke all on function cw_auth(text, text), cw_load(text, text), cw_save(text, text, jsonb, jsonb, jsonb, jsonb) from public;
