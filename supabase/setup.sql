@@ -90,7 +90,7 @@ language sql stable as $$
             select 1 from jsonb_array_elements_text(coalesce(r.data->'assignedContractors', '[]'::jsonb)) a
             where cw_norm(a) = cw_norm(u.contractor)))
     else -- production_manager, supervisor
-      r.collection in ('workers','requisitions','resignations','exitClearances','attendanceRecords')
+      r.collection in ('workers','requisitions','resignations','exitClearances','attendanceRecords','candidates')
         and r.division = u.division
   end
 $$;
@@ -110,9 +110,11 @@ returns boolean language sql stable as $$
       )
     when 'gm_production' then p_coll = 'requisitions' and prev.collection is not null
     else -- production_manager, supervisor
-      p_coll in ('requisitions','exitClearances')
-      and new_division = u.division
-      and (prev is null or prev.collection is null or prev.division = u.division)
+      (p_coll in ('requisitions','exitClearances')
+        and new_division = u.division
+        and (prev is null or prev.collection is null or prev.division = u.division))
+      -- interview decision on a candidate HR forwarded to their division
+      or (p_coll = 'candidates' and prev.collection is not null and prev.division = u.division)
   end
 $$;
 
@@ -162,6 +164,22 @@ begin
       end if;
       d := prev.data || jsonb_build_object('status', d->'status', 'queryRemarks', coalesce(d->'queryRemarks', prev.data->'queryRemarks', 'null'::jsonb));
     end if;
+    if x->>'c' = 'candidates' and u.role = 'contractor' then
+      -- contractors submit or resubmit; they can't move a candidate further along
+      if coalesce(d->>'status', '') <> 'Submitted'
+         or (prev.collection is not null and coalesce(prev.data->>'status', '') not in ('Submitted', 'Returned to Contractor')) then
+        rejected := rejected || jsonb_build_array(jsonb_build_object('c', x->>'c', 'id', x->>'id')); continue;
+      end if;
+    end if;
+    if x->>'c' = 'candidates' and u.role in ('production_manager', 'supervisor') then
+      -- the interview panel records only its decision; candidate details stay as submitted
+      if coalesce(prev.data->>'status', '') not in ('Forwarded to Production', 'On Hold')
+         or coalesce(d->>'status', '') not in ('Selected', 'Rejected by Production', 'On Hold') then
+        rejected := rejected || jsonb_build_array(jsonb_build_object('c', x->>'c', 'id', x->>'id')); continue;
+      end if;
+      d := prev.data || jsonb_build_object('status', d->'status', 'interview', d->'interview',
+                                           'decisionBy', d->'decisionBy', 'history', d->'history');
+    end if;
     insert into records (collection, id, data, contractor, division, updated_at, updated_by)
     values (x->>'c', x->>'id', d, x->>'contractor', x->>'division', now(), u.user_id)
     on conflict (collection, id) do update
@@ -203,6 +221,73 @@ begin
 
   return jsonb_build_object('saved', saved, 'rejected', rejected);
 end $$;
+
+-- ---------------------------------------------------------------------
+-- Candidate documents (Aadhaar card, CV, education certificates).
+-- Kept apart from the records so pages load fast; fetched one at a time when opened.
+-- Who can open a file: HR, the contractor who uploaded it, and the Production
+-- Manager / Supervisor of the division it is for.
+-- ---------------------------------------------------------------------
+create table if not exists documents (
+  id          text primary key,
+  candidate_id text,
+  kind        text not null,              -- aadhaar | cv | education | other
+  name        text not null,
+  mime        text not null,
+  size        int  not null,
+  data        text not null,              -- base64
+  contractor  text,
+  division    text,
+  uploaded_by text,
+  uploaded_at timestamptz not null default now()
+);
+alter table documents enable row level security;
+revoke all on documents from anon, authenticated;
+
+create or replace function cw_doc_put(p_user text, p_key text, p_id text, p_candidate text, p_kind text,
+                                      p_name text, p_mime text, p_data text, p_contractor text, p_division text)
+returns jsonb language plpgsql volatile security definer set search_path = public as $$
+declare u app_users; prev documents;
+begin
+  u := cw_auth(p_user, p_key);
+  if u.role not in ('hr_admin', 'contractor') then raise exception 'not allowed' using errcode = '42501'; end if;
+  if p_id !~ '^[A-Za-z0-9_-]{8,64}$' then raise exception 'bad id' using errcode = '22023'; end if;
+  if length(coalesce(p_data, '')) > 4000000 then raise exception 'file too large' using errcode = '54000'; end if;
+  if p_kind not in ('aadhaar', 'cv', 'education', 'other') then p_kind := 'other'; end if;
+  select * into prev from documents where id = p_id;
+  if u.role = 'contractor' then
+    p_contractor := u.contractor;                       -- a contractor can only file under their own name
+    if prev.id is not null and cw_norm(prev.contractor) <> cw_norm(u.contractor) then
+      raise exception 'not allowed' using errcode = '42501';
+    end if;
+  end if;
+  insert into documents (id, candidate_id, kind, name, mime, size, data, contractor, division, uploaded_by)
+  values (p_id, p_candidate, p_kind, left(p_name, 200), left(p_mime, 100), (length(p_data) * 3 / 4), p_data,
+          p_contractor, p_division, u.user_id)
+  on conflict (id) do update set candidate_id = excluded.candidate_id, kind = excluded.kind, name = excluded.name,
+    mime = excluded.mime, size = excluded.size, data = excluded.data, division = excluded.division,
+    uploaded_by = excluded.uploaded_by, uploaded_at = now();
+  return jsonb_build_object('id', p_id, 'size', length(p_data) * 3 / 4);
+end $$;
+
+create or replace function cw_doc_get(p_user text, p_key text, p_id text) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare u app_users; dd documents;
+begin
+  u := cw_auth(p_user, p_key);
+  select * into dd from documents where id = p_id;
+  if dd.id is null then raise exception 'not found' using errcode = 'P0002'; end if;
+  if not (u.role = 'hr_admin'
+          or (u.role = 'contractor' and cw_norm(dd.contractor) = cw_norm(u.contractor))
+          or (u.role in ('production_manager', 'supervisor') and dd.division = u.division)) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  return jsonb_build_object('id', dd.id, 'name', dd.name, 'mime', dd.mime, 'kind', dd.kind, 'data', dd.data);
+end $$;
+
+revoke all on function cw_doc_put(text, text, text, text, text, text, text, text, text, text), cw_doc_get(text, text, text) from public;
+grant execute on function cw_doc_put(text, text, text, text, text, text, text, text, text, text) to anon, authenticated;
+grant execute on function cw_doc_get(text, text, text) to anon, authenticated;
 
 revoke all on function cw_auth(text, text), cw_load(text, text), cw_save(text, text, jsonb, jsonb, jsonb, jsonb) from public;
 -- only cw_load and cw_save are meant to be called from outside; Supabase grants new functions to its API roles by default

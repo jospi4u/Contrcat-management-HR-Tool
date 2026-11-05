@@ -102,6 +102,19 @@ async function api(req, url, s) {
       p_settings: body.settings || {}, p_audit: body.audit || []
     });
   }
+  // candidate documents: POST uploads one file (base64), GET ?id= returns it
+  if (url.pathname === '/api/doc' && req.method === 'POST') {
+    const b = await req.json().catch(() => null);
+    if (!b || !b.id || !b.data) return new Response('{"error":"bad request"}', { status: 400, headers: { 'content-type': 'application/json' } });
+    return rpc('cw_doc_put', {
+      p_user: s.user, p_key: s.key, p_id: String(b.id), p_candidate: String(b.candidate || ''), p_kind: String(b.kind || 'other'),
+      p_name: String(b.name || 'document'), p_mime: String(b.mime || 'application/octet-stream'), p_data: String(b.data),
+      p_contractor: String(b.contractor || ''), p_division: String(b.division || '')
+    });
+  }
+  if (url.pathname === '/api/doc' && req.method === 'GET') {
+    return rpc('cw_doc_get', { p_user: s.user, p_key: s.key, p_id: String(url.searchParams.get('id') || '') });
+  }
   return new Response('{"error":"not found"}', { status: 404, headers: { 'content-type': 'application/json' } });
 }
 
@@ -113,6 +126,9 @@ function page({ error = '', user = '' }, status = 200) {
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
+<link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#080807">
+<link rel="icon" href="/icons/icon-192.png"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Aristo">
 <title>Sign in · Aristo Contract Manpower</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Playfair+Display:ital,wght@0,700;1,500&display=swap">
@@ -165,11 +181,15 @@ const pass = () => new Response(null, { headers: { 'x-middleware-next': '1' } })
 
 // Used for unknown user IDs so a wrong ID takes as long as a wrong password
 const DUMMY_SALT = '00000000000000000000000000000000';
+const PUBLIC_FILES = new Set(['/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png', '/icons/apple-touch-icon.png']);
 
 export default async function middleware(req) {
   const url = new URL(req.url);
 
   if (url.pathname === '/logout') return redirect('/', cookie('', 0));
+
+  // app icon and install manifest: phones fetch these before anyone signs in; they hold nothing private
+  if (PUBLIC_FILES.has(url.pathname)) return pass();
 
   if (url.pathname === '/login' && req.method === 'POST') {
     const form = await req.formData().catch(() => null);

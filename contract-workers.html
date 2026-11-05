@@ -3,7 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Contract Worker HR Management System</title>
+    <title>Aristo Contract Manpower</title>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#080807">
+    <link rel="icon" href="/icons/icon-192.png">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Aristo">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <style>
         :root {
             /* Matte sport palette: black / red / yellow / white */
@@ -584,6 +592,54 @@
         [style*="background:#0f172a"] { background: var(--aw-black) !important; }
         [style*="border-color:#fdba74"] { border-color: var(--aw-gold-line) !important; }
 
+        /* ---------- Candidate line-up, review and interview ---------- */
+        .cw-panel { border: 1px solid var(--aw-gold-line); border-top: 2px solid var(--aw-gold); border-radius: 12px; padding: 18px 20px; margin: 4px 0 22px; background: var(--aw-bg); }
+        .cw-hint { color: var(--aw-muted); font-size: 12px; margin: 0 0 12px; }
+        .cw-uploads { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 10px; }
+        .cw-drop { display: flex; flex-direction: column; gap: 4px; padding: 14px; border: 1px dashed var(--aw-gold-line); border-radius: 10px; cursor: pointer; background: var(--aw-black); }
+        .cw-drop:hover { border-color: var(--aw-gold); background: var(--aw-gold-tint); }
+        .cw-drop input[type=file] { font-size: 11px; color: var(--aw-muted); margin-top: 6px; border: 0; padding: 0; background: transparent; }
+        .cw-drop-title { color: var(--aw-ink); font-weight: 600; font-size: 13px; }
+        .cw-drop-title b { color: var(--aw-gold); }
+        .cw-drop-sub { color: var(--aw-muted); font-size: 11px; }
+        .cw-drop-list { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
+        .cw-file { font-size: 11px; color: var(--aw-cream); display: flex; gap: 6px; align-items: center; }
+        .cw-file .st { font-size: 10px; letter-spacing: .5px; text-transform: uppercase; }
+        .cw-file .st.ok { color: var(--aw-green); } .cw-file .st.wait { color: var(--aw-warn); } .cw-file .st.bad { color: var(--aw-danger); }
+        .cw-file button { padding: 0 6px; font-size: 10px; background: transparent; color: var(--aw-muted); border: 0; letter-spacing: 0; }
+        .cw-read-status { font-size: 12px; color: var(--aw-gold); min-height: 18px; margin: 4px 0 10px; }
+        .cw-autofilled { border-color: var(--aw-gold-line) !important; box-shadow: inset 3px 0 0 var(--aw-gold); }
+        .cw-detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px 18px; margin: 10px 0 14px; }
+        .cw-detail-grid div { font-size: 12px; } .cw-detail-grid span { display: block; color: var(--aw-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .8px; }
+        .cw-docs { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 14px; }
+        .cw-doc-btn { background: transparent !important; color: var(--aw-gold) !important; border: 1px solid var(--aw-gold-line) !important; font-size: 10px; padding: 5px 10px; }
+        .cw-history { list-style: none; padding: 0; margin: 6px 0 14px; font-size: 11px; color: var(--aw-muted); }
+        .cw-history li { padding: 3px 0; border-bottom: 1px solid var(--aw-line); }
+        .cw-history b { color: var(--aw-cream); font-weight: 500; }
+        .cw-decision { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-top: 8px; }
+        .cw-decision .form-group { min-width: 160px; }
+        .cw-btn-ghost { background: transparent !important; color: var(--aw-gold) !important; border: 1px solid var(--aw-gold-line) !important; }
+        .cw-btn-danger { background: transparent !important; color: var(--aw-danger) !important; border: 1px solid var(--aw-danger) !important; }
+        .cw-filter { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+        .cw-filter button { background: transparent; color: var(--aw-muted); border: 1px solid var(--aw-line-strong); font-size: 10px; padding: 5px 10px; }
+        .cw-filter button.on { color: #000; background: var(--aw-gold); border-color: var(--aw-gold); }
+        .badge-sel { color: var(--aw-green); }
+
+        .cw-pick { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+        .cw-pick-btn { position: relative; display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 14px; border: 1px solid var(--aw-gold-line); color: var(--aw-gold); font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; flex: 1 1 120px; }
+        .cw-pick-btn.cw-camera { background: var(--aw-gold); color: #000; border-color: var(--aw-gold); }
+        .cw-pick-btn input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+        .cw-pick-btn:hover { filter: brightness(1.08); }
+        @media (max-width: 560px) {
+            .mini-form, #candidate-form-wrapper .mini-form { grid-template-columns: 1fr !important; }
+            .cw-panel { padding: 14px; }
+            .cw-uploads { grid-template-columns: 1fr; }
+            .cw-pick-btn { min-height: 48px; font-size: 12px; }
+            #candidate-form-wrapper button { width: 100%; margin: 6px 0 0; min-height: 48px; }
+            header { padding: 12px 14px; } header h1::before { padding-right: 8px; margin-right: 8px; letter-spacing: 3px; }
+            .header-right > div:first-of-type { display: none; }  /* locations line */
+        }
+
         body.identity-pending #login-screen { visibility: hidden; }
         #sync-status { font-size: 11px; color: var(--aw-green); letter-spacing: .3px; }
         #sync-status.bad { color: var(--aw-warn); }
@@ -1006,17 +1062,64 @@
                 <div class="section-header" id="rt-assigned-header" style="display:none;">Requirements Assigned To Me</div>
                 <div class="table-wrapper" id="rt-assigned-wrapper" style="display:none;">
                     <table>
-                        <thead><tr><th>Division</th><th>Position</th><th>Count</th><th>Skill</th><th>Required By</th><th>Deadline</th><th>Action</th></tr></thead>
+                        <thead><tr><th>Action</th><th>Division</th><th>Position</th><th>Count</th><th>Skill</th><th>Required By</th><th>Deadline</th></tr></thead>
                         <tbody id="rt-assigned-body"></tbody>
                     </table>
                 </div>
 
-                <!-- Candidate submission form (contractor) -->
-                <div id="candidate-form-wrapper" style="display:none; border:2px solid var(--accent-color); border-radius:6px; padding:14px; margin-bottom:20px; background:#fffaf5;">
-                    <div class="section-header" style="margin-top:0;">Select / Submit Candidate — <span id="cf-req-id"></span></div>
-                    <div class="mini-form" style="grid-template-columns: repeat(3,1fr);">
-                        <div class="form-group"><label>Candidate Name</label><input type="text" id="cf-name"></div>
-                        <div class="form-group"><label>Mobile Number</label><input type="tel" id="cf-mobile"></div>
+                <!-- Candidate line-up (contractor): upload documents, details fill in automatically -->
+                <div id="candidate-form-wrapper" style="display:none;" class="cw-panel">
+                    <div class="section-header" style="margin-top:0;">Add Candidate — <span id="cf-req-id"></span></div>
+                    <p class="cw-hint">Upload the candidate's documents. The details below fill in automatically from them — check every field before submitting.</p>
+                    <div class="cw-uploads">
+                        <div class="cw-drop">
+                            <span class="cw-drop-title">Aadhaar card <b>*</b></span>
+                            <span class="cw-drop-sub">Front and back · photo or PDF</span>
+                            <div class="cw-pick">
+                                <label class="cw-pick-btn cw-camera">📷 Take photo<input type="file" accept="image/*" capture="environment" onchange="RECRUIT.addFiles('aadhaar', this)"></label>
+                                <label class="cw-pick-btn">Upload file<input type="file" id="cf-doc-aadhaar" accept="image/*,application/pdf" multiple onchange="RECRUIT.addFiles('aadhaar', this)"></label>
+                            </div>
+                            <span class="cw-drop-list" id="cf-list-aadhaar"></span>
+                        </div>
+                        <div class="cw-drop">
+                            <span class="cw-drop-title">CV / Resume <b>*</b></span>
+                            <span class="cw-drop-sub">PDF, Word (.docx) or photo</span>
+                            <div class="cw-pick">
+                                <label class="cw-pick-btn cw-camera">📷 Take photo<input type="file" accept="image/*" capture="environment" onchange="RECRUIT.addFiles('cv', this)"></label>
+                                <label class="cw-pick-btn">Upload file<input type="file" id="cf-doc-cv" accept="image/*,application/pdf,.docx,.txt" onchange="RECRUIT.addFiles('cv', this)"></label>
+                            </div>
+                            <span class="cw-drop-list" id="cf-list-cv"></span>
+                        </div>
+                        <div class="cw-drop">
+                            <span class="cw-drop-title">Education certificates <b>*</b></span>
+                            <span class="cw-drop-sub">SSLC / PUC / ITI / Diploma / Degree</span>
+                            <div class="cw-pick">
+                                <label class="cw-pick-btn cw-camera">📷 Take photo<input type="file" accept="image/*" capture="environment" onchange="RECRUIT.addFiles('education', this)"></label>
+                                <label class="cw-pick-btn">Upload file<input type="file" id="cf-doc-education" accept="image/*,application/pdf" multiple onchange="RECRUIT.addFiles('education', this)"></label>
+                            </div>
+                            <span class="cw-drop-list" id="cf-list-education"></span>
+                        </div>
+                    </div>
+                    <p class="cw-hint">On a phone, <b>Take photo</b> opens the camera. Lay the document flat in good light and fill the frame. Take one photo per page.</p>
+                    <div id="cf-read-status" class="cw-read-status"></div>
+
+                    <div class="mini-form" style="grid-template-columns: repeat(4,1fr);">
+                        <div class="form-group"><label>Candidate Name *</label><input type="text" id="cf-name"></div>
+                        <div class="form-group"><label>Gender</label><select id="cf-gender"><option value="">--</option><option>Male</option><option>Female</option><option>Transgender</option></select></div>
+                        <div class="form-group"><label>Date of Birth</label><input type="date" id="cf-dob" onchange="RECRUIT.updateAge()"></div>
+                        <div class="form-group"><label>Age</label><input type="number" id="cf-age" readonly></div>
+                        <div class="form-group"><label>Mobile Number *</label><input type="tel" id="cf-mobile"></div>
+                        <div class="form-group"><label>Email</label><input type="email" id="cf-email"></div>
+                        <div class="form-group"><label>Aadhaar (last 4 digits shown)</label><input type="text" id="cf-aadhaar" placeholder="XXXX XXXX 1234" onblur="this.value = RECRUIT.maskAadhaar(this.value)"></div>
+                        <div class="form-group"><label>Pincode</label><input type="text" id="cf-pincode" maxlength="6"></div>
+                        <div class="form-group full-width"><label>Permanent Address (from Aadhaar)</label><textarea id="cf-address" rows="2"></textarea></div>
+                        <div class="form-group"><label>State</label><input type="text" id="cf-state"></div>
+                        <div class="form-group"><label>Highest Qualification *</label>
+                            <select id="cf-education"><option value="">--</option><option>Below SSLC</option><option>SSLC</option><option>PUC (+2)</option><option>ITI</option><option>Diploma</option><option>Bachelor's Degree</option><option>Master's Degree</option></select>
+                        </div>
+                        <div class="form-group"><label>Board / University</label><input type="text" id="cf-board"></div>
+                        <div class="form-group"><label>Year Passed · Score</label><input type="text" id="cf-passyear" placeholder="e.g. 2016 · 68%"></div>
+                        <div class="form-group"><label>Experience (years)</label><input type="number" step="0.5" min="0" id="cf-experience"></div>
                         <div class="form-group"><label>Skill / Grade</label>
                             <select id="cf-skill">
                                 <option>Helper Grade I</option><option>Helper Grade II</option><option>Semi Skilled Grade I</option>
@@ -1024,22 +1127,21 @@
                                 <option>Highly Skilled Grade I</option><option>Highly Skilled Grade II</option><option>Highly Skilled Grade III</option>
                             </select>
                         </div>
-                        <div class="form-group"><label>Experience</label><input type="text" id="cf-experience" placeholder="e.g. 2 Yrs"></div>
-                        <div class="form-group"><label>Education</label>
-                            <select id="cf-education"><option>SSLC</option><option>PUC (+2)</option><option>ITI / Diploma</option><option>Bachelor's Degree</option></select>
-                        </div>
-                        <div class="form-group"><label>ID Proof (Aadhaar/PAN etc.)</label><input type="file" id="cf-id-doc"></div>
-                        <div class="form-group full-width"><label>Resume / Certificates</label><input type="file" id="cf-resume-doc" multiple></div>
+                        <div class="form-group full-width"><label>Key Skills (from CV)</label><input type="text" id="cf-skills"></div>
+                        <div class="form-group full-width"><label>Remarks for HR</label><input type="text" id="cf-remarks"></div>
                     </div>
-                    <div class="access-note">This is a prototype: uploaded file names are recorded against the candidate, but files themselves are not stored — connect real document storage before going live.</div>
-                    <button type="button" onclick="submitCandidate()">Submit Candidate</button>
+                    <button type="button" id="cf-submit-btn" onclick="RECRUIT.submit()">Submit Candidate to HR</button>
                     <button type="button" style="background:#64748b;" onclick="closeCandidateForm()">Cancel</button>
                 </div>
 
-                <div class="section-header">Candidates Submitted</div>
+                <!-- Candidate details: HR review + HR interview, Production interview -->
+                <div id="candidate-detail" style="display:none;" class="cw-panel"></div>
+
+                <div class="section-header">Candidates</div>
+                <div class="cw-filter" id="cand-filter"></div>
                 <div class="table-wrapper">
                     <table>
-                        <thead><tr><th>Candidate</th><th>Mobile</th><th>Skill</th><th>Experience</th><th>Education</th><th>Documents</th><th>Contractor</th><th>For Requisition</th><th>Status</th><th id="cand-actions-col">Action</th></tr></thead>
+                        <thead><tr><th>Candidate</th><th>Age / Gender</th><th>Mobile</th><th>Qualification</th><th>Experience</th><th>Documents</th><th>Contractor</th><th>For Requisition</th><th>Status</th><th id="cand-actions-col">Action</th></tr></thead>
                         <tbody id="candidates-body"></tbody>
                     </table>
                 </div>
@@ -1742,7 +1844,8 @@
         }
 
         function generateEmployeeId(contractorName) {
-            const prefix = ((contractorName || 'XX').replace(/[^a-zA-Z]/g, '').substring(0, 2).toUpperCase()) || 'XX';
+            // initials from the contractor's name, ignoring a leading "M/s.": HRD → HR, Nanda → NA
+            const prefix = ((contractorName || 'XX').replace(/^\s*M\s*\/\s*s\.?\s*/i, '').replace(/[^a-zA-Z]/g, '').substring(0, 2).toUpperCase()) || 'XX';
             if (!empIdCounters[prefix]) empIdCounters[prefix] = 1;
             const num = empIdCounters[prefix]++;
             return prefix + String(num).padStart(3, '0');
@@ -2477,8 +2580,8 @@
                 assignedBody.innerHTML = '';
                 if (!assigned.length) assignedBody.innerHTML = '<tr><td colspan="7">No requirements assigned to you yet.</td></tr>';
                 assigned.forEach(r => {
-                    assignedBody.innerHTML += '<tr><td>' + r.division + '</td><td>' + r.position + '</td><td>' + r.count + '</td><td>' + r.skill + '</td><td>' + (r.requiredDate || '-') + '</td><td>' + r.deadline + '</td>' +
-                        '<td><button type="button" class="action-btn edit" onclick="openCandidateForm(\'' + r.id + '\')">Select Candidate</button></td></tr>';
+                    assignedBody.innerHTML += '<tr><td><button type="button" class="action-btn edit" onclick="openCandidateForm(\'' + r.id + '\')">Add Candidate</button></td>' +
+                        '<td>' + r.division + '</td><td>' + r.position + '</td><td>' + r.count + '</td><td>' + r.skill + '</td><td>' + (r.requiredDate || '-') + '</td><td>' + r.deadline + '</td></tr>';
                 });
             }
         }
@@ -3240,6 +3343,493 @@
         addAudit = function (text) { addAuditLocal(text); if (SYNC.on) SYNC.audit.push(text); };
         setInterval(() => { if (document.visibilityState === 'visible') SYNC.pull(); }, 30000);
         window.addEventListener('focus', () => { if (Date.now() - SYNC.lastPull > 5000) SYNC.pull(); });
+
+        /* =========================================================
+           CANDIDATE LINE-UP → HR REVIEW & INTERVIEW → PRODUCTION INTERVIEW → EMPLOYEE MASTER
+           1. Contractor uploads Aadhaar, CV and education certificates for an assigned requisition;
+              the details are read from the documents in the browser (no outside service).
+           2. HR reviews the documents, interviews, then forwards to Production, sends back or rejects.
+           3. The division's Production Manager / Supervisor interviews and marks Selected / Rejected / On Hold.
+           4. On HR's screen a Selected candidate automatically becomes an Employee Master profile
+              (status "Onboarding"); HR adds salary and joining date, then activates it.
+           ========================================================= */
+        const CAND = {
+            SUBMITTED: 'Submitted', RETURNED: 'Returned to Contractor', HR_REJECTED: 'Rejected by HR',
+            FORWARDED: 'Forwarded to Production', ON_HOLD: 'On Hold', SELECTED: 'Selected', PROD_REJECTED: 'Rejected by Production'
+        };
+        const INDIAN_STATES = ['Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh',
+            'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab',
+            'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal', 'Delhi', 'Jammu and Kashmir',
+            'Ladakh', 'Puducherry', 'Chandigarh'];
+        const escH = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const uid = p => p + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 7).toUpperCase();
+        const todayStr = () => new Date().toISOString().slice(0, 10);
+
+        const RECRUIT = {
+            files: { aadhaar: [], cv: [], education: [] },   // {file, name, mime, status, text, docId}
+            editingId: null, auto: {}, filter: 'action',
+
+            /* ---------- helpers ---------- */
+            maskAadhaar(v) {
+                const d = String(v || '').replace(/\D/g, '');
+                if (d.length >= 4) return 'XXXX XXXX ' + d.slice(-4);
+                return String(v || '').trim();
+            },
+            ageFrom(dob) {
+                if (!dob) return '';
+                const b = new Date(dob), t = new Date(); if (isNaN(b)) return '';
+                let a = t.getFullYear() - b.getFullYear(); if (t < new Date(t.getFullYear(), b.getMonth(), b.getDate())) a--; return a > 0 ? a : '';
+            },
+            updateAge() { document.getElementById('cf-age').value = this.ageFrom(document.getElementById('cf-dob').value); },
+            loadScript(src) {
+                return new Promise((ok, bad) => {
+                    if (document.querySelector('script[src="' + src + '"]')) return ok();
+                    const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => bad(new Error('Could not load ' + src)); document.head.appendChild(s);
+                });
+            },
+            status(msg) { document.getElementById('cf-read-status').textContent = msg || ''; },
+
+            /* ---------- reading documents ---------- */
+            async ocr(source) {
+                await this.loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
+                const r = await Tesseract.recognize(source, 'eng');
+                return r.data.text || '';
+            },
+            async pdfText(file) {
+                await this.loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+                let text = '';
+                for (let i = 1; i <= Math.min(pdf.numPages, 4); i++) {
+                    const c = await (await pdf.getPage(i)).getTextContent();
+                    let lastY = null;
+                    c.items.forEach(it => { const y = it.transform[5]; text += (lastY !== null && Math.abs(y - lastY) > 4 ? '\n' : ' ') + it.str; lastY = y; });
+                    text += '\n';
+                }
+                if (text.replace(/\s/g, '').length > 40) return text;
+                // scanned PDF: render the first pages and read them like photos
+                let out = '';
+                for (let i = 1; i <= Math.min(pdf.numPages, 2); i++) {
+                    const page = await pdf.getPage(i), vp = page.getViewport({ scale: 2 });
+                    const cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height;
+                    await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+                    out += await this.ocr(cv) + '\n';
+                }
+                return out;
+            },
+            async readFile(file) {
+                const n = file.name.toLowerCase();
+                if (file.type === 'application/pdf' || n.endsWith('.pdf')) return this.pdfText(file);
+                if (n.endsWith('.docx')) {
+                    await this.loadScript('https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js');
+                    return (await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() })).value || '';
+                }
+                if (file.type.startsWith('text/') || n.endsWith('.txt')) return file.text();
+                if (file.type.startsWith('image/')) return this.ocr(file);
+                return '';
+            },
+
+            /* ---------- understanding the text ---------- */
+            toISO(d) {
+                const m = String(d).match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
+                if (m) return m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+                const y = String(d).match(/\b(19|20)\d{2}\b/); return y ? y[0] + '-01-01' : '';
+            },
+            findState(t) { const s = INDIAN_STATES.find(s => new RegExp('\\b' + s.replace(/ /g, '\\s+') + '\\b', 'i').test(t)); return s || ''; },
+            nameLike(l) {
+                const s = l.replace(/[^A-Za-z .]/g, ' ').replace(/\s+/g, ' ').trim();
+                if (s.length < 3 || s.length > 40) return '';
+                if (/government|india|aadhaar|unique|identification|authority|enrol|address|dob|male|female|birth|year|help|www|resume|curriculum|vitae|profile|mobile|phone|email/i.test(s)) return '';
+                const w = s.split(' ').filter(x => x.length > 0);
+                return w.length >= 1 && w.length <= 5 && w.some(x => x.length > 2) ? s.replace(/\b\w/g, c => c.toUpperCase()).replace(/\B\w/g, c => c.toLowerCase()) : '';
+            },
+            parseAadhaar(text) {
+                const t = text.replace(/\r/g, ''), lines = t.split('\n').map(l => l.trim()).filter(Boolean), o = {};
+                const num = t.match(/\b(\d{4})\s?(\d{4})\s?(\d{4})\b/); if (num) o.aadhaar = 'XXXX XXXX ' + num[3];
+                const dob = t.match(/(?:DOB|D\.O\.B|Date\s*of\s*Birth|Birth)[^0-9]{0,12}(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{4})/i) || t.match(/\b(\d{2}\/\d{2}\/(?:19|20)\d{2})\b/);
+                if (dob) o.dob = this.toISO(dob[1]);
+                else { const yob = t.match(/Year\s*of\s*Birth[^0-9]{0,6}((?:19|20)\d{2})/i); if (yob) o.dob = yob[1] + '-01-01'; }
+                const g = t.match(/\b(FEMALE|MALE|TRANSGENDER)\b/i) || (/महिला/.test(t) ? ['', 'Female'] : /पुरुष/.test(t) ? ['', 'Male'] : null);
+                if (g) o.gender = g[1].charAt(0).toUpperCase() + g[1].slice(1).toLowerCase();
+                // the name is normally the line just above the date-of-birth line
+                const di = lines.findIndex(l => /DOB|Birth|\d{2}\/\d{2}\/\d{4}/i.test(l));
+                for (let i = di - 1; i >= Math.max(0, di - 3) && di > 0; i--) { const n = this.nameLike(lines[i]); if (n) { o.name = n; break; } }
+                const ad = t.match(/Address\s*[:：]?\s*([\s\S]{10,260}?\b[1-9]\d{5}\b)/i);
+                if (ad) { o.address = ad[1].replace(/\s*\n\s*/g, ', ').replace(/\s+/g, ' ').replace(/,\s*,/g, ',').trim(); }
+                const pin = (o.address || t).match(/\b[1-9]\d{5}\b/); if (pin) o.pincode = pin[0];
+                const st = this.findState(o.address || t); if (st) o.state = st;
+                return o;
+            },
+            qualificationOf(t) {
+                if (/\b(M\.?\s?(Com|Sc|A|Tech|E|BA|CA)\b|Master|Post\s*Graduat)/i.test(t)) return "Master's Degree";
+                if (/\b(B\.?\s?(Com|Sc|A|Tech|E|BA|CA|B\.?M)\b|Bachelor|Graduat|Degree)/i.test(t)) return "Bachelor's Degree";
+                if (/Diploma|Polytechnic/i.test(t)) return 'Diploma';
+                if (/\bITI\b|Industrial\s*Training|NCVT|SCVT|National\s*Trade\s*Certificate/i.test(t)) return 'ITI';
+                if (/Higher\s*Secondary|Pre[-\s]?University|\bPUC\b|\b12(th)?\b|\bHSC\b|Intermediate|Plus\s*Two/i.test(t)) return 'PUC (+2)';
+                if (/\bSSLC\b|Secondary\s*School|Matriculation|\b10(th)?\b|\bSSC\b/i.test(t)) return 'SSLC';
+                return '';
+            },
+            parseCV(text) {
+                const t = text.replace(/\r/g, ''), lines = t.split('\n').map(l => l.trim()).filter(Boolean), o = {};
+                const em = t.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i); if (em) o.email = em[0];
+                // 10-digit Indian mobile in any grouping: 9847012345, 98470 12345, 984-701-2345, +91 …
+                const ph = t.match(/(?:\+?\s?91[\s-]*|\b0)?\b([6-9](?:[\s-]?\d){9})\b/); if (ph) o.mobile = ph[1].replace(/\D/g, '');
+                for (const l of lines.slice(0, 6)) { const n = this.nameLike(l.replace(/^name\s*[:\-]\s*/i, '')); if (n) { o.name = n; break; } }
+                const nm = t.match(/Name\s*[:\-]\s*([A-Za-z .]{3,40})/i); if (nm && this.nameLike(nm[1])) o.name = this.nameLike(nm[1]);
+                const ex = t.match(/(\d{1,2}(?:\.\d)?)\s*\+?\s*(?:years?|yrs?)(?:\s*of)?\s*(?:experience|exp)?/i); if (ex) o.experience = parseFloat(ex[1]);
+                const dob = t.match(/(?:DOB|Date\s*of\s*Birth)[^0-9]{0,10}(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{4})/i); if (dob) o.dob = this.toISO(dob[1]);
+                const sk = t.match(/(?:Key\s*)?Skills?\s*(?:Set)?\s*[:\-]?\s*\n?([\s\S]{3,240}?)(?:\n\s*\n|Education|Experience|Personal|Declaration|Language|Hobbies|$)/i);
+                if (sk) o.skills = sk[1].replace(/[•●▪\-\*]+/g, ',').replace(/\s*\n\s*/g, ', ').replace(/,\s*,+/g, ',').replace(/^\s*,|,\s*$/g, '').trim().slice(0, 200);
+                const q = this.qualificationOf(t); if (q) o.education = q;
+                const g = t.match(/\b(Female|Male)\b/i); if (g) o.gender = g[1].charAt(0).toUpperCase() + g[1].slice(1).toLowerCase();
+                return o;
+            },
+            parseEducation(text) {
+                const t = text.replace(/\r/g, ''), lines = t.split('\n').map(l => l.trim()).filter(Boolean), o = {};
+                o.education = this.qualificationOf(t);
+                const bd = lines.find(l => /(Board|University|Council|Institute|Directorate|NCVT|SCVT)/i.test(l) && l.length < 90); if (bd) o.board = bd.replace(/\s+/g, ' ');
+                const yrs = (t.match(/\b(19[89]\d|20[0-4]\d)\b/g) || []).map(Number); if (yrs.length) o.passYear = String(Math.max(...yrs));
+                const pc = t.match(/(\d{2}(?:\.\d{1,2})?)\s*%/) || t.match(/(?:Percentage|Aggregate)[^0-9]{0,10}(\d{2}(?:\.\d{1,2})?)/i); if (pc) o.score = pc[1] + '%';
+                const gr = t.match(/\b(?:Grade|Class)\s*[:\-]?\s*(Distinction|First|Second|Third|A\+|A|B\+|B|C)\b/i); if (!o.score && gr) o.score = gr[1];
+                return o;
+            },
+            rank: { '': 0, 'Below SSLC': 1, 'SSLC': 2, 'PUC (+2)': 3, 'ITI': 3.5, 'Diploma': 4, "Bachelor's Degree": 5, "Master's Degree": 6 },
+
+            // put what was read into the form; never overwrite something the contractor typed
+            fill(values) {
+                const map = { name: 'cf-name', gender: 'cf-gender', dob: 'cf-dob', mobile: 'cf-mobile', email: 'cf-email', aadhaar: 'cf-aadhaar',
+                    address: 'cf-address', state: 'cf-state', pincode: 'cf-pincode', education: 'cf-education', board: 'cf-board',
+                    experience: 'cf-experience', skills: 'cf-skills' };
+                Object.entries(values).forEach(([k, v]) => {
+                    const id = map[k]; if (!id || v === '' || v == null) return;
+                    const el = document.getElementById(id);
+                    if (el.value && !this.auto[id]) return;                                     // typed by the contractor
+                    if (k === 'education' && this.rank[el.value] > this.rank[v]) return;        // keep the highest qualification
+                    el.value = v; this.auto[id] = true; el.classList.add('cw-autofilled');
+                });
+                if (values.passYear || values.score) {
+                    const el = document.getElementById('cf-passyear');
+                    if (!el.value || this.auto['cf-passyear']) { el.value = [values.passYear, values.score].filter(Boolean).join(' · '); this.auto['cf-passyear'] = true; el.classList.add('cw-autofilled'); }
+                }
+                this.updateAge();
+            },
+
+            /* ---------- contractor form ---------- */
+            renderFiles(kind) {
+                const box = document.getElementById('cf-list-' + kind);
+                box.innerHTML = this.files[kind].map((f, i) => '<span class="cw-file">' + escH(f.name) + ' <span class="st ' +
+                    (f.status === 'Read' || f.status === 'Saved' ? 'ok' : f.status === 'Could not read' ? 'bad' : 'wait') + '">' + escH(f.status) + '</span>' +
+                    '<button type="button" onclick="event.preventDefault(); RECRUIT.removeFile(\'' + kind + '\',' + i + ')" title="Remove">✕</button></span>').join('');
+            },
+            removeFile(kind, i) { this.files[kind].splice(i, 1); this.renderFiles(kind); },
+            async addFiles(kind, input) {
+                const list = [...input.files]; input.value = '';
+                for (const file of list) {
+                    if (file.size > 8 * 1024 * 1024) { alert(file.name + ' is larger than 8 MB. Please upload a smaller file or a clearer photo.'); continue; }
+                    const entry = { file, name: file.name, mime: file.type || 'application/octet-stream', status: 'Reading…' };
+                    if (kind === 'cv') this.files.cv = [];
+                    this.files[kind].push(entry); this.renderFiles(kind);
+                    this.status('Reading ' + file.name + '… (photos take 10–30 seconds)');
+                    try {
+                        entry.text = await this.readFile(file);
+                        const parsed = kind === 'aadhaar' ? this.parseAadhaar(entry.text) : kind === 'cv' ? this.parseCV(entry.text) : this.parseEducation(entry.text);
+                        // Aadhaar is the trusted source for name, date of birth, gender and address
+                        if (kind !== 'aadhaar' && this.files.aadhaar.some(f => f.status === 'Read')) { delete parsed.name; delete parsed.dob; delete parsed.gender; }
+                        this.fill(parsed);
+                        entry.status = Object.keys(parsed).some(k => parsed[k]) ? 'Read' : 'Could not read';
+                    } catch (e) { console.warn(e); entry.status = 'Could not read'; }
+                    this.renderFiles(kind);
+                }
+                this.status(this.allRead() ? 'Details filled in from the documents — please check them.' : '');
+            },
+            allRead() { return Object.values(this.files).flat().every(f => f.status !== 'Reading…'); },
+            clearForm() {
+                ['cf-name', 'cf-gender', 'cf-dob', 'cf-age', 'cf-mobile', 'cf-email', 'cf-aadhaar', 'cf-pincode', 'cf-address', 'cf-state', 'cf-education',
+                 'cf-board', 'cf-passyear', 'cf-experience', 'cf-skills', 'cf-remarks'].forEach(id => { const el = document.getElementById(id); el.value = ''; el.classList.remove('cw-autofilled'); });
+                this.files = { aadhaar: [], cv: [], education: [] }; this.auto = {}; this.editingId = null;
+                ['aadhaar', 'cv', 'education'].forEach(k => this.renderFiles(k)); this.status('');
+            },
+            open(reqId, cand) {
+                if (currentRole !== 'contractor') return;
+                this.clearForm();
+                currentCandidateReqId = reqId;
+                const req = requisitions.find(r => r.id === reqId);
+                document.getElementById('cf-req-id').textContent = reqId + (req ? ' — ' + req.position + ' (' + req.division + ')' : '');
+                if (req) document.getElementById('cf-skill').value = req.skill;
+                if (cand) {   // resubmitting a candidate HR sent back
+                    this.editingId = cand.id;
+                    const set = (id, v) => { document.getElementById(id).value = v == null ? '' : v; };
+                    set('cf-name', cand.name); set('cf-gender', cand.gender); set('cf-dob', cand.dob); set('cf-mobile', cand.mobile); set('cf-email', cand.email);
+                    set('cf-aadhaar', cand.aadhaar); set('cf-pincode', cand.pincode); set('cf-address', cand.permAddr); set('cf-state', cand.state);
+                    set('cf-education', cand.education); set('cf-board', cand.board); set('cf-passyear', cand.passYear); set('cf-experience', cand.experience);
+                    set('cf-skills', cand.skills); set('cf-skill', cand.skill); set('cf-remarks', cand.remarks);
+                    (cand.docs || []).forEach(d => this.files[d.kind] && this.files[d.kind].push({ name: d.name, mime: d.mime, status: 'Saved', docId: d.id }));
+                    ['aadhaar', 'cv', 'education'].forEach(k => this.renderFiles(k)); this.updateAge();
+                    this.status(cand.hrRemarks ? 'HR asked for: ' + cand.hrRemarks : '');
+                }
+                const w = document.getElementById('candidate-form-wrapper'); w.style.display = 'block'; w.scrollIntoView({ behavior: 'smooth' });
+            },
+            async toBase64(entry) {
+                let blob = entry.file;
+                if (entry.mime.startsWith('image/')) {   // shrink photos so uploads stay quick
+                    const img = await createImageBitmap(blob), k = Math.min(1, 1800 / Math.max(img.width, img.height));
+                    const cv = document.createElement('canvas'); cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
+                    cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+                    blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.82)); entry.mime = 'image/jpeg';
+                    if (!/\.jpe?g$/i.test(entry.name)) entry.name = entry.name.replace(/\.[^.]+$/, '') + '.jpg';
+                }
+                if (blob.size > 2.8 * 1024 * 1024) throw new Error(entry.name + ' is too large to upload (over 2.8 MB). Please use a smaller PDF.');
+                const buf = new Uint8Array(await blob.arrayBuffer()); let bin = '';
+                for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+                return btoa(bin);
+            },
+            async submit() {
+                if (currentRole !== 'contractor' || !currentCandidateReqId) return;
+                const v = id => document.getElementById(id).value.trim();
+                const req = requisitions.find(r => r.id === currentCandidateReqId);
+                const missing = [];
+                if (!v('cf-name')) missing.push('candidate name');
+                if (!/^\d{10}$/.test(v('cf-mobile').replace(/\D/g, '').slice(-10))) missing.push('a 10-digit mobile number');
+                if (!v('cf-education')) missing.push('highest qualification');
+                ['aadhaar', 'cv', 'education'].forEach(k => { if (!this.files[k].length) missing.push(k === 'aadhaar' ? 'Aadhaar card' : k === 'cv' ? 'CV' : 'education certificate'); });
+                if (missing.length) { alert('Please add: ' + missing.join(', ') + '.'); return; }
+                if (!this.allRead()) { alert('Please wait until all documents have been read.'); return; }
+                if (!SYNC.on) { alert('Documents can only be submitted while the shared database is connected. Please try again in a moment.'); return; }
+                const btn = document.getElementById('cf-submit-btn'); btn.disabled = true; btn.textContent = 'Uploading documents…';
+                const id = this.editingId || uid('CD');
+                try {
+                    const docs = [];
+                    for (const kind of ['aadhaar', 'cv', 'education']) {
+                        for (const f of this.files[kind]) {
+                            if (!f.docId) {
+                                const data = await this.toBase64(f), docId = uid('DOC');
+                                const r = await fetch('/api/doc', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' },
+                                    body: JSON.stringify({ id: docId, candidate: id, kind, name: f.name, mime: f.mime, data, contractor: currentContractorName, division: req ? req.division : '' }) });
+                                if (!r.ok) throw new Error('Upload of ' + f.name + ' failed (' + r.status + ')');
+                                f.docId = docId; f.status = 'Saved'; this.renderFiles(kind);
+                            }
+                            docs.push({ id: f.docId, kind, name: f.name, mime: f.mime });
+                        }
+                    }
+                    const prev = candidates.find(c => c.id === id);
+                    const rec = Object.assign({}, prev || {}, {
+                        id, requisitionId: currentCandidateReqId, division: req ? req.division : '', position: req ? req.position : '',
+                        contractor: currentContractorName, status: CAND.SUBMITTED,
+                        name: v('cf-name'), gender: v('cf-gender'), dob: v('cf-dob'), age: this.ageFrom(v('cf-dob')),
+                        mobile: v('cf-mobile').replace(/\D/g, '').slice(-10), email: v('cf-email'), aadhaar: this.maskAadhaar(v('cf-aadhaar')),
+                        permAddr: v('cf-address'), state: v('cf-state'), pincode: v('cf-pincode'),
+                        education: v('cf-education'), board: v('cf-board'), passYear: v('cf-passyear'),
+                        experience: v('cf-experience'), skills: v('cf-skills'), skill: v('cf-skill'), remarks: v('cf-remarks'),
+                        docs, submittedOn: (prev && prev.submittedOn) || todayStr()
+                    });
+                    rec.history = ((prev && prev.history) || []).concat([{ at: new Date().toLocaleString(), by: currentContractorName, what: prev ? 'Resubmitted to HR' : 'Submitted to HR' }]);
+                    if (prev) Object.assign(prev, rec); else candidates.push(rec);
+                    addAudit(currentContractorName + (prev ? ' resubmitted' : ' submitted') + ' candidate ' + rec.name + ' for requisition ' + rec.requisitionId);
+                    persistAll();
+                    closeCandidateForm(); renderCandidates(); renderRequisitions();
+                    alert(rec.name + ' has been sent to HR with ' + docs.length + ' document(s).');
+                } catch (e) {
+                    alert(e.message || 'Something went wrong while uploading. Please try again.');
+                } finally { btn.disabled = false; btn.textContent = 'Submit Candidate to HR'; }
+            },
+
+            /* ---------- documents ---------- */
+            async openDoc(docId) {
+                const w = window.open('', '_blank');
+                if (w) w.document.write('<p style="font-family:sans-serif;padding:20px">Opening document…</p>');
+                try {
+                    const r = await fetch('/api/doc?id=' + encodeURIComponent(docId), { credentials: 'same-origin' });
+                    const d = await r.json(); if (!r.ok || !d.data) throw new Error('not available');
+                    const bin = atob(d.data), buf = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+                    const url = URL.createObjectURL(new Blob([buf], { type: d.mime }));
+                    if (w) w.location = url; else window.open(url, '_blank');
+                } catch (e) { if (w) w.close(); alert('This document could not be opened. You may not have access to it.'); }
+            },
+            docButtons(c) {
+                const label = { aadhaar: 'Aadhaar', cv: 'CV', education: 'Certificate', other: 'Document' };
+                return (c.docs || []).map(d => '<button type="button" class="action-btn cw-doc-btn" onclick="RECRUIT.openDoc(\'' + d.id + '\')" title="' + escH(d.name) + '">' + label[d.kind] + '</button>').join(' ') || '-';
+            },
+
+            /* ---------- list ---------- */
+            needsMe(c) {
+                if (currentRole === 'hr_admin') return c.status === CAND.SUBMITTED || (c.status === CAND.SELECTED && !c.workerEmpId);
+                if (currentRole === 'production_manager' || currentRole === 'supervisor') return c.status === CAND.FORWARDED || c.status === CAND.ON_HOLD;
+                if (currentRole === 'contractor') return c.status === CAND.RETURNED;
+                return false;
+            },
+            visible() {
+                let list = candidates;
+                if (currentRole === 'contractor') list = list.filter(c => (c.contractor || '').toLowerCase() === currentContractorName.toLowerCase());
+                if (currentRole === 'production_manager' || currentRole === 'supervisor') list = list.filter(c => c.division === currentDivision && [CAND.FORWARDED, CAND.ON_HOLD, CAND.SELECTED, CAND.PROD_REJECTED].includes(c.status));
+                return list;
+            },
+            setFilter(f) { this.filter = f; renderCandidates(); },
+            render() {
+                const tbody = document.getElementById('candidates-body'), all = this.visible();
+                const counts = { action: all.filter(c => this.needsMe(c)).length, all: all.length, selected: all.filter(c => c.status === CAND.SELECTED).length };
+                document.getElementById('cand-filter').innerHTML = [['action', 'Needs my action'], ['all', 'All'], ['selected', 'Selected']]
+                    .map(([k, l]) => '<button type="button" class="' + (this.filter === k ? 'on' : '') + '" onclick="RECRUIT.setFilter(\'' + k + '\')">' + l + ' (' + counts[k] + ')</button>').join('');
+                const list = this.filter === 'action' ? all.filter(c => this.needsMe(c)) : this.filter === 'selected' ? all.filter(c => c.status === CAND.SELECTED) : all;
+                tbody.innerHTML = '';
+                if (!list.length) { tbody.innerHTML = '<tr><td colspan="10">' + (this.filter === 'action' ? 'Nothing waiting for you.' : 'No candidates yet.') + '</td></tr>'; return; }
+                list.forEach(c => {
+                    const req = requisitions.find(r => r.id === c.requisitionId);
+                    let action = '<button type="button" class="action-btn cw-btn-ghost" onclick="RECRUIT.detail(\'' + c.id + '\')">View</button>';
+                    if (currentRole === 'hr_admin' && c.status === CAND.SUBMITTED) action = '<button type="button" class="action-btn edit" onclick="RECRUIT.detail(\'' + c.id + '\')">Review &amp; Interview</button>';
+                    if ((currentRole === 'production_manager' || currentRole === 'supervisor') && (c.status === CAND.FORWARDED || c.status === CAND.ON_HOLD))
+                        action = '<button type="button" class="action-btn edit" onclick="RECRUIT.detail(\'' + c.id + '\')">Interview</button>';
+                    if (currentRole === 'contractor' && c.status === CAND.RETURNED) action = '<button type="button" class="action-btn edit" onclick="RECRUIT.resubmit(\'' + c.id + '\')">Edit &amp; Resubmit</button>';
+                    const st = c.status === CAND.SELECTED && c.workerEmpId ? statusBadge('Selected') + '<div style="font-size:10px;color:var(--aw-muted);margin-top:3px">Profile ' + escH(c.workerEmpId) + '</div>' : statusBadge(c.status || CAND.SUBMITTED);
+                    tbody.innerHTML += '<tr><td class="text-left">' + escH(c.name) + '</td><td>' + escH([c.age, c.gender].filter(Boolean).join(' / ') || '-') + '</td><td>' + escH(c.mobile) +
+                        '</td><td>' + escH(c.education || '-') + '</td><td>' + escH(c.experience !== '' && c.experience != null ? c.experience + ' yrs' : '-') + '</td><td>' + this.docButtons(c) +
+                        '</td><td>' + escH(c.contractor) + '</td><td>' + escH(req ? req.position + ' (' + req.division + ')' : c.requisitionId) + '</td><td>' + st + '</td><td>' + action + '</td></tr>';
+                });
+            },
+            resubmit(id) { const c = candidates.find(x => x.id === id); if (c) this.open(c.requisitionId, c); },
+
+            /* ---------- details + decisions ---------- */
+            detail(id) {
+                const c = candidates.find(x => x.id === id); if (!c) return;
+                const req = requisitions.find(r => r.id === c.requisitionId);
+                const f = (l, v) => '<div><span>' + l + '</span>' + escH(v || '-') + '</div>';
+                let decide = '';
+                if (currentRole === 'hr_admin' && c.status === CAND.SUBMITTED) {
+                    decide = '<div class="section-header">HR Review &amp; Interview</div><div class="cw-decision">' +
+                        '<div class="form-group"><label>HR interview date</label><input type="date" id="cd-date" value="' + todayStr() + '"></div>' +
+                        '<div class="form-group" style="flex:1"><label>HR interview remarks / what to correct</label><input type="text" id="cd-remarks"></div></div>' +
+                        '<div class="cw-decision"><button type="button" onclick="RECRUIT.decide(\'' + c.id + '\',\'forward\')">HR Selected — Forward to Production</button>' +
+                        '<button type="button" class="cw-btn-ghost" onclick="RECRUIT.decide(\'' + c.id + '\',\'return\')">Send back to contractor</button>' +
+                        '<button type="button" class="cw-btn-danger" onclick="RECRUIT.decide(\'' + c.id + '\',\'hr-reject\')">Reject</button></div>';
+                }
+                if ((currentRole === 'production_manager' || currentRole === 'supervisor') && (c.status === CAND.FORWARDED || c.status === CAND.ON_HOLD)) {
+                    decide = '<div class="section-header">Production Interview</div><div class="cw-decision">' +
+                        '<div class="form-group"><label>Interview date</label><input type="date" id="cd-date" value="' + todayStr() + '"></div>' +
+                        '<div class="form-group" style="flex:1"><label>Interview remarks</label><input type="text" id="cd-remarks"></div></div>' +
+                        '<div class="cw-decision"><button type="button" onclick="RECRUIT.decide(\'' + c.id + '\',\'select\')">Selected</button>' +
+                        '<button type="button" class="cw-btn-ghost" onclick="RECRUIT.decide(\'' + c.id + '\',\'hold\')">On Hold</button>' +
+                        '<button type="button" class="cw-btn-danger" onclick="RECRUIT.decide(\'' + c.id + '\',\'prod-reject\')">Rejected</button></div>';
+                }
+                if (currentRole === 'hr_admin' && c.status === CAND.SELECTED && c.workerEmpId) {
+                    decide = '<div class="access-note">Employee Master profile <b>' + escH(c.workerEmpId) + '</b> was created automatically (status Onboarding). Open <b>Workers Master Data</b>, click <b>Edit</b> on it to add the date of joining and salary, then <b>Activate</b>.</div>';
+                }
+                const hist = (c.history || []).slice().reverse().map(h => '<li><b>' + escH(h.what) + '</b> — ' + escH(h.by) + ' · ' + escH(h.at) + (h.remarks ? ' · “' + escH(h.remarks) + '”' : '') + '</li>').join('');
+                const panel = document.getElementById('candidate-detail');
+                panel.innerHTML = '<div class="section-header" style="margin-top:0">' + escH(c.name) + ' — ' + escH(req ? req.position + ', ' + req.division : c.requisitionId) + ' &nbsp;' + statusBadge(c.status) + '</div>' +
+                    '<div class="cw-detail-grid">' + f('Contractor', c.contractor) + f('Gender', c.gender) + f('Date of birth', c.dob) + f('Age', c.age) + f('Mobile', c.mobile) +
+                    f('Email', c.email) + f('Aadhaar', c.aadhaar) + f('State', c.state) + f('Pincode', c.pincode) + f('Qualification', c.education) + f('Board / University', c.board) +
+                    f('Year · Score', c.passYear) + f('Experience', c.experience !== '' && c.experience != null ? c.experience + ' years' : '') + f('Skill grade', c.skill) + f('Submitted on', c.submittedOn) + '</div>' +
+                    '<div class="cw-detail-grid">' + f('Permanent address', c.permAddr) + f('Key skills', c.skills) + f('Contractor remarks', c.remarks) +
+                    (c.hrInterview ? f('HR interview', c.hrInterview.date + ' · ' + c.hrInterview.by + (c.hrInterview.remarks ? ' · ' + c.hrInterview.remarks : '')) : '') +
+                    (c.interview ? f('Production interview', c.interview.date + ' · ' + c.interview.by + (c.interview.remarks ? ' · ' + c.interview.remarks : '')) : '') + '</div>' +
+                    '<div class="section-header">Documents</div><div class="cw-docs">' + this.docButtons(c) + '</div>' +
+                    decide + '<div class="section-header">History</div><ul class="cw-history">' + (hist || '<li>—</li>') + '</ul>' +
+                    '<button type="button" class="cw-btn-ghost" onclick="document.getElementById(\'candidate-detail\').style.display=\'none\'">Close</button>';
+                panel.style.display = 'block'; panel.scrollIntoView({ behavior: 'smooth' });
+            },
+            decide(id, what) {
+                const c = candidates.find(x => x.id === id); if (!c) return;
+                const date = (document.getElementById('cd-date') || {}).value || todayStr();
+                const remarks = ((document.getElementById('cd-remarks') || {}).value || '').trim();
+                const me = (typeof signedInUser !== 'undefined' && signedInUser && signedInUser.name) || ROLE_LABELS[currentRole];
+                const steps = {
+                    'forward': [CAND.FORWARDED, 'HR interview passed — forwarded to Production'],
+                    'return': [CAND.RETURNED, 'Sent back to contractor'],
+                    'hr-reject': [CAND.HR_REJECTED, 'Rejected by HR'],
+                    'select': [CAND.SELECTED, 'Selected in Production interview'],
+                    'hold': [CAND.ON_HOLD, 'Put on hold by Production'],
+                    'prod-reject': [CAND.PROD_REJECTED, 'Rejected in Production interview']
+                };
+                if ((what === 'return' || what === 'hr-reject' || what === 'prod-reject') && !remarks) { alert('Please add a remark so everyone knows why.'); return; }
+                const [status, text] = steps[what];
+                c.status = status;
+                if (what === 'forward' || what === 'return' || what === 'hr-reject') { c.hrInterview = { date, by: me, remarks }; if (what === 'return') c.hrRemarks = remarks; }
+                else { c.interview = { date, by: me === ROLE_LABELS[currentRole] ? me : me + ' (' + ROLE_LABELS[currentRole] + ')', remarks }; c.decisionBy = me; }
+                c.history = (c.history || []).concat([{ at: new Date().toLocaleString(), by: me, what: text, remarks }]);
+                addAudit(me + ': ' + text + ' — ' + c.name + ' (' + c.id + ')');
+                if (currentRole === 'hr_admin') this.autoProfiles();
+                persistAll();
+                document.getElementById('candidate-detail').style.display = 'none';
+                renderCandidates();
+            },
+
+            /* ---------- Selected → Employee Master (runs on HR's screen) ---------- */
+            autoProfiles() {
+                if (currentRole !== 'hr_admin') return 0;
+                let made = 0;
+                candidates.filter(c => c.status === CAND.SELECTED && !c.workerEmpId).forEach(c => {
+                    const req = requisitions.find(r => r.id === c.requisitionId) || {};
+                    const con = CONTRACTORS.find(x => x.name === c.contractor);
+                    const exp = parseFloat(c.experience) || 0;
+                    const empId = generateEmployeeId(c.contractor);
+                    workers.push({
+                        empId, name: c.name, contractor: c.contractor, division: c.division || req.division || '', location: con ? con.location : '',
+                        doj: '', designation: req.position || c.position || '', department: '', section: '', skill: c.skill || req.skill || '',
+                        expYr: Math.floor(exp), expMo: Math.round((exp % 1) * 12), mobile: c.mobile, emergency: '', dob: c.dob, age: c.age,
+                        state: c.state, permAddr: c.permAddr, presAddr: c.permAddr, aadhar: c.aadhaar, pan: '', uan: '', esi: '', ppeDate: '',
+                        basicDa: '', hra: '', gross: '', shift: req.shift || '', status: 'Onboarding',
+                        email: c.email, education: c.education, board: c.board, passYear: c.passYear, skills: c.skills,
+                        candidateId: c.id, requisitionId: c.requisitionId, docs: c.docs || []
+                    });
+                    c.workerEmpId = empId;
+                    c.history = (c.history || []).concat([{ at: new Date().toLocaleString(), by: 'System', what: 'Employee Master profile ' + empId + ' created' }]);
+                    addAudit('Employee Master profile ' + empId + ' created automatically for selected candidate ' + c.name);
+                    made++;
+                });
+                if (made) { persistAll(); renderWorkersTable(); }
+                return made;
+            },
+            activate(empId) {
+                const w = workers.find(x => x.empId === empId); if (!w || currentRole !== 'hr_admin') return;
+                const gaps = []; if (!w.doj) gaps.push('date of joining'); if (!(parseFloat(w.basicDa) > 0)) gaps.push('Basic+DA'); if (!(parseFloat(w.gross) > 0)) gaps.push('gross salary');
+                if (gaps.length) { alert('Before activating, click Edit and fill in: ' + gaps.join(', ') + '.'); return; }
+                w.status = 'Active'; addAudit('HR activated ' + w.name + ' (' + w.empId + ') — joined ' + w.doj); persistAll(); renderWorkersTable(); renderDivisionWorkers();
+            }
+        };
+
+        /* ---------- install as a phone / desktop app ---------- */
+        if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
+        let installPrompt = null;
+        function installButton() {
+            let b = document.getElementById('install-app-btn');
+            if (!b) {
+                b = document.createElement('button'); b.id = 'install-app-btn'; b.type = 'button'; b.textContent = 'Install app';
+                b.className = 'cw-btn-ghost'; b.style.cssText = 'font-size:10px;padding:6px 12px;letter-spacing:1.5px';
+                b.onclick = async () => {
+                    if (installPrompt) { installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; b.remove(); }
+                    else alert('On iPhone: tap the Share button in Safari, then "Add to Home Screen".\nOn Android: open the Chrome menu (⋮), then "Install app" or "Add to Home screen".');
+                };
+                const hr = document.querySelector('.header-right'); if (hr) hr.appendChild(b);
+            }
+        }
+        window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; installButton(); });
+        const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+        if (!standalone && /iPhone|iPad|Android/i.test(navigator.userAgent)) installButton();
+
+        // the tool's original candidate functions now use the new workflow
+        openCandidateForm = function (reqId) { RECRUIT.open(reqId); };
+        closeCandidateForm = function () { currentCandidateReqId = null; RECRUIT.editingId = null; document.getElementById('candidate-form-wrapper').style.display = 'none'; };
+        submitCandidate = function () { RECRUIT.submit(); };
+        renderCandidates = function () { RECRUIT.render(); };
+        const statusBadgeBase = statusBadge;
+        statusBadge = function (s) {
+            if (s === 'Selected') return '<span class="badge badge-active">Selected</span>';
+            if (s === 'Onboarding' || s === 'Forwarded to Production' || s === 'Submitted' || s === 'On Hold' || s === 'Returned to Contractor') return '<span class="badge badge-pending">' + s + '</span>';
+            if (s === 'Rejected by HR' || s === 'Rejected by Production') return '<span class="badge badge-danger">' + s + '</span>';
+            return statusBadgeBase(s);
+        };
+        // Onboarding profiles get an Activate button in Workers Master Data
+        const renderWorkersTableBase = renderWorkersTable;
+        renderWorkersTable = function () {
+            renderWorkersTableBase();
+            if (currentRole !== 'hr_admin') return;
+            document.querySelectorAll('#workers-table-body tr').forEach(tr => {
+                const id = tr.cells[0] && tr.cells[0].textContent, w = workers.find(x => x.empId === id);
+                if (w && w.status === 'Onboarding' && tr.lastElementChild) tr.lastElementChild.insertAdjacentHTML('afterbegin', '<button type="button" class="action-btn edit" onclick="RECRUIT.activate(\'' + w.empId + '\')">Activate</button>');
+            });
+        };
+        // whenever HR's screen gets fresh data, turn newly selected candidates into profiles
+        const syncRerenderBase = SYNC.rerender.bind(SYNC);
+        SYNC.rerender = function () { if (currentRole === 'hr_admin' && this.on) RECRUIT.autoProfiles(); syncRerenderBase(); };
 
         async function connectDatabase(me) {
             try {
