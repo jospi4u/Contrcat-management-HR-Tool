@@ -112,6 +112,12 @@ async function api(req, url, s) {
   }
   if (url.pathname === '/api/admin/delete-user' && req.method === 'POST') return rpc('cw_admin_delete_user', Object.assign({}, who, { p_target: String(body.user || '') }));
   if (url.pathname === '/api/admin/contractors' && req.method === 'POST') return rpc('cw_admin_set_contractors', Object.assign({}, who, { p_list: Array.isArray(body.list) ? body.list : [] }));
+  if (url.pathname === '/api/admin/sheet' && req.method === 'POST') {
+    return rpc('cw_admin_set_sheet', Object.assign({}, who, { p_url: String(body.url || '').trim(), p_token: String(body.token || ''), p_enabled: body.enabled !== false }));
+  }
+  if (url.pathname === '/api/admin/sheet-send' && req.method === 'POST') {
+    return rpc('cw_admin_sheet_send', Object.assign({}, who, { p_what: String(body.what || ''), p_summary: body.summary && typeof body.summary === 'object' ? body.summary : {} }));
+  }
   if (url.pathname === '/api/admin/rename-contractor' && req.method === 'POST') {
     return rpc('cw_admin_rename_contractor', Object.assign({}, who, { p_old: String(body.old || ''), p_new: String(body.new || '') }));
   }

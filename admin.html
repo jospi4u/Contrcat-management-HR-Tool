@@ -100,6 +100,16 @@ input:focus,select:focus{border-color:var(--gold);outline:none}
 .aha-feed li .t{display:block;color:var(--muted);font-size:10.5px;margin-top:2px}
 .aha-feed li .fast{color:var(--green)}
 @media (max-width:900px){.adopt-body{grid-template-columns:1fr}.f-step{min-width:0;width:100% !important}.f-step.aha::before{display:none}}
+.steps{margin:0 0 14px;padding-left:20px;display:flex;flex-direction:column;gap:10px}
+.steps li{padding-left:4px}
+.code-wrap{position:relative;margin-top:8px}
+.code-wrap pre{background:var(--black);border:1px solid var(--line2);border-radius:8px;padding:12px;margin:0;max-height:260px;overflow:auto;font:11.5px/1.5 ui-monospace,Consolas,monospace;color:var(--cream);white-space:pre}
+.code-wrap button{position:absolute;top:8px;right:8px}
+code{font-family:ui-monospace,Consolas,monospace;background:var(--black);padding:1px 5px;border-radius:4px}
+.live{display:inline-flex;align-items:center;gap:6px;color:var(--green);font-size:11px;margin-left:10px}
+.live i{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 rgba(63,191,127,.6);animation:pulse 2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(63,191,127,.55)}70%{box-shadow:0 0 0 8px rgba(63,191,127,0)}100%{box-shadow:0 0 0 0 rgba(63,191,127,0)}}
+@media (prefers-reduced-motion:reduce){.live i{animation:none}}
 #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--gold-line);color:var(--cream);padding:10px 16px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
 #toast.show{opacity:1}
 dialog{background:var(--card);color:var(--cream);border:1px solid var(--gold-line);border-top:2px solid var(--gold);border-radius:12px;padding:22px;max-width:560px;width:calc(100% - 32px)}
@@ -121,6 +131,7 @@ dialog h3{font-family:var(--display);color:var(--ink);font-size:20px;margin:0 0 
     <a href="#contractors">Contractors</a>
     <a href="#logins">Login history</a>
     <a href="#activity">Activity</a>
+    <a href="#sheet">Google Sheet</a>
   </nav>
   <main>
     <div id="load-error" class="note bad" style="display:none"></div>
@@ -128,7 +139,7 @@ dialog h3{font-family:var(--display);color:var(--ink);font-size:20px;margin:0 0 
     <!-- DASHBOARD: the six numbers -->
     <section id="dashboard" class="on">
       <h2>Dashboard</h2>
-      <p class="sub">How the app is being used. <span class="toolbar" style="display:inline-flex;margin:0 0 0 8px"><select id="period" onchange="render()"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option></select></span></p>
+      <p class="sub">How the app is being used. <span class="toolbar" style="display:inline-flex;margin:0 0 0 8px"><select id="period" onchange="render()"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option></select></span><span class="live" id="live"></span></p>
       <div class="adopt card">
         <div class="adopt-head">
           <div><h3>Adoption funnel</h3><p class="adopt-msg" id="adopt-msg"></p></div>
@@ -165,6 +176,34 @@ dialog h3{font-family:var(--display);color:var(--ink);font-size:20px;margin:0 0 
       <p class="sub">Every sign-in attempt, newest first (last 500).</p>
       <div class="toolbar"><input id="login-q" placeholder="Filter by user ID…" oninput="renderLogins()"><select id="login-ok" onchange="renderLogins()"><option value="">All attempts</option><option value="1">Successful</option><option value="0">Failed</option></select></div>
       <div class="scroll"><table><thead><tr><th>When</th><th>User ID</th><th>Result</th><th>Note</th><th>Device</th><th>IP</th></tr></thead><tbody id="logins-body"></tbody></table></div>
+    </section>
+
+    <!-- GOOGLE SHEET -->
+    <section id="sheet">
+      <h2>Google Sheet</h2>
+      <p class="sub">Every event — sign-ins (and failed ones), app opened, aha moments, documents read — lands in your own Google Sheet as it happens.</p>
+      <div class="card"><h3>Status</h3><div id="sheet-status"></div></div>
+      <div class="card">
+        <h3>Connect a sheet (about 3 minutes)</h3>
+        <ol class="steps">
+          <li>Open <a href="https://sheets.new" target="_blank" rel="noopener">sheets.new</a> to create a new Google Sheet, and name it e.g. <b>Aristo app events</b>.</li>
+          <li>In the sheet: <b>Extensions → Apps Script</b>. Delete what's there and paste this script (it already contains your secret code):
+            <div class="code-wrap"><pre id="sheet-script"></pre><button class="ghost sm" onclick="copyScript()">Copy script</button></div></li>
+          <li>Click <b>Save</b> (disk icon), then <b>Deploy → New deployment</b>. Click the gear next to "Select type" and choose <b>Web app</b>.</li>
+          <li>Set <b>Execute as: Me</b> and <b>Who has access: Anyone</b>, then <b>Deploy</b>. Approve the permissions Google asks for (choose your account → Advanced → Go to project → Allow).</li>
+          <li>Copy the <b>Web app URL</b> (it ends with <code>/exec</code>), paste it below and click <b>Save &amp; connect</b>, then <b>Send a test row</b>.</li>
+        </ol>
+        <div class="grid" style="grid-template-columns:1fr"><div><label>Web app URL</label><input id="sheet-url" placeholder="https://script.google.com/macros/s/…/exec" spellcheck="false"></div></div>
+        <div id="sheet-err" class="note bad" style="display:none"></div>
+        <div class="row">
+          <button onclick="saveSheet()">Save &amp; connect</button>
+          <button class="ghost" onclick="sheetSend('test')">Send a test row</button>
+          <button class="ghost" onclick="sheetSend('backfill')">Send past events</button>
+          <button class="ghost" onclick="sheetSend('summary')">Send six numbers</button>
+          <button class="danger" onclick="disconnectSheet()">Disconnect</button>
+        </div>
+        <p class="mut" style="margin-top:12px;font-size:12px">The link and secret code are kept in the database and only admins can see them. "Anyone" access is needed so the app can write rows; the secret code stops anyone else adding to your sheet.</p>
+      </div>
     </section>
 
     <!-- ACTIVITY -->
@@ -225,7 +264,7 @@ async function api(path, body) {
   return d;
 }
 async function load() {
-  try { D = await api('/api/admin/overview'); document.getElementById('load-error').style.display = 'none'; render(); }
+  try { D = await api('/api/admin/overview'); lastLoad = Date.now(); document.getElementById('load-error').style.display = 'none'; render(); liveTick(); }
   catch (e) { const el = document.getElementById('load-error'); el.textContent = 'Could not load: ' + e.message + '. If you just set up the Admin Portal, run supabase/setup.sql again in Supabase.'; el.style.display = 'block'; }
 }
 
@@ -292,7 +331,7 @@ function renderFunnel() {
   }).join('') : '<li class="mut" style="border-left-color:var(--line2)">Aha moments will appear here as people do their first key action.</li>';
 }
 
-function render() { if (!D) return; renderFunnel(); renderSix(); renderUsers(); renderContractors(); renderLogins(); renderActivity(); }
+function render() { if (!D) return; renderFunnel(); renderSix(); renderSheet(); renderUsers(); renderContractors(); renderLogins(); renderActivity(); }
 function renderSix() {
   const days = +document.getElementById('period').value, since = Date.now() - days * 864e5;
   const logins = D.logins.filter(l => l.success && new Date(l.at) >= since);
@@ -456,9 +495,82 @@ function renderActivity() {
   document.getElementById('changes-body').innerHTML = ch.map(c => `<tr><td style="white-space:nowrap">${when(c.updated_at)}</td><td>${esc(nameOf(c.updated_by))}</td><td>${esc(area[c.collection] || c.collection)}</td><td class="mut">${esc(c.id)}</td></tr>`).join('') || '<tr><td colspan="4" class="mut">Nothing yet.</td></tr>';
 }
 
+/* ---------- Google Sheet ---------- */
+let sheetToken = null;
+function newToken() { const c = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'; return Array.from(crypto.getRandomValues(new Uint8Array(32)), x => c[x % c.length]).join(''); }
+function scriptText(token) {
+  return `// Aristo Contract Manpower → Google Sheet. Paste into Extensions → Apps Script, then Deploy as a Web app.
+const TOKEN = '${token}';   // must match the Admin Portal — don't share it
+
+function doPost(e) {
+  const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+  if (body.token !== TOKEN) return ContentService.createTextOutput('wrong token');
+  const lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (body.rows && body.rows.length) {
+      const sh = ss.getSheetByName('Events') || ss.insertSheet('Events');
+      if (sh.getLastRow() === 0) { sh.appendRow(['Time', 'User ID', 'Name', 'Role', 'Event', 'Detail', 'Seconds from open', 'Device', 'IP']); sh.setFrozenRows(1); }
+      const rows = body.rows.map(r => [new Date(r.at), r.user || '', r.name || '', r.role || '', r.event || '', r.detail || '', r.seconds == null ? '' : r.seconds, r.device || '', r.ip || '']);
+      sh.getRange(sh.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+    }
+    if (body.summary) {
+      const sh = ss.getSheetByName('Summary') || ss.insertSheet('Summary');
+      const keys = ['Period', 'Who used it', 'Reached aha', 'Time to aha', 'Drop-off', 'Cost per run', 'Outcome per run', 'Funnel'];
+      if (sh.getLastRow() === 0) { sh.appendRow(['Snapshot time'].concat(keys)); sh.setFrozenRows(1); }
+      sh.appendRow([new Date(body.summary.at)].concat(keys.map(k => body.summary[k] == null ? '' : body.summary[k])));
+    }
+  } finally { lock.releaseLock(); }
+  return ContentService.createTextOutput('ok');
+}`;
+}
+function renderSheet() {
+  const s = D.sheet || {};
+  if (!sheetToken) sheetToken = s.token || newToken();
+  document.getElementById('sheet-script').textContent = scriptText(sheetToken);
+  if (s.url && !document.getElementById('sheet-url').value) document.getElementById('sheet-url').value = s.url;
+  document.getElementById('sheet-status').innerHTML = s.url
+    ? `<p><span class="badge ok">Connected</span> &nbsp;Events go to <span class="mut">${esc(s.url.replace(/\/s\/(.{6}).+(.{6})\/exec$/, '/s/$1…$2/exec'))}</span>${s.enabled === false ? ' <span class="badge warn">paused</span>' : ''}</p><p class="mut" style="margin:6px 0 0">New events are added within a few seconds. Use <b>Send past events</b> once to copy what was recorded before you connected.</p>`
+    : '<p><span class="badge warn">Not connected</span> &nbsp;Follow the steps below to send events to your Google Sheet.</p>';
+}
+function copyScript() { navigator.clipboard.writeText(document.getElementById('sheet-script').textContent).then(() => toast('Script copied — paste it into Apps Script')); }
+async function saveSheet() {
+  const url = document.getElementById('sheet-url').value.trim(), err = document.getElementById('sheet-err'); err.style.display = 'none';
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(url)) { err.textContent = 'Paste the Web app URL from Apps Script. It starts with https://script.google.com/macros/s/ and ends with /exec.'; err.style.display = 'block'; return; }
+  try { await api('/api/admin/sheet', { url, token: sheetToken, enabled: true }); toast('Sheet connected — now send a test row'); load(); }
+  catch (e) { err.textContent = e.message; err.style.display = 'block'; }
+}
+async function disconnectSheet() {
+  if (!confirm('Stop sending events to the Google Sheet? Rows already in the sheet stay.')) return;
+  try { await api('/api/admin/sheet', { url: '', token: '', enabled: false }); sheetToken = newToken(); document.getElementById('sheet-url').value = ''; toast('Disconnected. If you connect again, paste the new script first.'); load(); }
+  catch (e) { alert(e.message); }
+}
+function summaryNow() {
+  const s = { Period: document.getElementById('period').selectedOptions[0].text };
+  document.querySelectorAll('#six .metric').forEach(m => { s[m.querySelector('.k').textContent.trim()] = m.querySelector('.v').textContent.replace(/\s+/g, ' ').trim(); });
+  s.Funnel = [...document.querySelectorAll('.f-step')].map(f => f.querySelector('.f-name').textContent.replace('✦ ', '') + ' ' + f.querySelector('.f-num b').textContent).join(' → ');
+  return s;
+}
+async function sheetSend(what) {
+  if (!(D.sheet && D.sheet.url)) { alert('Connect the sheet first: paste the Web app URL and click Save & connect.'); return; }
+  try {
+    const r = await api('/api/admin/sheet-send', { what, summary: what === 'summary' ? summaryNow() : undefined });
+    toast(what === 'test' ? 'Test row sent — check the Events tab in your sheet' : what === 'summary' ? 'Six numbers sent to the Summary tab' : r.rows + ' past events sent to the sheet');
+  } catch (e) { alert(e.message); }
+}
+
+/* ---------- live refresh ---------- */
+let lastLoad = 0;
+function liveTick() {
+  const el = document.getElementById('live'); if (!el || !lastLoad) return;
+  const s = Math.round((Date.now() - lastLoad) / 1000);
+  el.innerHTML = '<i></i>Live · updated ' + (s < 5 ? 'just now' : s + ' s ago');
+}
+
 fetch('/whoami', { credentials: 'same-origin' }).then(r => r.json()).then(me => { const n = me.name || me.user; document.getElementById('me').textContent = n === 'System Admin' ? 'System Admin' : n + ' · System Admin'; }).catch(() => {});
 load();
-setInterval(() => { if (document.visibilityState === 'visible') load(); }, 60000);
+setInterval(() => { if (document.visibilityState === 'visible') load(); }, 15000);
+setInterval(liveTick, 1000);
 </script>
 </body>
 </html>
