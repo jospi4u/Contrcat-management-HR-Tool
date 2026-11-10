@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>My Aristo · Self-Service</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#080807">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Aristo">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Playfair+Display:ital,wght@0,500;0,700;1,500&display=swap">
+<style>
+:root{color-scheme:dark;--bg:#1a1917;--card:#24221f;--hover:#2c2925;--black:#080807;--ink:#fff;--cream:#f5f0e8;--muted:#a39d94;
+  --gold:#c4a882;--gold-hover:#d4bc9a;--gold-line:rgba(196,168,130,.6);--gold-tint:rgba(196,168,130,.1);--line:rgba(255,255,255,.1);--line2:rgba(255,255,255,.16);
+  --green:#3fbf7f;--danger:#ef5f64;--warn:#e8b04a;--display:"Playfair Display",Georgia,serif;--sans:"DM Sans",system-ui,sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--cream);font:14px/1.5 var(--sans)}
+a{color:var(--gold)}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+header{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;padding-top:max(12px,env(safe-area-inset-top));background:var(--black);border-bottom:1px solid var(--line)}
+.mark{font-weight:600;letter-spacing:4px;color:var(--ink);font-size:12px;padding-right:10px;border-right:2px solid var(--gold)}
+.brand{display:flex;align-items:center;gap:10px}
+.brand b{font-family:var(--display);font-size:17px;color:var(--ink);font-weight:700}
+#sync{font-size:11px;color:var(--green)}#sync.bad{color:var(--warn)}
+main{max-width:720px;margin:0 auto;padding:16px 16px 96px}
+section{display:none}section.on{display:block}
+h2{font-family:var(--display);font-size:24px;color:var(--ink);margin:4px 0 4px}
+.sub{color:var(--muted);margin:0 0 16px;font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+.card h3{font-family:var(--display);font-style:italic;font-weight:500;color:var(--gold);font-size:16px;margin:0 0 10px}
+.big{font-family:var(--display);font-size:34px;line-height:40px;color:var(--ink)}
+.k{font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.mut{color:var(--muted)}.ok{color:var(--green)}.bad{color:var(--danger)}.warn{color:var(--warn)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btn,button{font:600 12px var(--sans);letter-spacing:1.5px;text-transform:uppercase;border:0;border-radius:0;padding:0 18px;min-height:46px;cursor:pointer;background:var(--gold);color:#000;width:100%}
+button:hover{background:var(--gold-hover)}button:disabled{opacity:.45;cursor:not-allowed}
+.ghost{background:transparent;color:var(--gold);border:1px solid var(--gold-line)}.ghost:hover{background:var(--gold-tint)}
+.danger{background:transparent;color:var(--danger);border:1px solid var(--danger)}
+.sm{min-height:32px;padding:0 12px;font-size:10px;letter-spacing:1px;width:auto}
+label{display:block;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin:12px 0 5px}
+input,select,textarea{width:100%;font:inherit;font-size:15px;color:var(--ink);background:var(--black);border:1px solid var(--line2);border-radius:8px;padding:10px 12px;min-height:46px}
+textarea{min-height:76px;resize:vertical}
+input:focus,select:focus,textarea:focus{border-color:var(--gold);outline:none}
+.row{display:flex;gap:10px;margin-top:14px}
+.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.item{background:var(--black);border:1px solid var(--line);border-radius:10px;padding:12px}
+.item .t{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.item b{color:var(--ink);font-weight:600}
+.item .d{color:var(--muted);font-size:12px;margin-top:3px}
+.badge{display:inline-block;border:1px solid currentColor;border-radius:999px;padding:1px 9px;font-size:10px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;white-space:nowrap}
+.note{border:1px solid var(--gold-line);background:var(--gold-tint);border-radius:8px;padding:10px 12px;font-size:13px;margin:10px 0}
+.note.bad{border-color:var(--danger);background:rgba(239,95,100,.1);color:var(--danger)}
+.punch{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.punch .times{display:flex;gap:18px}
+.punch .times div span{display:block}
+.bal{display:flex;align-items:baseline;gap:8px}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:13px}
+th{color:var(--muted);font-weight:500;font-size:10px;letter-spacing:.8px;text-transform:uppercase;text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}
+td{padding:8px 6px;border-bottom:1px solid var(--line)}
+.scroll{overflow-x:auto}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:5;display:grid;grid-template-columns:repeat(5,1fr);background:var(--black);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav.tabs a{display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 4px 10px;color:var(--muted);text-decoration:none;font-size:11px}
+nav.tabs a svg{width:21px;height:21px}
+nav.tabs a.on{color:var(--gold)}
+#gate{position:fixed;inset:0;z-index:20;background:var(--bg);display:none;overflow:auto}
+#gate .card{max-width:420px;margin:60px auto}
+#toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:var(--card);border:1px solid var(--gold-line);padding:10px 16px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:30;max-width:90vw}
+#toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="mark">ARISTO</span><b>My Aristo</b></div>
+  <span id="sync">Loading…</span>
+</header>
+
+<main>
+  <div id="load-error" class="note bad" style="display:none"></div>
+
+  <!-- HOME -->
+  <section id="home" class="on">
+    <h2 id="hello">Hello</h2>
+    <p class="sub" id="who"></p>
+    <div class="card">
+      <div class="punch">
+        <div><div class="k">Today · <span id="today-label"></span></div>
+          <div class="times"><div><span class="k">In</span><b id="p-in" class="big" style="font-size:24px">—</b></div><div><span class="k">Out</span><b id="p-out" class="big" style="font-size:24px">—</b></div></div></div>
+        <div style="min-width:140px"><button id="punch-btn" onclick="ESS.punch()">Check in</button></div>
+      </div>
+      <p class="mut" style="margin:10px 0 0;font-size:12px" id="punch-note">Web check-in records your time; the eSSL machine stays the official record.</p>
+    </div>
+    <div class="grid2">
+      <div class="card" style="margin:0"><div class="k">Earned leave available</div><div class="bal"><span class="big" id="h-bal">—</span><span class="mut">days</span></div><div class="mut" style="font-size:12px" id="h-bal-note"></div></div>
+      <div class="card" style="margin:0"><div class="k">Days worked (recorded)</div><div class="bal"><span class="big" id="h-days">—</span></div><div class="mut" style="font-size:12px">from monthly attendance</div></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>My requests</h3><ul class="list" id="h-requests"></ul></div>
+    <div class="card"><h3>Coming holidays</h3><ul class="list" id="h-holidays"></ul></div>
+  </section>
+
+  <!-- LEAVE -->
+  <section id="leave">
+    <h2>Leave</h2>
+    <p class="sub">Earned leave: 1 day for every 20 days worked, available after 240 days worked. Sundays and holidays aren't counted.</p>
+    <div class="card"><h3>Balance</h3><div id="bal-detail"></div></div>
+    <div class="card"><h3>Apply for leave</h3>
+      <label for="lv-type">Leave type</label><select id="lv-type" onchange="ESS.leaveDays()"><option>Earned Leave</option><option>Leave Without Pay</option></select>
+      <div class="grid2"><div><label for="lv-from">From</label><input type="date" id="lv-from" onchange="ESS.leaveDays()"></div><div><label for="lv-to">To</label><input type="date" id="lv-to" onchange="ESS.leaveDays()"></div></div>
+      <p id="lv-days" class="mut" style="margin:8px 0 0;font-size:13px"></p>
+      <label for="lv-reason">Reason</label><textarea id="lv-reason" placeholder="e.g. Family function in native place"></textarea>
+      <div class="row"><button onclick="ESS.applyLeave()">Send to supervisor</button></div>
+    </div>
+    <div class="card"><h3>My leave</h3><ul class="list" id="lv-list"></ul></div>
+  </section>
+
+  <!-- ATTENDANCE -->
+  <section id="attendance">
+    <h2>Attendance</h2>
+    <p class="sub">Your check-ins, monthly attendance, and corrections for days you forgot to punch or punched wrongly.</p>
+    <div class="card"><h3>This month's check-ins</h3><div class="scroll"><table><thead><tr><th>Date</th><th>In</th><th>Out</th><th>Hours</th><th>Note</th></tr></thead><tbody id="at-punches"></tbody></table></div></div>
+    <div class="card"><h3>Monthly attendance</h3><div class="scroll"><table><thead><tr><th>Month</th><th>Present days</th><th>OT hours</th></tr></thead><tbody id="at-months"></tbody></table></div></div>
+    <div class="card"><h3>Request a correction</h3>
+      <label for="rg-date">Date</label><input type="date" id="rg-date">
+      <div class="grid2"><div><label for="rg-in">In time</label><input type="time" id="rg-in" value="08:30"></div><div><label for="rg-out">Out time</label><input type="time" id="rg-out" value="17:00"></div></div>
+      <label for="rg-reason">Reason</label><textarea id="rg-reason" placeholder="e.g. Biometric not working at the gate"></textarea>
+      <div class="row"><button onclick="ESS.regularize()">Send to supervisor</button></div>
+    </div>
+    <div class="card"><h3>My corrections</h3><ul class="list" id="rg-list"></ul></div>
+  </section>
+
+  <!-- PROFILE -->
+  <section id="profile">
+    <h2>My profile</h2>
+    <p class="sub">What HR holds about you. To change something, request it below — HR approves it.</p>
+    <div class="card"><h3>Details</h3><div class="scroll"><table><tbody id="pf-details"></tbody></table></div></div>
+    <div class="card"><h3>Request a change</h3>
+      <label for="pc-field">What to change</label>
+      <select id="pc-field" onchange="ESS.pcCurrent()"><option value="mobile">Mobile number</option><option value="emergency">Emergency contact</option><option value="presAddr">Present address</option><option value="permAddr">Permanent address</option>
+        <option value="bankAccount">Bank account number</option><option value="ifsc">Bank IFSC code</option><option value="bankName">Bank name</option><option value="nominee">Nominee (name, relation)</option><option value="family">Family details</option><option value="email">Email</option></select>
+      <p class="mut" style="margin:6px 0 0;font-size:12px">Now: <span id="pc-now">—</span></p>
+      <label for="pc-value">New value</label><input id="pc-value">
+      <label for="pc-reason">Reason (optional)</label><input id="pc-reason" placeholder="e.g. New SIM">
+      <div class="row"><button onclick="ESS.requestChange()">Send to HR</button></div>
+    </div>
+    <div class="card"><h3>My change requests</h3><ul class="list" id="pc-list"></ul></div>
+  </section>
+
+  <!-- MORE -->
+  <section id="more">
+    <h2>More</h2>
+    <div class="card"><h3>My pay</h3><p class="mut" style="margin:0 0 8px;font-size:12px">Monthly pay as processed by HR. Downloadable payslips are coming next.</p><div class="scroll"><table><thead><tr><th>Month</th><th>Days</th><th>Gross</th><th>Deductions</th><th>Net pay</th></tr></thead><tbody id="pay-list"></tbody></table></div></div>
+    <div class="card"><h3>Holiday calendar</h3><ul class="list" id="hol-list"></ul></div>
+    <div class="card"><h3>Resign</h3>
+      <div id="rs-open"></div>
+      <div id="rs-form">
+        <label for="rs-date">Last working day you propose</label><input type="date" id="rs-date">
+        <label for="rs-reason">Reason</label><textarea id="rs-reason"></textarea>
+        <div class="row"><button class="danger" onclick="ESS.resign()">Send resignation to supervisor</button></div>
+      </div>
+    </div>
+    <div class="card"><h3>Change password</h3>
+      <label for="cp-cur">Current password</label><input type="password" id="cp-cur" autocomplete="current-password">
+      <label for="cp-new">New password</label><input type="password" id="cp-new" autocomplete="new-password" placeholder="At least 8 characters, letters and numbers">
+      <div class="row"><button class="ghost" onclick="ESS.changePw('cp-cur','cp-new','cp-err')">Change password</button></div>
+      <div id="cp-err" class="note bad" style="display:none"></div>
+    </div>
+    <div class="row"><a class="btn ghost" href="/logout" onclick="ESS.forget()" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Sign out</a></div>
+  </section>
+</main>
+
+<nav class="tabs" id="tabs">
+  <a href="#home" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Home</a>
+  <a href="#leave"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Leave</a>
+  <a href="#attendance"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Attendance</a>
+  <a href="#profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>Profile</a>
+  <a href="#more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</a>
+</nav>
+
+<!-- first sign-in: choose your own password -->
+<div id="gate"><div class="card">
+  <span class="mark" style="border:0">ARISTO</span>
+  <h2 style="margin-top:14px">Choose your password</h2>
+  <p class="sub">This is your first sign-in. Replace the starting password HR gave you with one only you know.</p>
+  <label for="g-cur">Starting password</label><input type="password" id="g-cur" autocomplete="current-password">
+  <label for="g-new">New password</label><input type="password" id="g-new" autocomplete="new-password" placeholder="At least 8 characters, letters and numbers">
+  <div class="row"><button onclick="ESS.changePw('g-cur','g-new','g-err')">Save and continue</button></div>
+  <div id="g-err" class="note bad" style="display:none"></div>
+</div></div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const iso = d => { const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0, 10); };
+const todayISO = () => iso(new Date());
+const nowHM = () => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+const nice = s => { if (!s) return '—'; const [y, m, d] = s.split('-'); return Number(d) + ' ' + MONTHS[Number(m) - 1].slice(0, 3) + ' ' + y; };
+const periodOf = s => MONTHS[Number(s.slice(5, 7)) - 1] + ' ' + s.slice(0, 4);
+const uid = p => p + '-' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 6).toUpperCase();
+const money = n => n == null || n === '' ? '—' : '₹ ' + Number(n).toLocaleString('en-IN');
+const OPENED = Date.now();
+const toast = m => { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2800); };
+const STATUS_CLASS = { 'Approved': 'ok', 'Pending Supervisor': 'warn', 'Pending HR': 'warn', 'Pending HR Review': 'warn', 'Cancelled': 'mut', 'Rejected by Supervisor': 'bad', 'Rejected by HR': 'bad', 'Accepted': 'ok', 'Rejected': 'bad' };
+const badge = s => `<span class="badge ${STATUS_CLASS[s] || 'mut'}">${esc(s)}</span>`;
+
+const ESS = {
+  me: null, worker: null, recs: {}, settings: {},
+  list(c) { return Object.values(this.recs[c] || {}); },
+  async api(path, body) {
+    const r = await fetch(path, body ? { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : { credentials: 'same-origin', cache: 'no-store' });
+    if (r.status === 401) { location.href = '/'; throw new Error('signed out'); }
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.message || d.error || 'Error ' + r.status);
+    return d;
+  },
+  status(t, bad) { const el = document.getElementById('sync'); el.textContent = t; el.className = bad ? 'bad' : ''; },
+  async load() {
+    try {
+      const s = await this.api('/api/load');
+      this.me = s.me; this.settings = s.settings || {}; this.recs = {};
+      (s.records || []).forEach(r => { (this.recs[r.c] = this.recs[r.c] || {})[r.id] = r.d; });
+      this.worker = (this.recs.workers || {})[this.me.empId] || null;
+      this.status('Up to date'); document.getElementById('load-error').style.display = 'none';
+      if (this.me.mustChange) document.getElementById('gate').style.display = 'block';
+      this.render();
+    } catch (e) {
+      if (e.message === 'signed out') return;
+      this.status('Offline', true);
+      const el = document.getElementById('load-error'); el.textContent = 'Could not load your details: ' + e.message + '. Pull down to refresh, or try again in a minute.'; el.style.display = 'block';
+    }
+  },
+  // save one record; the database checks it is yours and allowed
+  async save(c, rec, auditText) {
+    this.status('Saving…');
+    const w = this.worker || {};
+    const res = await this.api('/api/save', { upserts: [{ c, id: rec.id, d: rec, empId: this.me.empId, contractor: w.contractor || null, division: w.division || null }], deletes: [], settings: {}, audit: auditText ? [auditText] : [] });
+    if (res.rejected && res.rejected.length) { this.status('Not allowed', true); throw new Error('That change isn’t allowed. Please refresh and try again.'); }
+    (this.recs[c] = this.recs[c] || {})[rec.id] = rec; this.status('Saved'); this.render();
+    if (!this.ahaSent && c !== 'punches') {   // a worker's first request = their aha moment on the Admin dashboard
+      this.ahaSent = true;
+      fetch('/api/event', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ kind: 'aha', meta: { action: 'employee ' + (auditText || c), secondsFromOpen: Math.round((Date.now() - OPENED) / 1000), role: 'employee' } }) }).catch(() => {});
+    }
+  },
+  forget() { try { sessionStorage.clear(); } catch (e) {} },
+
+  /* ---------- leave rules ---------- */
+  policy() { const p = this.settings.leavePolicy || {}; return { perDays: +p.perDays || 20, eligibleAfter: +p.eligibleAfter || 240 }; },
+  holidays() { return (Array.isArray(this.settings.holidays) ? this.settings.holidays : []).filter(h => h && h.date).sort((a, b) => a.date.localeCompare(b.date)); },
+  daysWorked() { return this.list('attendanceRecords').filter(a => a.empId === this.me.empId).reduce((n, a) => n + (+a.presentDays || 0), 0); },
+  countDays(from, to) {
+    if (!from || !to || to < from) return 0;
+    const hol = new Set(this.holidays().map(h => h.date)); let n = 0;
+    for (let d = new Date(from + 'T00:00:00'); iso(d) <= to; d.setDate(d.getDate() + 1)) { if (d.getDay() !== 0 && !hol.has(iso(d))) n++; }
+    return n;
+  },
+  balance() {
+    const p = this.policy(), worked = this.daysWorked(), earned = Math.floor(worked / p.perDays);
+    const el = this.list('leaveRequests').filter(l => l.empId === this.me.empId && l.type === 'Earned Leave');
+    const taken = el.filter(l => l.status === 'Approved').reduce((n, l) => n + (+l.days || 0), 0);
+    const pending = el.filter(l => /^Pending/.test(l.status)).reduce((n, l) => n + (+l.days || 0), 0);
+    const eligible = worked >= p.eligibleAfter;
+    return { worked, earned, taken, pending, eligible, available: eligible ? Math.max(0, earned - taken - pending) : 0, needed: Math.max(0, p.eligibleAfter - worked), p };
+  },
+
+  /* ---------- actions ---------- */
+  punch() {
+    const id = this.me.empId + '|' + todayISO(), cur = (this.recs.punches || {})[id];
+    const rec = Object.assign({ id, empId: this.me.empId, name: this.me.name || (this.worker && this.worker.name) || this.me.empId, date: todayISO(), source: 'web' }, cur || {});
+    if (!rec.in) rec.in = nowHM(); else if (!rec.out) rec.out = nowHM(); else { toast('You have already checked in and out today.'); return; }
+    this.save('punches', rec, (rec.out ? 'Checked out' : 'Checked in') + ' on the web at ' + (rec.out || rec.in)).then(() => toast(rec.out ? 'Checked out at ' + rec.out : 'Checked in at ' + rec.in)).catch(e => alert(e.message));
+  },
+  leaveDays() {
+    const f = document.getElementById('lv-from').value, t = document.getElementById('lv-to').value || f, n = this.countDays(f, t);
+    document.getElementById('lv-days').textContent = f ? n + ' working day' + (n === 1 ? '' : 's') + ' (Sundays and holidays not counted)' : '';
+    return n;
+  },
+  applyLeave() {
+    const type = document.getElementById('lv-type').value, from = document.getElementById('lv-from').value, to = document.getElementById('lv-to').value || from;
+    const reason = document.getElementById('lv-reason').value.trim(), days = this.countDays(from, to), b = this.balance();
+    if (!from) return alert('Choose the first day of leave.');
+    if (to < from) return alert('The last day must be on or after the first day.');
+    if (!days) return alert('Those dates are all Sundays or holidays — no leave is needed.');
+    if (!reason) return alert('Please give a reason.');
+    if (type === 'Earned Leave' && !b.eligible) return alert('Earned leave starts after ' + b.p.eligibleAfter + ' days worked. You have ' + b.worked + '. You can apply for Leave Without Pay instead.');
+    if (type === 'Earned Leave' && days > b.available) return alert('You have ' + b.available + ' earned leave day(s) available. Apply for fewer days, or for Leave Without Pay.');
+    const overlap = this.list('leaveRequests').find(l => l.empId === this.me.empId && !/Rejected|Cancelled/.test(l.status) && !(l.to < from || l.from > to));
+    if (overlap) return alert('You already have leave from ' + nice(overlap.from) + ' to ' + nice(overlap.to) + '.');
+    const rec = { id: uid('LV'), empId: this.me.empId, name: (this.worker && this.worker.name) || this.me.name, type, from, to, days, reason, status: 'Pending Supervisor', appliedOn: todayISO(),
+      history: [{ at: new Date().toLocaleString(), by: (this.worker && this.worker.name) || this.me.user, what: 'Applied for ' + days + ' day(s) of ' + type }] };
+    this.save('leaveRequests', rec, 'Applied for ' + days + ' day(s) of ' + type + ' from ' + from + ' to ' + to).then(() => {
+      ['lv-from', 'lv-to', 'lv-reason'].forEach(id => { document.getElementById(id).value = ''; }); this.leaveDays(); toast('Sent to your supervisor');
+    }).catch(e => alert(e.message));
+  },
+  cancel(c, id) {
+    const r = (this.recs[c] || {})[id]; if (!r || !confirm('Cancel this request?')) return;
+    const rec = Object.assign({}, r, { status: 'Cancelled', history: (r.history || []).concat([{ at: new Date().toLocaleString(), by: (this.worker && this.worker.name) || this.me.user, what: 'Cancelled by the employee' }]) });
+    this.save(c, rec, 'Cancelled their ' + c.replace(/s$/, '') + ' ' + id).then(() => toast('Cancelled')).catch(e => alert(e.message));
+  },
+  regularize() {
+    const date = document.getElementById('rg-date').value, inT = document.getElementById('rg-in').value, outT = document.getElementById('rg-out').value, reason = document.getElementById('rg-reason').value.trim();
+    if (!date) return alert('Choose the date.');
+    if (date > todayISO()) return alert('You can only correct today or earlier.');
+    if (!inT || !outT || outT <= inT) return alert('Enter an in time and a later out time.');
+    if (!reason) return alert('Please give a reason.');
+    if (this.list('regularizations').some(r => r.empId === this.me.empId && r.date === date && !/Rejected|Cancelled/.test(r.status))) return alert('You already asked to correct ' + nice(date) + '.');
+    const rec = { id: uid('RG'), empId: this.me.empId, name: (this.worker && this.worker.name) || this.me.name, date, inTime: inT, outTime: outT, reason, status: 'Pending Supervisor', appliedOn: todayISO(),
+      history: [{ at: new Date().toLocaleString(), by: (this.worker && this.worker.name) || this.me.user, what: 'Asked to correct attendance for ' + date }] };
+    this.save('regularizations', rec, 'Asked to correct attendance for ' + date).then(() => { document.getElementById('rg-reason').value = ''; toast('Sent to your supervisor'); }).catch(e => alert(e.message));
+  },
+  FIELDS: { mobile: 'Mobile number', emergency: 'Emergency contact', presAddr: 'Present address', permAddr: 'Permanent address', bankAccount: 'Bank account number', ifsc: 'Bank IFSC code', bankName: 'Bank name', nominee: 'Nominee', family: 'Family details', email: 'Email' },
+  pcCurrent() { const f = document.getElementById('pc-field').value; document.getElementById('pc-now').textContent = (this.worker && this.worker[f]) || '—'; },
+  requestChange() {
+    const f = document.getElementById('pc-field').value, v = document.getElementById('pc-value').value.trim(), reason = document.getElementById('pc-reason').value.trim();
+    if (!v) return alert('Enter the new value.');
+    if (f === 'mobile' && !/^[6-9]\d{9}$/.test(v.replace(/\D/g, '').slice(-10))) return alert('Enter a 10-digit mobile number.');
+    if (f === 'ifsc' && !/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(v)) return alert('An IFSC code looks like SBIN0001234.');
+    const rec = { id: uid('PC'), empId: this.me.empId, name: (this.worker && this.worker.name) || this.me.name, field: f, fieldLabel: this.FIELDS[f], from: (this.worker && this.worker[f]) || '', to: f === 'ifsc' ? v.toUpperCase() : v, reason, status: 'Pending HR', appliedOn: todayISO(),
+      history: [{ at: new Date().toLocaleString(), by: (this.worker && this.worker.name) || this.me.user, what: 'Asked HR to change ' + this.FIELDS[f] }] };
+    this.save('profileChanges', rec, 'Asked HR to change their ' + this.FIELDS[f]).then(() => { document.getElementById('pc-value').value = ''; document.getElementById('pc-reason').value = ''; toast('Sent to HR'); }).catch(e => alert(e.message));
+  },
+  resign() {
+    const lwd = document.getElementById('rs-date').value, reason = document.getElementById('rs-reason').value.trim(), w = this.worker || {};
+    if (!lwd || lwd < todayISO()) return alert('Choose your proposed last working day (today or later).');
+    if (!reason) return alert('Please give a reason.');
+    if (!confirm('Send your resignation to your supervisor? HR will confirm your last working day.')) return;
+    const rec = { id: uid('RS'), empId: this.me.empId, name: w.name || this.me.name, contractor: w.contractor || '', division: w.division || '', type: 'Notice', resignDate: todayISO(), lwd, reason, remarks: 'Submitted by the employee in self-service',
+      status: 'Pending Supervisor', finalStatus: '', source: 'employee', history: [{ at: new Date().toLocaleString(), by: w.name || this.me.user, what: 'Resigned; proposed last day ' + lwd }] };
+    this.save('resignations', rec, 'Submitted their resignation, proposed last day ' + lwd).then(() => toast('Resignation sent to your supervisor')).catch(e => alert(e.message));
+  },
+  async changePw(curId, newId, errId) {
+    const cur = document.getElementById(curId).value, nw = document.getElementById(newId).value, err = document.getElementById(errId); err.style.display = 'none';
+    try {
+      await this.api('/api/change-password', { current: cur, password: nw });
+      document.getElementById(curId).value = ''; document.getElementById(newId).value = '';
+      document.getElementById('gate').style.display = 'none'; this.me.mustChange = false; toast('Password changed');
+    } catch (e) { err.textContent = e.message; err.style.display = 'block'; }
+  },
+
+  /* ---------- screens ---------- */
+  render() {
+    const me = this.me, w = this.worker || {}, mine = c => this.list(c).filter(x => x.empId === me.empId);
+    document.getElementById('hello').textContent = 'Hello, ' + ((w.name || me.name || '').split(' ')[0] || 'there');
+    document.getElementById('who').textContent = [me.empId, w.designation, w.division, w.contractor].filter(Boolean).join(' · ');
+    document.getElementById('today-label').textContent = nice(todayISO());
+    const p = (this.recs.punches || {})[me.empId + '|' + todayISO()] || {};
+    document.getElementById('p-in').textContent = p.in || '—'; document.getElementById('p-out').textContent = p.out || '—';
+    const pb = document.getElementById('punch-btn'); pb.textContent = !p.in ? 'Check in' : !p.out ? 'Check out' : 'Done for today'; pb.disabled = !!(p.in && p.out);
+    const b = this.balance();
+    document.getElementById('h-bal').textContent = b.eligible ? b.available : 0;
+    document.getElementById('h-bal-note').textContent = b.eligible ? (b.pending ? b.pending + ' day(s) waiting for approval' : 'ready to use') : b.needed + ' more days worked to start';
+    document.getElementById('h-days').textContent = b.worked;
+    const reqs = [].concat(mine('leaveRequests').map(r => ['leaveRequests', r, r.type + ' · ' + nice(r.from) + (r.to !== r.from ? ' – ' + nice(r.to) : '') + ' · ' + r.days + ' day(s)']),
+      mine('regularizations').map(r => ['regularizations', r, 'Attendance correction · ' + nice(r.date)]),
+      mine('profileChanges').map(r => ['profileChanges', r, 'Change ' + r.fieldLabel]),
+      mine('resignations').map(r => ['resignations', r, 'Resignation · last day ' + nice(r.lwd)]))
+      .sort((a, b) => (b[1].appliedOn || b[1].resignDate || '').localeCompare(a[1].appliedOn || a[1].resignDate || '')).slice(0, 6);
+    document.getElementById('h-requests').innerHTML = reqs.length ? reqs.map(([c, r, t]) => this.itemHtml(c, r, t)).join('') : '<li class="mut">No requests yet.</li>';
+    const hol = this.holidays(), next = hol.filter(h => h.date >= todayISO()).slice(0, 4);
+    document.getElementById('h-holidays').innerHTML = next.length ? next.map(h => `<li class="item"><div class="t"><b>${esc(h.name)}</b><span class="mut">${nice(h.date)}</span></div></li>`).join('') : '<li class="mut">No upcoming holidays set by HR yet.</li>';
+    // leave
+    document.getElementById('bal-detail').innerHTML = `<div class="grid2"><div><div class="k">Available</div><div class="big">${b.available}</div></div><div><div class="k">Days worked</div><div class="big">${b.worked}</div></div></div>
+      <p class="mut" style="margin:10px 0 0;font-size:12px">Earned ${b.earned} (1 per ${b.p.perDays} days) · used ${b.taken} · waiting ${b.pending}${b.eligible ? '' : ` · <span class="warn">starts after ${b.p.eligibleAfter} days worked (${b.needed} to go)</span>`}</p>`;
+    document.getElementById('lv-list').innerHTML = mine('leaveRequests').sort((a, b) => b.from.localeCompare(a.from)).map(r => this.itemHtml('leaveRequests', r, r.type + ' · ' + r.days + ' day(s)', nice(r.from) + (r.to !== r.from ? ' to ' + nice(r.to) : '') + ' · ' + r.reason)).join('') || '<li class="mut">No leave yet.</li>';
+    // attendance
+    const ym = todayISO().slice(0, 7), punches = mine('punches').filter(x => x.date.startsWith(ym)).sort((a, b) => b.date.localeCompare(a.date));
+    const hrs = x => { if (!x.in || !x.out) return '—'; const [a, b2] = x.in.split(':').map(Number), [c, d] = x.out.split(':').map(Number); const m = (c * 60 + d) - (a * 60 + b2); return m > 0 ? (m / 60).toFixed(1) : '—'; };
+    document.getElementById('at-punches').innerHTML = punches.map(x => `<tr><td>${nice(x.date)}</td><td>${esc(x.in || '—')}</td><td>${esc(x.out || '—')}</td><td>${hrs(x)}</td><td class="mut">${x.source === 'regularized' ? 'corrected' : 'web'}</td></tr>`).join('') || '<tr><td colspan="5" class="mut">No check-ins this month.</td></tr>';
+    document.getElementById('at-months').innerHTML = mine('attendanceRecords').sort((a, b) => new Date('1 ' + b.period) - new Date('1 ' + a.period)).map(a => `<tr><td>${esc(a.period)}</td><td>${esc(a.presentDays)}</td><td>${esc(a.otHrs || 0)}</td></tr>`).join('') || '<tr><td colspan="3" class="mut">No monthly attendance yet.</td></tr>';
+    document.getElementById('rg-list').innerHTML = mine('regularizations').sort((a, b) => b.date.localeCompare(a.date)).map(r => this.itemHtml('regularizations', r, nice(r.date) + ' · ' + r.inTime + '–' + r.outTime, r.reason)).join('') || '<li class="mut">No corrections yet.</li>';
+    // profile
+    const rows = [['Employee ID', me.empId], ['Name', w.name], ['Designation', w.designation], ['Division', w.division], ['Contractor', w.contractor], ['Location', w.location], ['Date of joining', w.doj], ['Skill grade', w.skill],
+      ['Shift', w.shift], ['Date of birth', w.dob], ['Mobile', w.mobile], ['Emergency contact', w.emergency], ['Email', w.email], ['Present address', w.presAddr], ['Permanent address', w.permAddr],
+      ['Aadhaar', w.aadhar], ['UAN', w.uan], ['ESI', w.esi], ['Bank account', w.bankAccount ? 'XXXX' + String(w.bankAccount).slice(-4) : ''], ['IFSC', w.ifsc], ['Bank', w.bankName], ['Nominee', w.nominee], ['Family', w.family]];
+    document.getElementById('pf-details').innerHTML = rows.map(([k, v]) => `<tr><td class="mut" style="width:42%">${k}</td><td>${esc(v || '—')}</td></tr>`).join('');
+    this.pcCurrent();
+    document.getElementById('pc-list').innerHTML = mine('profileChanges').sort((a, b) => b.appliedOn.localeCompare(a.appliedOn)).map(r => this.itemHtml('profileChanges', r, r.fieldLabel + ': ' + r.to, 'was: ' + (r.from || '—'))).join('') || '<li class="mut">No change requests.</li>';
+    // more
+    const pay = mine('payrollRuns').sort((a, b) => new Date('1 ' + b.period) - new Date('1 ' + a.period));
+    document.getElementById('pay-list').innerHTML = pay.map(x => `<tr><td>${esc(x.period)}</td><td>${esc(x.presentDays)}</td><td>${money(x.gross)}</td><td>${money((+x.pf || 0) + (+x.esi || 0) + (+x.pt || 0))}</td><td><b>${money(x.net)}</b></td></tr>`).join('') || '<tr><td colspan="5" class="mut">No pay processed yet.</td></tr>';
+    document.getElementById('hol-list').innerHTML = hol.map(h => `<li class="item"><div class="t"><b>${esc(h.name)}</b><span class="mut">${nice(h.date)}</span></div></li>`).join('') || '<li class="mut">HR hasn’t published the holiday calendar yet.</li>';
+    const openRes = mine('resignations').find(r => !/Rejected|Cancelled/.test(r.status));
+    document.getElementById('rs-open').innerHTML = openRes ? this.itemHtml('resignations', openRes, 'Resignation · last day ' + nice(openRes.lwd), openRes.reason) : '';
+    document.getElementById('rs-form').style.display = openRes ? 'none' : 'block';
+  },
+  itemHtml(c, r, title, detail) {
+    const last = (r.history || []).slice(-1)[0], canCancel = /^Pending (Supervisor|HR)$/.test(r.status) && c !== 'resignations';
+    const why = r.status && /Rejected/.test(r.status) ? ((r.hr && r.hr.remarks) || (r.supervisor && r.supervisor.remarks) || '') : '';
+    return `<li class="item"><div class="t"><b>${esc(title)}</b>${badge(r.status)}</div>${detail ? `<div class="d">${esc(detail)}</div>` : ''}${why ? `<div class="d bad">Reason: ${esc(why)}</div>` : ''}` +
+      `${last ? `<div class="d">${esc(last.what)} · ${esc(last.at)}</div>` : ''}${canCancel ? `<div style="margin-top:8px"><button class="ghost sm" onclick="ESS.cancel('${c}','${esc(r.id)}')">Cancel request</button></div>` : ''}</li>`;
+  }
+};
+
+function show(id) {
+  document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === id));
+  document.querySelectorAll('#tabs a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + id));
+  window.scrollTo(0, 0);
+}
+window.addEventListener('hashchange', () => show(location.hash.slice(1) || 'home'));
+if (location.hash) show(location.hash.slice(1));
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
+ESS.load();
+setInterval(() => { if (document.visibilityState === 'visible') ESS.load(); }, 60000);
+window.addEventListener('focus', () => ESS.load());
+fetch('/api/event', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'open', meta: { role: 'employee' } }) }).catch(() => {});
+</script>
+</body>
+</html>

@@ -143,7 +143,7 @@ dialog h3{font-family:var(--display);color:var(--ink);font-size:20px;margin:0 0 
       <div class="adopt card">
         <div class="adopt-head">
           <div><h3>Adoption funnel</h3><p class="adopt-msg" id="adopt-msg"></p></div>
-          <select id="adopt-role" onchange="renderFunnel()"><option value="">Everyone</option><option value="contractor">Contractors</option><option value="hr_admin">HR</option><option value="production_manager">Production Managers</option><option value="supervisor">Supervisors</option><option value="gm_production">GM Production</option></select>
+          <select id="adopt-role" onchange="renderFunnel()"><option value="">Everyone</option><option value="contractor">Contractors</option><option value="hr_admin">HR</option><option value="production_manager">Production Managers</option><option value="supervisor">Supervisors</option><option value="gm_production">GM Production</option><option value="employee">Workers (self-service)</option></select>
         </div>
         <div class="adopt-body">
           <div class="funnel-viz" id="funnel-viz"></div>
@@ -158,7 +158,7 @@ dialog h3{font-family:var(--display);color:var(--ink);font-size:20px;margin:0 0 
     <section id="users">
       <h2>Users</h2>
       <p class="sub">Every login to the app. Changes take effect at once: a deactivated, deleted or reset login is signed out on its next click.</p>
-      <div class="toolbar"><button onclick="editUser()">+ Add user</button><input id="user-q" placeholder="Search name, ID, contractor…" oninput="renderUsers()"><select id="user-role" onchange="renderUsers()"><option value="">All roles</option></select></div>
+      <div class="toolbar"><button onclick="editUser()">+ Add user</button><button class="ghost" onclick="openWorkerLogins()">+ Create worker logins</button><input id="user-q" placeholder="Search name, ID, contractor…" oninput="renderUsers()"><select id="user-role" onchange="renderUsers()"><option value="">All roles</option></select></div>
       <div class="scroll"><table><thead><tr><th>User ID</th><th>Name</th><th>Role</th><th>Contractor / Division</th><th>Status</th><th>Last sign-in</th><th>Actions</th></tr></thead><tbody id="users-body"></tbody></table></div>
     </section>
 
@@ -233,6 +233,15 @@ dialog h3{font-family:var(--display);color:var(--ink);font-size:20px;margin:0 0 
   <div class="row"><button onclick="saveUser()">Save</button><button class="ghost" onclick="document.getElementById('user-dlg').close()">Cancel</button></div>
 </dialog>
 
+<dialog id="wl-dlg" style="max-width:720px">
+  <h3>Create worker logins</h3>
+  <p class="mut" style="margin:0 0 10px">Workers in the Employee Master without a login. Each gets the user ID = their Employee ID and a starting password, and must choose their own at first sign-in. They sign in at the same address and land on their self-service page.</p>
+  <div class="toolbar"><label style="margin:0;text-transform:none;letter-spacing:0;display:flex;gap:6px;align-items:center;color:var(--cream)"><input type="checkbox" id="wl-all" style="width:auto;min-height:0" onchange="document.querySelectorAll('.wl-cb').forEach(c => c.checked = this.checked)"> Select all</label><span class="mut" id="wl-count"></span></div>
+  <div class="scroll" style="max-height:320px;overflow:auto"><table><thead><tr><th></th><th>Emp ID</th><th>Name</th><th>Division</th><th>Contractor</th><th>Status</th></tr></thead><tbody id="wl-body"></tbody></table></div>
+  <div id="wl-result"></div>
+  <div class="row"><button id="wl-go" onclick="createWorkerLogins()">Create logins</button><button class="ghost" onclick="document.getElementById('wl-dlg').close()">Close</button></div>
+</dialog>
+
 <dialog id="pw-dlg">
   <h3>Password set</h3>
   <p>Give this to <b id="pw-user"></b>. It is shown only now — it isn't stored anywhere.</p>
@@ -243,7 +252,7 @@ dialog h3{font-family:var(--display);color:var(--ink);font-size:20px;margin:0 0 
 
 <script>
 'use strict';
-const ROLES = { admin: 'System Admin', hr_admin: 'HR Admin', gm_production: 'GM Production', production_manager: 'Production Manager', supervisor: 'Supervisor', contractor: 'Contractor' };
+const ROLES = { admin: 'System Admin', hr_admin: 'HR Admin', gm_production: 'GM Production', production_manager: 'Production Manager', supervisor: 'Supervisor', contractor: 'Contractor', employee: 'Worker (self-service)' };
 const DIVISIONS = ['Aristo Vertical Production', 'Aristo Cabinetry Production', 'Art of Lacquering', 'Aristo Quality and Service', 'Aristo Cabinetry Site Installation', 'Admin Department'];
 const AHA_LABEL = { contractor: 'submitted a candidate', hr_admin: 'acted on a candidate or requisition', admin: 'acted on a candidate or requisition', gm_production: 'approved a requisition', production_manager: 'interview decision or requisition', supervisor: 'interview decision or requisition' };
 let D = null, editing = null;
@@ -314,7 +323,7 @@ function renderFunnel() {
   }).join('');
   // the feel-good line
   const a = aha.size, inv = steps[0][2], s1 = signed.size;
-  const GROUP = { '': ['person', 'people'], contractor: ['contractor', 'contractors'], hr_admin: ['HR user', 'HR users'], production_manager: ['Production Manager', 'Production Managers'], supervisor: ['Supervisor', 'Supervisors'], gm_production: ['GM', 'GMs'] }[role];
+  const GROUP = { '': ['person', 'people'], contractor: ['contractor', 'contractors'], hr_admin: ['HR user', 'HR users'], production_manager: ['Production Manager', 'Production Managers'], supervisor: ['Supervisor', 'Supervisors'], gm_production: ['GM', 'GMs'], employee: ['worker', 'workers'] }[role];
   const who = n => n === 1 ? GROUP[0] : GROUP[1], has = n => n === 1 ? 'has' : 'have';
   document.getElementById('adopt-msg').innerHTML =
     !inv ? 'No logins in this group yet.'
@@ -379,12 +388,14 @@ function renderSix() {
 /* ---------- users ---------- */
 function roleOptions(sel, withAll) { sel.innerHTML = (withAll ? '<option value="">All roles</option>' : '') + Object.entries(ROLES).map(([k, v]) => `<option value="${k}">${v}</option>`).join(''); }
 roleOptions(document.getElementById('user-role'), true); roleOptions(document.getElementById('u-role'));
+function staffRoles() { const s = document.getElementById('u-role'); [...s.options].forEach(o => { if (o.value === 'employee') o.remove(); }); }
+staffRoles();
 document.getElementById('u-div').innerHTML = DIVISIONS.map(d => `<option>${esc(d)}</option>`).join('');
 function renderUsers() {
   const q = document.getElementById('user-q').value.toLowerCase(), r = document.getElementById('user-role').value;
   const list = D.users.filter(u => (!r || u.role === r) && (!q || [u.user, u.name, u.contractor, u.division].join(' ').toLowerCase().includes(q)));
   document.getElementById('users-body').innerHTML = list.map(u => `<tr>
-    <td><b>${esc(u.user)}</b></td><td>${esc(u.name || '—')}</td><td>${esc(ROLES[u.role] || u.role)}</td><td>${esc(u.contractor || u.division || '—')}</td>
+    <td><b>${esc(u.user)}</b></td><td>${esc(u.name || '—')}</td><td>${esc(ROLES[u.role] || u.role)}</td><td>${esc(u.role === 'employee' ? [u.empId, u.division].filter(Boolean).join(' · ') : (u.contractor || u.division || '—'))}${u.mustChange ? ' <span class="badge warn">new password due</span>' : ''}</td>
     <td>${u.active ? '<span class="badge ok">Active</span>' : '<span class="badge bad">Off</span>'}</td><td>${u.last_login ? when(u.last_login) + ' <span class="mut">· ' + ago(u.last_login) + '</span>' : '<span class="mut">never</span>'}</td>
     <td style="white-space:nowrap"><button class="ghost sm" onclick="editUser('${esc(u.user)}')">Edit</button> <button class="ghost sm" onclick="resetPw('${esc(u.user)}')">Reset password</button>
       <button class="ghost sm" onclick="toggleUser('${esc(u.user)}')">${u.active ? 'Switch off' : 'Switch on'}</button> <button class="danger sm" onclick="deleteUser('${esc(u.user)}')">Delete</button></td></tr>`).join('')
@@ -405,7 +416,8 @@ function editUser(id) {
   document.getElementById('u-title').textContent = editing ? 'Edit ' + editing.user : 'Add user';
   document.getElementById('u-id').value = editing ? editing.user : ''; document.getElementById('u-id').disabled = !!editing;
   document.getElementById('u-name').value = editing ? editing.name || '' : '';
-  document.getElementById('u-role').value = editing ? editing.role : 'contractor';
+  roleOptions(document.getElementById('u-role')); if (!editing || editing.role !== 'employee') staffRoles();
+  document.getElementById('u-role').value = editing ? editing.role : 'contractor'; document.getElementById('u-role').disabled = !!(editing && editing.role === 'employee');
   document.getElementById('u-con').innerHTML = contractors().map(c => `<option${c.active === false ? ' disabled' : ''}>${esc(c.name)}</option>`).join('');
   document.getElementById('u-con').value = editing && editing.contractor || (contractors()[0] || {}).name || '';
   document.getElementById('u-div').value = editing && editing.division || DIVISIONS[0];
@@ -493,6 +505,48 @@ function renderActivity() {
   const area = { workers: 'Worker master', pendingSubmissions: 'Onboarding submission', requisitions: 'Requisition', candidates: 'Candidate', resignations: 'Resignation', exitClearances: 'Exit clearance', attendanceRecords: 'Attendance', payrollRuns: 'Payroll', wageRegisters: 'Wage register', invoices: 'Invoice' };
   const ch = D.recent_changes.filter(c => !q || (c.updated_by + ' ' + nameOf(c.updated_by) + ' ' + c.collection + ' ' + c.id).toLowerCase().includes(q));
   document.getElementById('changes-body').innerHTML = ch.map(c => `<tr><td style="white-space:nowrap">${when(c.updated_at)}</td><td>${esc(nameOf(c.updated_by))}</td><td>${esc(area[c.collection] || c.collection)}</td><td class="mut">${esc(c.id)}</td></tr>`).join('') || '<tr><td colspan="4" class="mut">Nothing yet.</td></tr>';
+}
+
+/* ---------- worker logins (Employee Self-Service) ---------- */
+function workersWithoutLogin() {
+  const has = new Set(D.users.filter(u => u.empId).map(u => u.empId)), ids = new Set(D.users.map(u => u.user));
+  return (D.workers || []).filter(w => ['Active', 'Onboarding'].includes(w.status || 'Active') && !has.has(w.empId) && !ids.has(String(w.empId).toLowerCase()));
+}
+function openWorkerLogins() {
+  const list = workersWithoutLogin();
+  document.getElementById('wl-body').innerHTML = list.map(w => `<tr><td><input type="checkbox" class="wl-cb" value="${esc(w.empId)}" style="width:auto;min-height:0"></td><td><b>${esc(w.empId)}</b></td><td>${esc(w.name || '—')}</td><td>${esc(w.division || '—')}</td><td>${esc(w.contractor || '—')}</td><td>${esc(w.status || 'Active')}</td></tr>`).join('')
+    || '<tr><td colspan="6" class="mut">Every active worker already has a login.</td></tr>';
+  document.getElementById('wl-count').textContent = list.length + ' worker(s) without a login';
+  document.getElementById('wl-all').checked = false; document.getElementById('wl-result').innerHTML = ''; document.getElementById('wl-go').disabled = !list.length;
+  document.getElementById('wl-dlg').showModal();
+}
+let lastWorkerLogins = [];
+async function createWorkerLogins() {
+  const picked = [...document.querySelectorAll('.wl-cb:checked')].map(c => c.value), byId = Object.fromEntries((D.workers || []).map(w => [w.empId, w]));
+  if (!picked.length) return alert('Tick the workers who need a login.');
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  const rows = picked.map(id => ({ user: String(id).toLowerCase(), empId: id, name: (byId[id] || {}).name || '',
+    password: Array.from(crypto.getRandomValues(new Uint8Array(9)), x => chars[x % chars.length]).join('') + Math.floor(10 + Math.random() * 89) }));
+  const btn = document.getElementById('wl-go'); btn.disabled = true;
+  const made = [], skipped = [];
+  try {
+    for (let i = 0; i < rows.length; i += 20) {
+      btn.textContent = 'Creating ' + Math.min(i + 20, rows.length) + ' of ' + rows.length + '…';
+      const r = await api('/api/admin/create-logins', { rows: rows.slice(i, i + 20) });
+      const sk = new Set(r.skipped || []); rows.slice(i, i + 20).forEach(x => (sk.has(x.empId) ? skipped : made).push(x));
+    }
+  } catch (e) { alert(e.message); }
+  btn.textContent = 'Create logins'; btn.disabled = false;
+  lastWorkerLogins = made;
+  document.getElementById('wl-result').innerHTML = `<div class="note">${made.length} login(s) created${skipped.length ? ', ' + skipped.length + ' skipped (already had a login)' : ''}. Passwords are shown only now — download them and give each worker only their own.</div>` +
+    (made.length ? `<div class="scroll" style="max-height:220px;overflow:auto"><table><thead><tr><th>User ID</th><th>Name</th><th>Starting password</th></tr></thead><tbody>${made.map(x => `<tr><td><b>${esc(x.user)}</b></td><td>${esc(x.name)}</td><td class="secret" style="font-size:13px;padding:4px 8px">${esc(x.password)}</td></tr>`).join('')}</tbody></table></div>
+      <div class="row"><button class="ghost" onclick="downloadWorkerLogins()">Download as CSV</button></div>` : '');
+  load();
+}
+function downloadWorkerLogins() {
+  const csv = 'User ID,Employee ID,Name,Starting password,Sign in at\n' + lastWorkerLogins.map(x => [x.user, x.empId, '"' + String(x.name).replace(/"/g, '""') + '"', x.password, location.origin].join(',')).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'worker-logins-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 /* ---------- Google Sheet ---------- */

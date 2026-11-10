@@ -95,6 +95,20 @@ async function api(req, url, s) {
   if (url.pathname === '/api/event' && req.method === 'POST') {
     return rpc('cw_event', Object.assign({}, who, { p_kind: String(body.kind || ''), p_meta: body.meta && typeof body.meta === 'object' ? body.meta : {} }));
   }
+  // change your own password: the current one must match this session; the new key replaces the cookie
+  if (url.pathname === '/api/change-password' && req.method === 'POST') {
+    const saltRes = await call('cw_login_salt', { p_user: s.user });
+    if (!saltRes.ok || typeof saltRes.data !== 'string') return json({ error: 'unavailable', message: 'Please try again in a minute.' }, 503);
+    if ((await deriveKey(String(body.current || ''), saltRes.data)) !== s.key) return json({ error: 'password', message: 'Your current password is not right.' }, 400);
+    const problem = passwordProblem(body.password);
+    if (problem) return json({ error: 'password', message: problem }, 400);
+    const salt = newSalt(), key = await deriveKey(String(body.password), salt);
+    const r = await call('cw_change_password', Object.assign({}, who, { p_fp: await fingerprint(key), p_salt: salt }));
+    if (!r.ok) return json({ error: 'database', message: (r.data && r.data.message) || 'Could not change the password.' }, 400);
+    const h = new Headers({ 'content-type': 'application/json', 'cache-control': 'no-store' });
+    h.append('set-cookie', cookie(encodeURIComponent(s.user) + '.' + key, SESSION_HOURS * 3600));
+    return new Response('{"ok":true}', { headers: h });
+  }
 
   // ---- Admin Portal (the database refuses anyone who isn't an admin) ----
   if (url.pathname === '/api/admin/overview' && req.method === 'GET') return rpc('cw_admin_overview', who);
@@ -111,6 +125,17 @@ async function api(req, url, s) {
     }));
   }
   if (url.pathname === '/api/admin/delete-user' && req.method === 'POST') return rpc('cw_admin_delete_user', Object.assign({}, who, { p_target: String(body.user || '') }));
+  // worker logins in bulk (at most 20 a call: each password takes a moment to protect)
+  if (url.pathname === '/api/admin/create-logins' && req.method === 'POST') {
+    const list = Array.isArray(body.rows) ? body.rows.slice(0, 20) : [];
+    const rows = [];
+    for (const r of list) {
+      if (passwordProblem(r.password)) continue;
+      const salt = newSalt();
+      rows.push({ user: String(r.user || ''), empId: String(r.empId || ''), name: String(r.name || ''), salt, fp: await fingerprint(await deriveKey(String(r.password), salt)) });
+    }
+    return rpc('cw_admin_create_logins', Object.assign({}, who, { p_rows: rows }));
+  }
   if (url.pathname === '/api/admin/contractors' && req.method === 'POST') return rpc('cw_admin_set_contractors', Object.assign({}, who, { p_list: Array.isArray(body.list) ? body.list : [] }));
   if (url.pathname === '/api/admin/sheet' && req.method === 'POST') {
     return rpc('cw_admin_set_sheet', Object.assign({}, who, { p_url: String(body.url || '').trim(), p_token: String(body.token || ''), p_enabled: body.enabled !== false }));
@@ -187,6 +212,9 @@ const pass = () => new Response(null, { headers: { 'x-middleware-next': '1' } })
 
 const PUBLIC_FILES = new Set(['/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png', '/icons/apple-touch-icon.png']);
 const ADMIN_PAGES = new Set(['/admin', '/admin.html']);
+const SELF_SERVICE_PAGES = new Set(['/me', '/ess.html']);
+const EMPLOYEE_PAGES = new Set(['/me', '/ess.html', '/sw.js']);
+const homeOf = role => role === 'admin' ? '/admin' : role === 'employee' ? '/me' : '/';
 
 export default async function middleware(req) {
   const url = new URL(req.url);
@@ -206,7 +234,7 @@ export default async function middleware(req) {
     const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim();
     const r = await call('cw_login', { p_user: user, p_key: key, p_ip: ip, p_ua: req.headers.get('user-agent') || '' });
     if (r.ok && r.data && r.data.ok) {
-      return redirect(r.data.role === 'admin' ? '/admin' : '/', cookie(encodeURIComponent(user) + '.' + key, SESSION_HOURS * 3600));
+      return redirect(homeOf(r.data.role), cookie(encodeURIComponent(user) + '.' + key, SESSION_HOURS * 3600));
     }
     const msg = r.data && r.data.locked ? 'Too many wrong attempts. This login is paused for 15 minutes.'
       : r.data && r.data.inactive ? 'This login has been switched off. Please contact HR.'
@@ -227,8 +255,11 @@ export default async function middleware(req) {
     if (url.pathname === '/whoami') return json({ error: 'signed out' }, 401);
     return page({}, 401);
   }
-  if (url.pathname === '/login') return redirect(me.role === 'admin' ? '/admin' : '/');
+  if (url.pathname === '/login') return redirect(homeOf(me.role));
   if (url.pathname === '/whoami') return json(me);
+  // workers only ever get their own self-service page; everyone else never gets it
+  if (me.role === 'employee') return EMPLOYEE_PAGES.has(url.pathname) ? pass() : redirect('/me');
+  if (SELF_SERVICE_PAGES.has(url.pathname)) return redirect('/');
   if (ADMIN_PAGES.has(url.pathname) && me.role !== 'admin') return redirect('/');
   return pass();
 }

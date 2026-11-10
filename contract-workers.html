@@ -750,6 +750,7 @@
                 <li data-roles="hr_admin"><a href="#leave-salary" class="nav-link" onclick="switchTab('leave-salary')">Leave Salary</a></li>
                 <li data-roles="hr_admin"><a href="#bonus" class="nav-link" onclick="switchTab('bonus')">Bonus Act (8.33%)</a></li>
                 <li data-roles="hr_admin"><a href="#salary-revision" class="nav-link" onclick="switchTab('salary-revision')">Annual Revision</a></li>
+                <li data-roles="hr_admin,production_manager,supervisor"><a href="#team" class="nav-link" onclick="switchTab('team')">Team &amp; Approvals</a></li>
                 <li data-roles="hr_admin,production_manager,supervisor,contractor"><a href="#exit-clearance" class="nav-link" onclick="switchTab('exit-clearance')">Exit & Clearance</a></li>
             </ul>
         </nav>
@@ -892,7 +893,8 @@
                 <div class="access-note" id="requisition-form-note" style="display:none;">Raised for your assigned division. Once submitted, this goes to HR for approval; on approval HR assigns it to one or more contractors who then source and submit candidates.</div>
                 <form id="requisition-form-el" class="mini-form">
                     <div class="form-group"><label>Division</label><input type="text" id="rq-division" readonly></div>
-                    <div class="form-group"><label>Department / Position</label><input type="text" id="rq-position" placeholder="e.g. Assembler"></div>
+                    <div class="form-group"><label>Department / Position <span style="color:var(--aw-danger,#e5484d)">*</span></label><select id="rq-position" required onchange="REQX.onPosition()"><option value="">-- Select department / position --</option></select>
+                        <div id="rq-dept-display" style="font-size:11px; margin-top:4px;"></div></div>
                     <div class="form-group"><label>No. of Workers Required</label><input type="number" id="rq-count" min="1" value="1"></div>
                     <div class="form-group">
                         <label>Skill Required / Grade</label>
@@ -903,7 +905,13 @@
                         </select>
                         <div id="rq-budget-display" style="font-size:11px; color:#5c4610; margin-top:4px; font-weight:600;"></div>
                     </div>
-                    <div class="form-group"><label>Experience Required</label><input type="text" id="rq-exp" placeholder="e.g. 1-3 Yrs"></div>
+                    <div class="form-group"><label>Experience Required <span style="color:var(--aw-danger,#e5484d)">*</span></label>
+                        <select id="rq-exp" required>
+                            <option value="">-- Select experience --</option>
+                            <option>Fresher</option><option>Up to 1 year</option><option>1 - 2 years</option>
+                            <option>2 - 3 years</option><option>3 - 5 years</option><option>5+ years</option>
+                        </select>
+                    </div>
                     <div class="form-group">
                         <label>Shift</label>
                         <select id="rq-shift">
@@ -945,6 +953,7 @@
                             <label style="font-weight:normal;"><input type="checkbox" class="rq-ppe" value="Helmet"> Helmet</label>
                             <label style="font-weight:normal;"><input type="checkbox" class="rq-ppe" value="Ear Plug"> Ear Plug</label>
                         </div>
+                        <div id="rq-ppe-note" style="font-size:11px; margin-top:6px; color:var(--aw-muted);"></div>
                     </div>
 
                     <div class="form-group">
@@ -1148,6 +1157,13 @@
                         <tbody id="candidates-body"></tbody>
                     </table>
                 </div>
+            </div>
+
+            <!-- TEAM & APPROVALS (Manager Self-Service + HR final approvals) -->
+            <div id="team" class="tab-content">
+                <h2>Team &amp; Approvals</h2>
+                <div class="cw-filter" id="team-tabs"></div>
+                <div id="team-body"></div>
             </div>
 
             <!-- 4. MANPOWER PLANNING -->
@@ -1820,6 +1836,7 @@
         let payrollRuns = [];
         let wageRegisters = [];
         let invoices = [];
+        let leaveRequests = [], regularizations = [], profileChanges = [], punches = [];   // employee self-service
         let auditLog = [];
         let empIdCounters = {};
         let nextReqId = 1, nextCandId = 1, nextResId = 1, nextClearId = 1, nextInvoiceNo = 1001;
@@ -2261,12 +2278,17 @@
         function submitRequisition() {
             if (currentRole !== 'production_manager' && currentRole !== 'supervisor') return;
             const type = document.getElementById('rq-type').value;
-            const position = document.getElementById('rq-position').value.trim();
+            const position = REQX.positionValue().trim();
             const count = parseInt(document.getElementById('rq-count').value || '1', 10);
             if (!position || !count) {
                 alert('Please enter the position/department and number of workers required.');
                 return;
             }
+            if (!document.getElementById('rq-exp').value) {
+                alert('Please select the experience required.');
+                return;
+            }
+            REQX.applyPpe();
             const ppeKit = Array.from(document.querySelectorAll('.rq-ppe:checked')).map(cb => cb.value);
 
             if (type === 'Replacement' && !document.getElementById('rq-repl-emp').value) {
@@ -2297,6 +2319,7 @@
                 date: new Date().toISOString().slice(0, 10),
                 division: currentDivision,
                 position: position,
+                department: REQX.deptOf(position),
                 count: count,
                 skill: grade,
                 gradeBudget: gradeSalaryBudget[grade] || 0,
@@ -2333,6 +2356,7 @@
             document.getElementById('rq-division').value = currentDivision;
             toggleTypeFields();
             updateReqBudgetDisplay();
+            REQX.onPosition();
             renderRequisitions();
         }
 
@@ -2396,7 +2420,7 @@
             currentReviewId = id;
             const r = requisitions.find(x => x.id === id);
             if (!r) return;
-            document.getElementById('hrr-id').textContent = r.id + ' — ' + r.position + ' (' + r.division + ')';
+            document.getElementById('hrr-id').textContent = r.id + ' — ' + (r.department ? r.department + ' · ' : '') + r.position + ' (' + r.division + ')';
             document.getElementById('hrr-details').innerHTML =
                 '<b>Raised by:</b> ' + r.raisedBy + ' &nbsp; <b>Date:</b> ' + r.date + ' &nbsp; <b>Type:</b> ' + r.type + '<br>' +
                 '<b>No. Required:</b> ' + r.count + ' &nbsp; <b>Grade:</b> ' + r.skill + ' (Budget ₹' + Number(r.gradeBudget || 0).toLocaleString() + '/month) &nbsp; <b>Experience:</b> ' + (r.exp || '-') + '<br>' +
@@ -2678,7 +2702,7 @@
             pendingSubmissions.push({
                 id: 'PS' + Date.now(),
                 name: c.name, contractor: c.contractor, division: req ? req.division : '', location: '', doj: '',
-                designation: req ? req.position : '', department: '', section: '', skill: c.skill, expYr: '', expMo: '',
+                designation: req ? req.position : '', department: req ? (req.department || '') : '', section: '', skill: c.skill, expYr: '', expMo: '',
                 mobile: c.mobile, emergency: '', dob: '', age: '', state: '', permAddr: '', presAddr: '', aadhar: '',
                 pan: '', uan: '', esi: '', ppeDate: '', basicDa: '', hra: '', gross: '', shift: req ? req.shift : '',
                 status: 'Onboarding - Pending Details',
@@ -3238,6 +3262,10 @@
                 payrollRuns:        { get: () => payrollRuns,        set: v => { payrollRuns = v; },        key: x => x.period + '|' + x.empId },
                 wageRegisters:      { get: () => wageRegisters,      set: v => { wageRegisters = v; },      key: x => x.contractor + '|' + x.period },
                 invoices:           { get: () => invoices,           set: v => { invoices = v; },           key: x => x.invoiceNo },
+                leaveRequests:      { get: () => leaveRequests,      set: v => { leaveRequests = v; },      key: x => x.id },
+                regularizations:    { get: () => regularizations,    set: v => { regularizations = v; },    key: x => x.id },
+                profileChanges:     { get: () => profileChanges,     set: v => { profileChanges = v; },     key: x => x.id },
+                punches:            { get: () => punches,            set: v => { punches = v; },            key: x => x.id },
             },
             settingsNow() {
                 return { empIdCounters, nextReqId, nextCandId, nextResId, nextClearId, nextInvoiceNo,
@@ -3264,7 +3292,7 @@
             // contractor / division a record belongs to (used by the database's access rules)
             owner(c, x) {
                 const w = x.empId ? workers.find(w => w.empId === x.empId) : null;
-                return { contractor: x.contractor || (w && w.contractor) || null, division: x.division || (w && w.division) || null };
+                return { contractor: x.contractor || (w && w.contractor) || null, division: x.division || (w && w.division) || null, empId: x.empId || null };
             },
             current() {
                 const m = new Map();
@@ -3777,7 +3805,7 @@
                     const empId = generateEmployeeId(c.contractor);
                     workers.push({
                         empId, name: c.name, contractor: c.contractor, division: c.division || req.division || '', location: con ? con.location : '',
-                        doj: '', designation: req.position || c.position || '', department: '', section: '', skill: c.skill || req.skill || '',
+                        doj: '', designation: req.position || c.position || '', department: req.department || '', section: '', skill: c.skill || req.skill || '',
                         expYr: Math.floor(exp), expMo: Math.round((exp % 1) * 12), mobile: c.mobile, emergency: '', dob: c.dob, age: c.age,
                         state: c.state, permAddr: c.permAddr, presAddr: c.permAddr, aadhar: c.aadhaar, pan: '', uan: '', esi: '', ppeDate: '',
                         basicDa: '', hra: '', gross: '', shift: req.shift || '', status: 'Onboarding',
@@ -3831,7 +3859,7 @@
                 const trail = this.trail(r).map(t => '<li><b>' + escH(t.stage) + ' — ' + escH(t.decision) + '</b> · ' + escH(t.by) + (t.at ? ' · ' + escH(t.at) : '') + (t.remarks ? ' · “' + escH(t.remarks) + '”' : '') + '</li>').join('');
                 const cands = candidates.filter(c => c.requisitionId === r.id);
                 return '<div class="cw-detail-grid">' + f('Requisition', r.id) + f('Raised on', r.date) + f('Raised by', r.raisedBy) + f('Division', r.division) +
-                    f('Type', r.type === 'New' ? 'New manpower' : r.type) + f('Position / department', r.position) + f('Number required', r.count) + f('Skill grade', r.skill) +
+                    f('Type', r.type === 'New' ? 'New manpower' : r.type) + f('Position / department', r.department ? r.department + ' · ' + r.position : r.position) + f('Number required', r.count) + f('Skill grade', r.skill) +
                     f('Grade budget', money(r.gradeBudget)) + f('Total monthly budget', r.gradeBudget && r.count ? money(r.gradeBudget * r.count) : '') +
                     f('Experience', r.exp) + f('Shift', r.shift) + f('Required by', r.requiredDate) + f('Preferred education', r.education) +
                     f('Driving licence', r.drivingLicense) + f('Training / skill needed', r.trainingSkill) + f('PPE kit', (r.ppeKit || []).join(', ')) +
@@ -3940,6 +3968,304 @@
                 persistAll(); renderRequisitions();
             }
         };
+
+        /* =========================================================
+           TEAM & APPROVALS — Manager Self-Service and HR's final step for requests workers raise in
+           self-service (/me): leave, attendance corrections, profile changes, resignations.
+           Order: Supervisor (or Production Manager) of the worker's division → HR. HR may act at any step.
+           ========================================================= */
+        let holidaysList = [];                                   // [{date:'2026-01-26', name:'Republic Day'}]
+        let leavePolicy = { perDays: 20, eligibleAfter: 240 };    // statutory earned leave
+        const TEAM = {
+            view: 'inbox', month: new Date().toISOString().slice(0, 7), divFilter: '',
+            isHR() { return currentRole === 'hr_admin'; },
+            me() { return (typeof signedInUser !== 'undefined' && signedInUser && signedInUser.name) || ROLE_LABELS[currentRole]; },
+            nice(s) { if (!s) return '-'; const [y, m, d] = s.split('-'); return Number(d) + ' ' + MONTHS[Number(m) - 1].slice(0, 3) + ' ' + y; },
+            iso(d) { const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0, 10); },
+            today() { return this.iso(new Date()); },
+            periodOf(s) { return MONTHS[Number(s.slice(5, 7)) - 1] + ' ' + s.slice(0, 4); },
+            scopeDiv() { return this.isHR() ? this.divFilter : currentDivision; },
+            team() { const d = this.scopeDiv(); return workers.filter(w => (!d || w.division === d) && ['Active', 'Onboarding'].includes(w.status || 'Active')); },
+            worker(empId) { return workers.find(w => w.empId === empId) || {}; },
+            balance(empId) {
+                const worked = attendanceRecords.filter(a => a.empId === empId).reduce((n, a) => n + (+a.presentDays || 0), 0);
+                const p = leavePolicy, earned = Math.floor(worked / (+p.perDays || 20));
+                const el = leaveRequests.filter(l => l.empId === empId && l.type === 'Earned Leave');
+                const taken = el.filter(l => l.status === 'Approved').reduce((n, l) => n + (+l.days || 0), 0);
+                const pending = el.filter(l => /^Pending/.test(l.status)).reduce((n, l) => n + (+l.days || 0), 0);
+                const eligible = worked >= (+p.eligibleAfter || 240);
+                return { worked, earned, taken, pending, eligible, available: eligible ? Math.max(0, earned - taken - pending) : 0 };
+            },
+            set(v) { this.view = v; this.render(); },
+
+            /* ---------- what waits for whom ---------- */
+            pending() {
+                const d = this.scopeDiv(), inDiv = r => !d || r.division === d || this.worker(r.empId).division === d;
+                const tag = (c, r) => ({ c, r });
+                const atSup = [].concat(leaveRequests.filter(r => r.status === 'Pending Supervisor').map(r => tag('leaveRequests', r)),
+                    regularizations.filter(r => r.status === 'Pending Supervisor').map(r => tag('regularizations', r)),
+                    resignations.filter(r => r.status === 'Pending Supervisor').map(r => tag('resignations', r))).filter(x => inDiv(x.r));
+                const atHR = [].concat(leaveRequests.filter(r => r.status === 'Pending HR').map(r => tag('leaveRequests', r)),
+                    regularizations.filter(r => r.status === 'Pending HR').map(r => tag('regularizations', r)),
+                    profileChanges.filter(r => r.status === 'Pending HR').map(r => tag('profileChanges', r))).filter(x => inDiv(x.r));
+                return { atSup, atHR };
+            },
+            describe(c, r) {
+                if (c === 'leaveRequests') return [r.type + ' · ' + r.days + ' day(s)', this.nice(r.from) + (r.to !== r.from ? ' to ' + this.nice(r.to) : '') + ' · ' + (r.reason || '')];
+                if (c === 'regularizations') return ['Attendance correction · ' + this.nice(r.date), r.inTime + '–' + r.outTime + ' · ' + (r.reason || '')];
+                if (c === 'profileChanges') return ['Profile change · ' + r.fieldLabel, (r.from || '—') + ' → ' + r.to + (r.reason ? ' · ' + r.reason : '')];
+                return ['Resignation · last day ' + this.nice(r.lwd), r.reason || ''];
+            },
+            card(c, r, stage) {
+                const w = this.worker(r.empId), [title, detail] = this.describe(c, r), b = c === 'leaveRequests' ? this.balance(r.empId) : null;
+                const bal = b ? `<div style="font-size:11px;margin-top:4px" class="${r.type === 'Earned Leave' && r.days > b.available + (/^Pending/.test(r.status) ? r.days : 0) ? 'warn' : 'mut'}">Earned leave: ${b.eligible ? (b.available + (/^Pending/.test(r.status) && r.type === 'Earned Leave' ? r.days : 0)) + ' available before this request' : 'not yet eligible (' + b.worked + ' of ' + leavePolicy.eligibleAfter + ' days worked)'} · days worked ${b.worked}</div>` : '';
+                const sup = r.supervisor ? `<div style="font-size:11px" class="mut">Supervisor: ${escH(r.supervisor.decision)} by ${escH(r.supervisor.by)}${r.supervisor.remarks ? ' — “' + escH(r.supervisor.remarks) + '”' : ''}</div>` : '';
+                const actLabel = stage === 'hr' ? (c === 'resignations' ? 'Send to Exit & Clearance' : 'Approve') : (c === 'resignations' ? 'Accept — send to HR' : 'Approve — send to HR');
+                return `<div class="cw-panel" style="padding:12px 14px;margin:0 0 10px">
+                    <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><div><b style="color:var(--aw-ink)">${escH(r.name || w.name || r.empId)}</b> <span class="mut" style="color:var(--aw-muted)">${escH(r.empId)} · ${escH(w.designation || '')} · ${escH(w.division || r.division || '')}</span></div>${statusBadge(r.status)}</div>
+                    <div style="margin-top:4px;color:var(--aw-cream)">${escH(title)}</div><div style="font-size:12px;color:var(--aw-muted)">${escH(detail)}</div>${bal}${sup}
+                    <div class="cw-decision" style="margin-top:8px"><div class="form-group" style="flex:1;min-width:200px"><input type="text" id="tm-${escH(r.id)}" placeholder="Remarks (required to reject)"></div>
+                    <button type="button" class="action-btn edit" onclick="TEAM.decide('${c}','${escH(r.id)}',true,'${stage}')">${actLabel}</button>
+                    <button type="button" class="action-btn delete" onclick="TEAM.decide('${c}','${escH(r.id)}',false,'${stage}')">Reject</button></div></div>`;
+            },
+            decide(c, id, approve, stage) {
+                const list = { leaveRequests, regularizations, profileChanges, resignations }[c], r = list.find(x => x.id === id); if (!r) return;
+                const box = document.getElementById('tm-' + id), remarks = box ? box.value.trim() : '';
+                if (!approve && !remarks) { alert('Please add a remark saying why it is rejected.'); return; }
+                const entry = { by: this.me(), at: new Date().toLocaleString(), decision: approve ? 'Approved' : 'Rejected', remarks };
+                let text;
+                if (stage === 'supervisor') {
+                    r.status = approve ? (c === 'resignations' ? 'Pending HR Review' : 'Pending HR') : 'Rejected by Supervisor';
+                    r.supervisor = entry; text = (approve ? 'Supervisor approved ' : 'Supervisor rejected ');
+                } else {
+                    r.hr = entry; text = approve ? 'HR approved ' : 'HR rejected ';
+                    if (c === 'resignations') { r.status = approve ? 'Pending HR Review' : 'Rejected'; if (approve) text = 'HR moved to Exit & Clearance: '; }
+                    else r.status = approve ? 'Approved' : 'Rejected by HR';
+                    if (approve && c === 'regularizations') { const msg = this.applyRegularization(r); if (msg) alert(msg); }
+                    if (approve && c === 'profileChanges') { const w = workers.find(x => x.empId === r.empId); if (w) w[r.field] = r.to; }
+                }
+                r.history = (r.history || []).concat([{ at: entry.at, by: entry.by, what: text.trim() + (remarks ? ' — ' + remarks : '') }]);
+                addAudit(text + this.describe(c, r)[0] + ' for ' + (r.name || r.empId) + ' (' + r.empId + ')');
+                persistAll(); this.render();
+                if (c === 'resignations' && approve && stage === 'hr') { try { renderResignations(); } catch (e) {} }
+            },
+            // an approved correction counts the day as present (unless that month's wage register is already final)
+            applyRegularization(r) {
+                const period = this.periodOf(r.date), w = this.worker(r.empId);
+                if (wageRegisters.some(x => x.period === period && x.contractor === w.contractor)) return 'Attendance for ' + period + ' is already final in the wage register, so the day was recorded but the monthly count was not changed.';
+                const pid = r.empId + '|' + r.date, had = punches.find(p => p.id === pid);
+                const p = had || { id: pid, empId: r.empId, name: r.name, date: r.date };
+                Object.assign(p, { in: r.inTime, out: r.outTime, source: 'regularized', division: w.division, contractor: w.contractor });
+                if (!had) punches.push(p);
+                if (had && had.in) return '';   // the day was already counted from the check-in
+                const att = attendanceRecords.find(a => a.empId === r.empId && a.period === period);
+                if (att) att.presentDays = (+att.presentDays || 0) + 1;
+                else attendanceRecords.push({ period, empId: r.empId, presentDays: 1, otHrs: 0 });
+                return '';
+            },
+
+            /* ---------- screens ---------- */
+            render() {
+                const el = document.getElementById('team-body'); if (!el || !currentRole) return;
+                const { atSup, atHR } = this.pending(), mine = this.isHR() ? atHR.length : atSup.length;
+                const tabs = [['inbox', 'Approvals (' + mine + ')'], ['roster', 'Team today'], ['calendar', 'Leave calendar'], ['profiles', 'Team profiles']].concat(this.isHR() ? [['settings', 'Holidays, leave & departments']] : []);
+                document.getElementById('team-tabs').innerHTML = tabs.map(([k, l]) => `<button type="button" class="${this.view === k ? 'on' : ''}" onclick="TEAM.set('${k}')">${l}</button>`).join('') +
+                    (this.isHR() ? `<select style="width:auto;margin-left:8px" onchange="TEAM.divFilter=this.value;TEAM.render()"><option value="">All divisions</option>${DIVISIONS.map(d => `<option${d === this.divFilter ? ' selected' : ''}>${escH(d)}</option>`).join('')}</select>` : `<span style="margin-left:8px;color:var(--aw-muted);font-size:12px">${escH(currentDivision)}</span>`);
+                el.innerHTML = this['view_' + this.view](atSup, atHR);
+            },
+            view_inbox(atSup, atHR) {
+                if (!this.isHR()) return `<div class="section-header">Waiting for you</div>` + (atSup.map(x => this.card(x.c, x.r, 'supervisor')).join('') || '<p style="color:var(--aw-muted)">Nothing waiting for you. Requests from your team appear here.</p>');
+                const resig = resignations.filter(r => r.source === 'employee' && r.status === 'Pending HR Review').filter(r => !this.scopeDiv() || r.division === this.scopeDiv());
+                return `<div class="section-header">Waiting for HR (final step)</div>` + (atHR.map(x => this.card(x.c, x.r, 'hr')).join('') || '<p style="color:var(--aw-muted)">Nothing waiting for HR.</p>') +
+                    (resig.length ? `<div class="access-note">${resig.length} resignation(s) from self-service are in <a href="#exit-clearance" onclick="switchTab('exit-clearance')">Exit &amp; Clearance</a>, waiting for HR to accept.</div>` : '') +
+                    `<div class="section-header">Still with the supervisor</div><p style="color:var(--aw-muted);font-size:12px;margin:0 0 8px">HR can decide these directly if the supervisor is away.</p>` +
+                    (atSup.map(x => this.card(x.c, x.r, 'hr')).join('') || '<p style="color:var(--aw-muted)">None.</p>');
+            },
+            view_roster() {
+                const t = this.today(), team = this.team();
+                const st = w => {
+                    const lv = leaveRequests.find(l => l.empId === w.empId && l.from <= t && l.to >= t && !/Rejected|Cancelled/.test(l.status));
+                    if (lv) return lv.status === 'Approved' ? ['On leave', 'badge-pending'] : ['Leave requested', 'badge-neutral'];
+                    const p = punches.find(x => x.empId === w.empId && x.date === t);
+                    if (p && p.out) return ['Left ' + p.out, 'badge-neutral'];
+                    if (p && p.in) return ['In since ' + p.in, 'badge-active'];
+                    return ['Not checked in', 'badge-neutral'];
+                };
+                const rows = team.map(w => [w, st(w)]), n = k => rows.filter(([, s]) => s[0].startsWith(k)).length;
+                return `<div class="metrics-grid"><div class="metric-card"><div class="value">${team.length}</div><div class="label">In the team</div></div><div class="metric-card"><div class="value">${n('In since') + n('Left')}</div><div class="label">Checked in today</div></div><div class="metric-card"><div class="value">${n('On leave')}</div><div class="label">On leave</div></div><div class="metric-card"><div class="value">${n('Not checked')}</div><div class="label">Not checked in</div></div></div>
+                    <p style="color:var(--aw-muted);font-size:12px">Today ${this.nice(t)} · from web check-ins and approved leave. The eSSL machine import (coming next) will make this complete.</p>
+                    <div class="table-wrapper"><table><thead><tr><th>Emp ID</th><th>Name</th><th>Designation</th><th>Contractor</th><th>Shift</th><th>Today</th></tr></thead><tbody>` +
+                    (rows.map(([w, s]) => `<tr><td>${escH(w.empId)}</td><td class="text-left">${escH(w.name)}</td><td>${escH(w.designation || '-')}</td><td>${escH(w.contractor)}</td><td>${escH(w.shift || '-')}</td><td><span class="badge ${s[1]}">${escH(s[0])}</span></td></tr>`).join('') || '<tr><td colspan="6">No workers in this team.</td></tr>') + '</tbody></table></div>';
+            },
+            view_calendar() {
+                const [y, m] = this.month.split('-').map(Number), days = new Date(y, m, 0).getDate(), start = this.month + '-01', end = this.month + '-' + String(days).padStart(2, '0');
+                const hol = new Set(holidaysList.map(h => h.date)), team = new Set(this.team().map(w => w.empId));
+                const lv = leaveRequests.filter(l => team.has(l.empId) && !/Rejected|Cancelled/.test(l.status) && !(l.to < start || l.from > end));
+                const people = [...new Set(lv.map(l => l.empId))];
+                const cell = (emp, d) => {
+                    const ds = this.month + '-' + String(d).padStart(2, '0'), dow = new Date(y, m - 1, d).getDay(), off = dow === 0 || hol.has(ds);
+                    const l = lv.find(x => x.empId === emp && x.from <= ds && x.to >= ds);
+                    const bg = l && !off ? (l.status === 'Approved' ? 'rgba(63,191,127,.35)' : 'rgba(232,176,74,.35)') : off ? 'rgba(255,255,255,.05)' : 'transparent';
+                    return `<td title="${escH(ds + (l ? ' · ' + l.type + ' · ' + l.status : off ? ' · off' : ''))}" style="padding:0;width:22px;height:26px;background:${bg};font-size:10px;color:var(--aw-muted)">${l && !off ? (l.status === 'Approved' ? 'L' : '?') : ''}</td>`;
+                };
+                const head = Array.from({ length: days }, (_, i) => { const d = i + 1, dow = new Date(y, m - 1, d).getDay(); return `<th style="padding:4px 0;min-width:22px;${dow === 0 ? 'color:var(--aw-gold)' : ''}">${d}</th>`; }).join('');
+                return `<div class="cw-decision" style="margin:0 0 10px"><div class="form-group"><label>Month</label><input type="month" value="${this.month}" onchange="TEAM.month=this.value;TEAM.render()"></div>
+                    <p style="color:var(--aw-muted);font-size:12px;margin:0 0 8px"><span style="display:inline-block;width:12px;height:12px;background:rgba(63,191,127,.5)"></span> approved &nbsp; <span style="display:inline-block;width:12px;height:12px;background:rgba(232,176,74,.5)"></span> waiting &nbsp; shaded = Sunday or holiday</p></div>
+                    <div class="table-wrapper"><table><thead><tr><th class="text-left">Worker</th>${head}</tr></thead><tbody>` +
+                    (people.map(e => `<tr><td class="text-left" style="white-space:nowrap">${escH(this.worker(e).name || e)}</td>${Array.from({ length: days }, (_, i) => cell(e, i + 1)).join('')}</tr>`).join('') || `<tr><td colspan="${days + 1}">No leave in ${MONTHS[m - 1]} ${y}.</td></tr>`) + '</tbody></table></div>' +
+                    (holidaysList.filter(h => h.date >= start && h.date <= end).map(h => `<span class="badge badge-neutral" style="margin:8px 6px 0 0">${escH(this.nice(h.date) + ' · ' + h.name)}</span>`).join(''));
+            },
+            view_profiles() {
+                return `<div class="table-wrapper"><table><thead><tr><th>Emp ID</th><th>Name</th><th>Designation</th><th>Contractor</th><th>Mobile</th><th>Joined</th><th>Days worked</th><th>Earned leave</th><th></th></tr></thead><tbody>` +
+                    (this.team().map(w => { const b = this.balance(w.empId); return `<tr><td>${escH(w.empId)}</td><td class="text-left">${escH(w.name)}</td><td>${escH(w.designation || '-')}</td><td>${escH(w.contractor)}</td><td>${escH(w.mobile || '-')}</td><td>${escH(w.doj || '-')}</td><td>${b.worked}</td><td>${b.eligible ? b.available + ' days' : 'from ' + leavePolicy.eligibleAfter + ' days'}</td><td><button type="button" class="action-btn cw-btn-ghost" onclick="TEAM.profile('${escH(w.empId)}')">View</button></td></tr>`; }).join('') || '<tr><td colspan="9">No workers in this team.</td></tr>') +
+                    '</tbody></table></div><div id="team-profile"></div>';
+            },
+            profile(empId) {
+                const w = this.worker(empId), b = this.balance(empId), f = (l, v) => `<div><span>${l}</span>${escH(v || '-')}</div>`;
+                const lv = leaveRequests.filter(l => l.empId === empId).sort((a, c) => c.from.localeCompare(a.from)).slice(0, 8);
+                document.getElementById('team-profile').innerHTML = `<div class="cw-panel"><div class="section-header" style="margin-top:0">${escH(w.name)} — ${escH(empId)}</div><div class="cw-detail-grid">` +
+                    f('Designation', w.designation) + f('Division', w.division) + f('Contractor', w.contractor) + f('Location', w.location) + f('Skill grade', w.skill) + f('Shift', w.shift) + f('Joined', w.doj) +
+                    f('Mobile', w.mobile) + f('Emergency contact', w.emergency) + f('Date of birth', w.dob) + f('Days worked', b.worked) + f('Earned leave available', b.eligible ? b.available : 'not yet eligible') + f('Leave used', b.taken) + `</div>` +
+                    `<div class="section-header">Recent leave</div><ul class="cw-history">${lv.map(l => `<li><b>${escH(l.type)}</b> · ${this.nice(l.from)}${l.to !== l.from ? ' – ' + this.nice(l.to) : ''} · ${l.days} day(s) · ${escH(l.status)}</li>`).join('') || '<li>None</li>'}</ul>` +
+                    `<button type="button" class="cw-btn-ghost" onclick="document.getElementById('team-profile').innerHTML=''">Close</button></div>`;
+                document.getElementById('team-profile').scrollIntoView({ behavior: 'smooth' });
+            },
+            view_settings() {
+                const hol = holidaysList.slice().sort((a, b) => a.date.localeCompare(b.date));
+                return `<div class="section-header">Earned leave rules</div><div class="cw-decision"><div class="form-group"><label>1 day of earned leave for every … days worked</label><input type="number" min="1" id="lp-per" value="${leavePolicy.perDays}"></div>
+                    <div class="form-group"><label>Earned leave starts after … days worked</label><input type="number" min="0" id="lp-elig" value="${leavePolicy.eligibleAfter}"></div><button type="button" onclick="TEAM.savePolicy()">Save rules</button></div>
+                    <p style="color:var(--aw-muted);font-size:12px">The Factories Act default is 1 for every 20 days, after 240 days worked in a year. Sundays and the holidays below are never counted as leave days.</p>
+                    <div class="section-header">Holiday calendar</div><div class="cw-decision"><div class="form-group"><label>Date</label><input type="date" id="hd-date"></div><div class="form-group" style="flex:1"><label>Holiday</label><input type="text" id="hd-name" placeholder="e.g. Onam"></div>
+                    <button type="button" onclick="TEAM.addHoliday()">Add holiday</button><button type="button" class="cw-btn-ghost" onclick="TEAM.addNational()">Add national holidays ${new Date().getFullYear() + (new Date().getMonth() > 9 ? 1 : 0)}</button></div>
+                    <div class="table-wrapper"><table><thead><tr><th>Date</th><th>Day</th><th>Holiday</th><th></th></tr></thead><tbody>` +
+                    (hol.map(h => `<tr><td>${this.nice(h.date)}</td><td>${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(h.date + 'T00:00:00').getDay()]}</td><td class="text-left">${escH(h.name)}</td><td><button type="button" class="action-btn delete" onclick="TEAM.removeHoliday('${h.date}')">Remove</button></td></tr>`).join('') || '<tr><td colspan="4">No holidays yet.</td></tr>') + '</tbody></table></div>';
+            },
+            savePolicy() {
+                const per = +document.getElementById('lp-per').value, elig = +document.getElementById('lp-elig').value;
+                if (!(per >= 1) || !(elig >= 0)) { alert('Enter whole numbers.'); return; }
+                leavePolicy = { perDays: per, eligibleAfter: elig }; addAudit('HR set earned leave to 1 day per ' + per + ' days worked, after ' + elig + ' days'); persistAll(); this.render();
+            },
+            addHoliday() {
+                const date = document.getElementById('hd-date').value, name = document.getElementById('hd-name').value.trim();
+                if (!date || !name) { alert('Enter the date and the holiday name.'); return; }
+                holidaysList = holidaysList.filter(h => h.date !== date).concat([{ date, name }]); addAudit('HR added holiday ' + name + ' on ' + date); persistAll(); this.render();
+            },
+            addNational() {
+                const y = new Date().getFullYear() + (new Date().getMonth() > 9 ? 1 : 0);
+                const add = [[y + '-01-26', 'Republic Day'], [y + '-05-01', 'May Day'], [y + '-08-15', 'Independence Day'], [y + '-10-02', 'Gandhi Jayanti']];
+                add.forEach(([date, name]) => { if (!holidaysList.some(h => h.date === date)) holidaysList.push({ date, name }); });
+                addAudit('HR added the national holidays for ' + y); persistAll(); this.render();
+            },
+            removeHoliday(date) { if (!confirm('Remove this holiday?')) return; holidaysList = holidaysList.filter(h => h.date !== date); addAudit('HR removed the holiday on ' + date); persistAll(); this.render(); }
+        };
+        // holidays and leave rules travel with the other shared settings
+        const settingsNowBase = SYNC.settingsNow.bind(SYNC), applySettingsBase = SYNC.applySettings.bind(SYNC);
+        SYNC.settingsNow = function () { return Object.assign(settingsNowBase(), { holidays: holidaysList, leavePolicy }); };
+        SYNC.applySettings = function (s) { applySettingsBase(s); if (Array.isArray(s.holidays)) holidaysList = s.holidays; if (s.leavePolicy) leavePolicy = Object.assign({ perDays: 20, eligibleAfter: 240 }, s.leavePolicy); };
+        const syncRerenderTeam = SYNC.rerender.bind(SYNC);
+        SYNC.rerender = function () { syncRerenderTeam(); try { TEAM.render(); } catch (e) { console.warn(e); } };
+        const switchTabBase = switchTab;
+        switchTab = function (id) { switchTabBase(id); if (id === 'team') TEAM.render(); };
+        // self-service resignations reach HR's existing Exit & Clearance list once the supervisor has passed them on
+        const statusBadgeTeam = statusBadge;
+        statusBadge = function (s) {
+            if (s === 'Pending Supervisor' || s === 'Pending HR') return '<span class="badge badge-pending">' + s + '</span>';
+            if (s === 'Rejected by Supervisor' || s === 'Rejected by HR') return '<span class="badge badge-danger">' + s + '</span>';
+            if (s === 'Approved' || s === 'Cancelled') return '<span class="badge ' + (s === 'Approved' ? 'badge-active' : 'badge-neutral') + '">' + s + '</span>';
+            return statusBadgeTeam(s);
+        };
+
+        /* ---------- Requisition form: department / position list and automatic PPE kit ----------
+           Each department has a PPE section type (glass / paint / general) and a "near noisy machinery" flag.
+           Safety Shoes and T-Shirt are required for everyone; glass adds Helmet, Goggles, Hand Sleeves, Hand Gloves;
+           paint adds Mask; noisy machinery adds Ear Plug. HR edits the list in Team & Approvals → Settings. */
+        const PPE_ALL = ['Shoes', 'T-Shirt'];
+        const PPE_BY_TYPE = { glass: ['Helmet', 'Goggles', 'Hand Sleeves', 'Hand Gloves'], paint: ['Mask'], general: [] };
+        const PPE_TYPE_LABEL = { glass: 'Glass section', paint: 'Paint section', general: 'General' };
+        let reqDepartments = [
+            { name: 'Glass Section', type: 'glass', noisy: false, positions: ['Glass Cutter', 'Glass Fitter', 'Glass Polisher', 'Glass Helper'] },
+            { name: 'Paint / Lacquer Section', type: 'paint', noisy: false, positions: ['Painter', 'Lacquer Sprayer', 'Sander / Polisher', 'Paint Helper'] },
+            { name: 'Machine Shop', type: 'general', noisy: true, positions: ['CNC Operator', 'Panel Saw Operator', 'Edge Banding Operator', 'Boring Machine Operator', 'Machine Helper'] },
+            { name: 'Assembly', type: 'general', noisy: false, positions: ['Assembler', 'Carpenter', 'Fitter', 'Assembly Helper'] },
+            { name: 'Packing & Dispatch', type: 'general', noisy: false, positions: ['Packer', 'Loader', 'Dispatch Helper'] },
+            { name: 'Stores & Warehouse', type: 'general', noisy: false, positions: ['Storekeeper', 'Forklift Operator', 'Warehouse Helper'] },
+            { name: 'Quality & Service', type: 'general', noisy: false, positions: ['Quality Inspector', 'Service Technician'] },
+            { name: 'Site Installation', type: 'general', noisy: false, positions: ['Installer', 'Installation Helper'] },
+            { name: 'Maintenance', type: 'general', noisy: true, positions: ['Electrician', 'Maintenance Fitter'] },
+            { name: 'Admin & Housekeeping', type: 'general', noisy: false, positions: ['Office Assistant', 'Housekeeping', 'Driver'] }
+        ];
+        const REQX = {
+            // option value is "Department|Position" so the same position name can sit in two departments
+            split(v) { const i = (v || '').indexOf('|'); return i < 0 ? ['', v || ''] : [v.slice(0, i), v.slice(i + 1)]; },
+            dept(v) { const d = this.split(v)[0]; return reqDepartments.find(x => x.name === d) || null; },
+            deptOf(position) { const sel = document.getElementById('rq-position'), d = this.dept(sel && sel.value); return d ? d.name : ''; },
+            required(d) { return d ? PPE_ALL.concat(PPE_BY_TYPE[d.type] || [], d.noisy ? ['Ear Plug'] : []) : PPE_ALL.slice(); },
+            fill() {
+                const sel = document.getElementById('rq-position'); if (!sel) return;
+                const keep = sel.value;
+                sel.innerHTML = '<option value="">-- Select department / position --</option>' + reqDepartments.map(d =>
+                    '<optgroup label="' + escH(d.name) + '">' + (d.positions || []).map(p => '<option value="' + escH(d.name + '|' + p) + '">' + escH(p) + '</option>').join('') + '</optgroup>').join('');
+                if (keep && Array.from(sel.options).some(o => o.value === keep)) sel.value = keep;
+                this.onPosition();
+            },
+            onPosition() { this.applyPpe(); },
+            applyPpe() {
+                const sel = document.getElementById('rq-position'); if (!sel) return;
+                const d = this.dept(sel.value), need = new Set(this.required(d));
+                document.querySelectorAll('.rq-ppe').forEach(cb => {
+                    const req = need.has(cb.value);
+                    if (req) cb.checked = true; else if (cb.disabled) cb.checked = false;   // drop items the previous section forced
+                    cb.disabled = req;
+                    cb.parentElement.style.opacity = req ? '1' : '';
+                    cb.parentElement.title = req ? 'Required for this section' : '';
+                });
+                const dd = document.getElementById('rq-dept-display');
+                if (dd) dd.innerHTML = d ? '<span style="color:var(--aw-muted)">Department:</span> <b style="color:var(--aw-gold)">' + escH(d.name) + '</b> · ' + escH(PPE_TYPE_LABEL[d.type] || 'General') + (d.noisy ? ' · near noisy machinery' : '') : '';
+                const note = document.getElementById('rq-ppe-note');
+                if (note) note.textContent = 'Ticked automatically and locked: ' + Array.from(need).join(', ') + (d ? ' (for ' + d.name + ')' : ' (for every worker)') + '. You can tick any extra items.';
+            },
+            // the stored position is just the position name; the department is saved alongside it
+            positionValue() { return this.split(document.getElementById('rq-position').value)[1]; },
+            settingsHtml() {
+                const typeSel = (i, t) => '<select id="rd-type-' + i + '">' + Object.keys(PPE_TYPE_LABEL).map(k => '<option value="' + k + '"' + (k === t ? ' selected' : '') + '>' + PPE_TYPE_LABEL[k] + '</option>').join('') + '</select>';
+                return '<div class="section-header">Requisition departments, positions &amp; PPE</div>' +
+                    '<p style="color:var(--aw-muted);font-size:12px">These fill the Department / Position dropdown on the Hiring Requisition Form. Safety Shoes and T-Shirt are always required. Glass section adds Helmet, Goggles, Hand Sleeves and Hand Gloves; Paint section adds Mask; "Near noisy machinery" adds Ear Plug.</p>' +
+                    '<div class="table-wrapper"><table><thead><tr><th>Department</th><th>PPE section</th><th>Near noisy machinery</th><th>Positions (comma separated)</th><th>PPE required</th><th></th></tr></thead><tbody>' +
+                    reqDepartments.map((d, i) => '<tr><td><input type="text" id="rd-name-' + i + '" value="' + escH(d.name) + '"></td><td>' + typeSel(i, d.type) + '</td>' +
+                        '<td><input type="checkbox" id="rd-noisy-' + i + '"' + (d.noisy ? ' checked' : '') + '></td>' +
+                        '<td><input type="text" style="min-width:260px" id="rd-pos-' + i + '" value="' + escH((d.positions || []).join(', ')) + '"></td>' +
+                        '<td class="text-left" style="font-size:11px">' + escH(this.required(d).join(', ')) + '</td>' +
+                        '<td><button type="button" class="action-btn delete" onclick="REQX.removeDept(' + i + ')">Remove</button></td></tr>').join('') +
+                    '</tbody></table></div><div class="cw-decision"><button type="button" onclick="REQX.saveDepts()">Save departments</button><button type="button" class="cw-btn-ghost" onclick="REQX.addDept()">+ Add department</button></div>';
+            },
+            readDepts() {
+                return reqDepartments.map((d, i) => ({
+                    name: document.getElementById('rd-name-' + i).value.trim(),
+                    type: document.getElementById('rd-type-' + i).value,
+                    noisy: document.getElementById('rd-noisy-' + i).checked,
+                    positions: document.getElementById('rd-pos-' + i).value.split(',').map(s => s.trim()).filter(Boolean)
+                }));
+            },
+            saveDepts() {
+                const list = this.readDepts();
+                if (list.some(d => !d.name || !d.positions.length)) { alert('Every department needs a name and at least one position.'); return; }
+                if (new Set(list.map(d => d.name.toLowerCase())).size !== list.length) { alert('Two departments have the same name.'); return; }
+                if (list.some(d => d.name.includes('|') || d.positions.some(p => p.includes('|')))) { alert('Names cannot contain the | character.'); return; }
+                reqDepartments = list; addAudit('HR updated the requisition departments, positions and PPE rules'); persistAll(); this.fill(); TEAM.render();
+            },
+            addDept() { reqDepartments = this.readDepts().concat([{ name: 'New Department', type: 'general', noisy: false, positions: ['Helper'] }]); TEAM.render(); },
+            removeDept(i) { if (!confirm('Remove this department from the requisition list? Requisitions already raised keep it.')) return; const l = this.readDepts(); l.splice(i, 1); reqDepartments = l; TEAM.render(); }
+        };
+        const viewSettingsTeam = TEAM.view_settings;
+        TEAM.view_settings = function () { return viewSettingsTeam.call(this) + REQX.settingsHtml(); };
+        const settingsNowReqx = SYNC.settingsNow, applySettingsReqx = SYNC.applySettings;
+        SYNC.settingsNow = function () { return Object.assign(settingsNowReqx(), { reqDepartments }); };
+        SYNC.applySettings = function (s) { applySettingsReqx(s); if (Array.isArray(s.reqDepartments) && s.reqDepartments.length) reqDepartments = s.reqDepartments; };
+        const syncRerenderReqx = SYNC.rerender.bind(SYNC);
+        SYNC.rerender = function () { syncRerenderReqx(); try { REQX.fill(); } catch (e) { console.warn(e); } };
+        const switchTabReqx = switchTab;
+        switchTab = function (id) { switchTabReqx(id); if (id === 'requisition-form') REQX.fill(); };
+        REQX.fill();
 
         /* ---------- install as a phone / desktop app ---------- */
         if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
