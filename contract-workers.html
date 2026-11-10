@@ -983,7 +983,9 @@
                             <div class="access-note" style="grid-column: 1 / -1;">Replacement requests skip GM Production and go straight to HR after your Production Manager approves.</div>
                             <div class="form-group full-width"><label>Employee Being Replaced (resigned/exited workers in your division)</label>
                                 <select id="rq-repl-emp" onchange="fillReplacementDetails()"><option value="">-- Select resigned/exited worker --</option></select>
+                                <div id="rq-repl-hint" style="font-size:11px; margin-top:4px; color:var(--aw-muted);"></div>
                             </div>
+                            <div id="rq-repl-card" style="grid-column: 1 / -1;"></div>
                             <div class="form-group"><label>Existing Position</label><input type="text" id="rq-repl-position" readonly></div>
                             <div class="form-group"><label>Existing Salary (for record)</label><input type="text" id="rq-repl-salary" readonly></div>
                             <div class="form-group"><label>Exit Status</label><input type="text" id="rq-repl-status" readonly></div>
@@ -2336,6 +2338,8 @@
                 replSalary: type === 'Replacement' ? document.getElementById('rq-repl-salary').value : '',
                 replStatus: type === 'Replacement' ? document.getElementById('rq-repl-status').value : '',
                 replReason: type === 'Replacement' ? document.getElementById('rq-repl-reason').value.trim() : '',
+                replName: type === 'Replacement' ? ((REQX.replDetails() || {}).name || '') : '',
+                replDetails: type === 'Replacement' ? REQX.replDetails() : null,
                 project: newFields.project,
                 whyNew: newFields.whyNew,
                 mgmtApproved: newFields.mgmtApproved,
@@ -2431,7 +2435,8 @@
                 (r.type === 'New' ?
                     ('<b>Project/Site:</b> ' + r.project + '<br><b>Why Needed:</b> ' + r.whyNew + '<br><b>Management Approved:</b> ' + r.mgmtApproved + '<br><b>Justification:</b> ' + r.justification + '<br><b>GM Production Approved By:</b> ' + (r.gmApprovedBy || '-') + '<br>')
                     :
-                    ('<b>Employee Being Replaced:</b> ' + r.replEmpId + ' (' + r.replPosition + ', exit status: ' + r.replStatus + ')<br><b>Previous Salary:</b> ₹' + r.replSalary + '<br><b>Reason for Replacement:</b> ' + (r.replReason || '-') + '<br>')
+                    ('<b>Employee Being Replaced:</b> ' + (r.replName ? r.replName + ' — ' : '') + r.replEmpId + ' (' + r.replPosition + ', exit status: ' + r.replStatus + ')<br><b>Previous Salary:</b> ₹' + r.replSalary + '<br><b>Reason for Replacement:</b> ' + (r.replReason || '-') + '<br>' +
+                     (r.replDetails ? REQX.replCardHtml(r.replDetails) : ''))
                 ) +
                 '<b>Production Manager Approved By:</b> ' + (r.pmApprovedBy || '-') + '<br>' +
                 '<b>Job Description/Remarks:</b> ' + (r.remarks || '-');
@@ -3854,7 +3859,8 @@
                 const f = (l, v) => '<div><span>' + l + '</span>' + escH(v === 0 ? '0' : (v || '-')) + '</div>';
                 const money = n => n ? '₹ ' + Number(n).toLocaleString('en-IN') + ' / month' : '-';
                 const repl = r.type === 'Replacement'
-                    ? f('Employee being replaced', r.replEmpId) + f('Their position', r.replPosition) + f('Their salary', r.replSalary ? '₹ ' + r.replSalary : '') + f('Exit status', r.replStatus) + f('Reason for replacement', r.replReason)
+                    ? f('Employee being replaced', (r.replName ? r.replName + ' · ' : '') + r.replEmpId) + f('Their position', r.replPosition)
+                      + (r.replDetails ? f('Their skill grade', r.replDetails.skill) + f('Their department', [r.replDetails.department, r.replDetails.section].filter(Boolean).join(' · ')) + f('Their contractor', r.replDetails.contractor) + f('Joined', r.replDetails.doj) + f('Last working day', r.replDetails.lwd) + f('Service', r.replDetails.tenure) + f('Exit type', r.replDetails.exitType) + f('Exit reason', r.replDetails.exitReason) : '') + f('Their salary', r.replSalary ? '₹ ' + r.replSalary : '') + f('Exit status', r.replStatus) + f('Reason for replacement', r.replReason)
                     : f('Project / site', r.project) + f('Why new manpower is needed', r.whyNew) + f('Management approved?', r.mgmtApproved) + f('Justification', r.justification);
                 const trail = this.trail(r).map(t => '<li><b>' + escH(t.stage) + ' — ' + escH(t.decision) + '</b> · ' + escH(t.by) + (t.at ? ' · ' + escH(t.at) : '') + (t.remarks ? ' · “' + escH(t.remarks) + '”' : '') + '</li>').join('');
                 const cands = candidates.filter(c => c.requisitionId === r.id);
@@ -4265,6 +4271,87 @@
         SYNC.rerender = function () { syncRerenderReqx(); try { REQX.fill(); } catch (e) { console.warn(e); } };
         const switchTabReqx = switchTab;
         switchTab = function (id) { switchTabReqx(id); if (id === 'requisition-form') REQX.fill(); };
+
+        /* ---------- Replacement: list left / resigned workers and show all their details ---------- */
+        Object.assign(REQX, {
+            STILL_WORKING: ['Active', 'Onboarding'],
+            exitOf(empId) { return resignations.filter(r => r.empId === empId).sort((a, b) => String(b.resignDate || '').localeCompare(String(a.resignDate || '')))[0] || null; },
+            // workers who have left (any final exit status) plus active workers whose resignation is waiting or accepted
+            leavers() {
+                return workers.filter(w => w.division === currentDivision).map(w => {
+                    const ex = this.exitOf(w.empId), left = w.status && !this.STILL_WORKING.includes(w.status) && !/^Pending/.test(w.status);
+                    const serving = !left && w.status === 'Active' && ex && !/^Rejected/.test(ex.status || '') && ex.status !== 'Cancelled';
+                    return left || serving ? { w, ex, serving } : null;
+                }).filter(Boolean).sort((a, b) => String((b.ex && b.ex.lwd) || '').localeCompare(String((a.ex && a.ex.lwd) || '')));
+            },
+            tenure(from, to) {
+                if (!from) return '';
+                const a = new Date(from + 'T00:00:00'), b = to ? new Date(to + 'T00:00:00') : new Date();
+                let m = (b.getFullYear() - a.getFullYear()) * 12 + b.getMonth() - a.getMonth(); if (b.getDate() < a.getDate()) m--;
+                if (m < 0) return ''; const y = Math.floor(m / 12); m %= 12;
+                return (y ? y + ' yr ' : '') + m + ' mo';
+            },
+            replDetails() {
+                const empId = document.getElementById('rq-repl-emp').value, w = workers.find(x => x.empId === empId);
+                if (!w) return null;
+                const ex = this.exitOf(empId), lwd = (ex && ex.lwd) || '';
+                const exp = (w.expYr || w.expMo) ? (w.expYr || 0) + ' yr ' + (w.expMo || 0) + ' mo' : '';
+                return {
+                    empId: w.empId, name: w.name, designation: w.designation || '', department: w.department || '', section: w.section || '',
+                    skill: w.skill || '', contractor: w.contractor || '', division: w.division || '', location: w.location || '', shift: w.shift || '',
+                    doj: w.doj || '', lwd, tenure: this.tenure(w.doj, lwd), experience: exp, gross: w.gross || '', basicDa: w.basicDa || '',
+                    status: w.status || '', exitType: ex ? (ex.type || '') : '', exitStatus: ex ? (ex.finalStatus || ex.status || '') : '',
+                    exitReason: ex ? (ex.reason || '') : '', exitRemarks: ex ? (ex.remarks || '') : '', resignDate: ex ? (ex.resignDate || '') : '',
+                    ppeDate: w.ppeDate || '', uan: w.uan || '', esi: w.esi || ''
+                };
+            },
+            replCardHtml(d) {
+                if (!d) return '';
+                const f = (l, v) => '<div><span>' + l + '</span>' + escH(v === 0 ? '0' : (v || '-')) + '</div>';
+                const money = n => n ? '₹ ' + Number(n).toLocaleString('en-IN') + ' / month' : '';
+                return '<div class="cw-panel" style="margin:6px 0 4px"><div style="font-size:12px;margin-bottom:4px"><b style="color:var(--aw-gold)">' + escH(d.name) + '</b> <span style="color:var(--aw-muted)">' + escH(d.empId) + ' · ' + escH(d.status) + '</span></div>' +
+                    '<div class="cw-detail-grid">' + f('Designation', d.designation) + f('Department / section', [d.department, d.section].filter(Boolean).join(' · ')) + f('Skill grade', d.skill) +
+                    f('Contractor', d.contractor) + f('Division', d.division) + f('Location', d.location) + f('Shift', d.shift) +
+                    f('Date of joining', d.doj) + f('Resignation date', d.resignDate) + f('Last working day', d.lwd) + f('Length of service', d.tenure) + f('Experience at joining', d.experience) +
+                    f('Gross salary', money(d.gross)) + f('Basic + DA', money(d.basicDa)) + f('Exit type', d.exitType) + f('Exit status', d.exitStatus) +
+                    f('Exit reason', d.exitReason) + f('Exit remarks', d.exitRemarks) + f('PPE issued on', d.ppeDate) + f('UAN', d.uan) + f('ESIC no.', d.esi) + '</div></div>';
+            }
+        });
+        const toggleTypeFieldsReqx = toggleTypeFields;
+        toggleTypeFields = function () {
+            toggleTypeFieldsReqx();
+            const sel = document.getElementById('rq-repl-emp'); if (!sel) return;
+            const keep = sel.value, list = REQX.leavers();
+            const taken = new Set(requisitions.filter(r => r.type === 'Replacement' && r.replEmpId && !/Rejected/i.test(r.status || '')).map(r => r.replEmpId));
+            sel.innerHTML = '<option value="">-- Select resigned / left worker --</option>' + list.map(({ w, ex, serving }) =>
+                '<option value="' + escH(w.empId) + '">' + escH(w.name + ' (' + w.empId + ') · ' + (w.designation || '-') + ' · ' + (serving ? 'Resignation ' + (ex.status || 'pending') : w.status) +
+                    (ex && ex.lwd ? ' · LWD ' + ex.lwd : '') + (taken.has(w.empId) ? ' · already in a requisition' : '')) + '</option>').join('');
+            if (keep && list.some(x => x.w.empId === keep)) sel.value = keep;
+            const hint = document.getElementById('rq-repl-hint');
+            if (hint) hint.textContent = list.length ? list.length + ' worker(s) in ' + currentDivision + ' who have left or resigned. Picking one fills in their details below.' : 'No worker in ' + currentDivision + ' has left or resigned yet.';
+            fillReplacementDetails();
+        };
+        const fillReplacementDetailsReqx = fillReplacementDetails;
+        fillReplacementDetails = function () {
+            fillReplacementDetailsReqx();
+            const d = REQX.replDetails(), card = document.getElementById('rq-repl-card');
+            if (card) card.innerHTML = REQX.replCardHtml(d);
+            if (!d || REQX._lastRepl === d.empId) { if (!d) REQX._lastRepl = ''; return; }
+            REQX._lastRepl = d.empId;
+            // carry the leaver's job over to this requisition: position, grade, shift and the reason
+            const ex = REQX.exitOf(d.empId), st = document.getElementById('rq-repl-status');
+            if (st && ex && ex.finalStatus) st.value = ex.finalStatus; else if (st && ex && d.status === 'Active') st.value = 'Resignation ' + (ex.status || 'pending');
+            const pos = document.getElementById('rq-position'), low = s => String(s || '').trim().toLowerCase();
+            const opts = Array.from(pos.options).filter(o => o.value && low(REQX.split(o.value)[1]) === low(d.designation));
+            const pick = opts.find(o => low(REQX.split(o.value)[0]) === low(d.department)) || opts[0];
+            if (pick) { pos.value = pick.value; REQX.onPosition(); }
+            const skill = document.getElementById('rq-skill');
+            if (Array.from(skill.options).some(o => o.value === d.skill)) { skill.value = d.skill; updateReqBudgetDisplay(); }
+            const shift = document.getElementById('rq-shift');
+            if (Array.from(shift.options).some(o => o.value === d.shift)) shift.value = d.shift;
+            const reason = document.getElementById('rq-repl-reason');
+            if (reason && !reason.value.trim()) reason.value = 'Replacement for ' + d.name + ' (' + d.empId + ') — ' + (d.exitStatus || d.status) + (d.lwd ? ', last working day ' + d.lwd : '') + (d.exitReason ? ': ' + d.exitReason : '');
+        };
         REQX.fill();
 
         /* ---------- install as a phone / desktop app ---------- */
