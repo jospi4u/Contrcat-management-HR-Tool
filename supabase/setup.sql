@@ -58,9 +58,16 @@ alter table app_users add column if not exists salt       text;          -- per-
 alter table app_users add column if not exists active     boolean not null default true;
 alter table app_users add column if not exists created_at timestamptz not null default now();
 alter table app_users add column if not exists last_login timestamptz;
+alter table app_users add column if not exists emp_id      text;          -- for worker logins: their Employee ID
+alter table app_users add column if not exists must_change boolean not null default false;  -- change password at next sign-in
 alter table app_users drop constraint if exists app_users_role_check;
 alter table app_users add constraint app_users_role_check
-  check (role in ('admin','hr_admin','gm_production','production_manager','supervisor','contractor'));
+  check (role in ('admin','hr_admin','gm_production','production_manager','supervisor','contractor','employee'));
+create unique index if not exists app_users_emp_idx on app_users (emp_id) where emp_id is not null;
+
+-- which worker a record belongs to (leave, attendance, payslips…) so workers see only their own
+alter table records add column if not exists emp_id text;
+create index if not exists records_emp_idx on records (collection, emp_id);
 
 -- every sign-in attempt, good or bad
 create table if not exists login_events (
@@ -110,7 +117,8 @@ begin
 end $$;
 
 create or replace function cw_user_json(u app_users) returns jsonb language sql stable as $$
-  select jsonb_build_object('user', u.user_id, 'role', u.role, 'contractor', u.contractor, 'division', u.division, 'name', u.name)
+  select jsonb_build_object('user', u.user_id, 'role', u.role, 'contractor', u.contractor, 'division', u.division, 'name', u.name,
+                            'empId', u.emp_id, 'mustChange', u.must_change)
 $$;
 
 -- where events are copied to (the admin's Google Sheet); only the sign-in layer and admins receive it
@@ -186,8 +194,13 @@ language sql stable as $$
       or (r.collection = 'requisitions' and exists (
             select 1 from jsonb_array_elements_text(coalesce(r.data->'assignedContractors', '[]'::jsonb)) a
             where cw_norm(a) = cw_norm(u.contractor)))
+    when 'employee' then   -- a worker sees only their own records
+      (r.collection = 'workers' and r.id = u.emp_id)
+      or (r.collection in ('attendanceRecords','payrollRuns','leaveRequests','regularizations','profileChanges','resignations','punches')
+          and coalesce(r.emp_id, r.data->>'empId') = u.emp_id)
     else -- production_manager, supervisor
-      r.collection in ('workers','requisitions','resignations','exitClearances','attendanceRecords','candidates')
+      r.collection in ('workers','requisitions','resignations','exitClearances','attendanceRecords','candidates',
+                       'leaveRequests','regularizations','punches')
         and r.division = u.division
   end
 $$;
@@ -206,6 +219,7 @@ returns boolean language sql stable as $$
         or (p_coll = 'invoices' and (prev is null or prev.collection is null))  -- raise new invoices only
       )
     when 'gm_production' then p_coll = 'requisitions' and prev.collection is not null
+    when 'employee' then false   -- handled in cw_save: own requests only
     else -- production_manager, supervisor
       (p_coll in ('requisitions','exitClearances')
         and new_division = u.division
@@ -224,7 +238,7 @@ declare u app_users;
 begin
   u := cw_auth(p_user, p_key);
   return jsonb_build_object(
-    'me', jsonb_build_object('user', u.user_id, 'role', u.role, 'contractor', u.contractor, 'division', u.division, 'name', u.name),
+    'me', cw_user_json(u),
     'records', coalesce((select jsonb_agg(jsonb_build_object('c', r.collection, 'id', r.id, 'd', r.data))
                          from records r where cw_can_read(u, r)), '[]'::jsonb),
     'settings', coalesce((select jsonb_object_agg(key, value) from app_settings where key not like 'admin_%'), '{}'::jsonb),  -- admin-only settings stay private
@@ -244,16 +258,42 @@ returns jsonb language plpgsql volatile security definer set search_path = publi
 declare
   u app_users; x jsonb; prev records; d jsonb; k text; v jsonb; cur jsonb;
   rejected jsonb := '[]'::jsonb; saved int := 0;
+  w_con text; w_div text; n_con text; n_div text; n_emp text;
 begin
   u := cw_auth(p_user, p_key);
+  if u.role = 'employee' then   -- a worker's contractor and division always come from their own worker record
+    select contractor, division into w_con, w_div from records where collection = 'workers' and id = u.emp_id;
+  end if;
 
   for x in select * from jsonb_array_elements(coalesce(p_upserts, '[]'::jsonb)) loop
     prev := null;
     select * into prev from records where collection = x->>'c' and id = x->>'id';
-    if not cw_can_write(u, x->>'c', prev, x->>'contractor', x->>'division') then
+    d := x->'d';
+    n_con := x->>'contractor'; n_div := x->>'division'; n_emp := coalesce(x->>'empId', d->>'empId');
+
+    if u.role = 'employee' then
+      -- workers raise and cancel their own requests and record their own check-in / check-out
+      if x->>'c' not in ('leaveRequests', 'regularizations', 'profileChanges', 'resignations', 'punches')
+         or coalesce(d->>'empId', '') <> u.emp_id
+         or (prev.collection is not null and coalesce(prev.emp_id, prev.data->>'empId') is distinct from u.emp_id)
+         or (x->>'c' <> 'punches' and (
+               coalesce(d->>'status', '') not in ('Pending Supervisor', 'Pending HR', 'Cancelled')
+               or (x->>'c' <> 'profileChanges' and coalesce(d->>'status', '') = 'Pending HR')   -- only profile changes skip the supervisor
+               or (prev.collection is not null and coalesce(prev.data->>'status', '') not in ('Pending Supervisor', 'Pending HR')))) then
+        rejected := rejected || jsonb_build_array(jsonb_build_object('c', x->>'c', 'id', x->>'id')); continue;
+      end if;
+      n_con := w_con; n_div := w_div; n_emp := u.emp_id;
+    elsif u.role in ('production_manager', 'supervisor') and x->>'c' in ('leaveRequests', 'regularizations', 'resignations')
+          and prev.collection is not null and coalesce(prev.data->>'status', '') = 'Pending Supervisor' then
+      -- the supervisor's step: pass on to HR or reject, for their own division only; the request itself stays as raised
+      if prev.division is distinct from u.division
+         or coalesce(d->>'status', '') not in ('Pending HR', 'Pending HR Review', 'Rejected by Supervisor') then
+        rejected := rejected || jsonb_build_array(jsonb_build_object('c', x->>'c', 'id', x->>'id')); continue;
+      end if;
+      d := prev.data || jsonb_build_object('status', d->'status', 'supervisor', d->'supervisor', 'history', d->'history');
+    elsif not cw_can_write(u, x->>'c', prev, x->>'contractor', x->>'division') then
       rejected := rejected || jsonb_build_array(jsonb_build_object('c', x->>'c', 'id', x->>'id')); continue;
     end if;
-    d := x->'d';
     if u.role = 'contractor' and x->>'c' = 'payrollRuns' then
       -- contractors may only change the status (confirm / query) and their query note, never amounts
       if coalesce(d->>'status', '') not in ('Contractor Confirmed', 'Query Raised') then
@@ -277,12 +317,13 @@ begin
       d := prev.data || jsonb_build_object('status', d->'status', 'interview', d->'interview',
                                            'decisionBy', d->'decisionBy', 'history', d->'history');
     end if;
-    insert into records (collection, id, data, contractor, division, updated_at, updated_by)
-    values (x->>'c', x->>'id', d, x->>'contractor', x->>'division', now(), u.user_id)
+    insert into records (collection, id, data, contractor, division, emp_id, updated_at, updated_by)
+    values (x->>'c', x->>'id', d, n_con, n_div, n_emp, now(), u.user_id)
     on conflict (collection, id) do update
       set data = excluded.data,
           contractor = case when u.role in ('hr_admin', 'admin') then excluded.contractor else records.contractor end,
           division   = case when u.role in ('hr_admin', 'admin') then excluded.division   else records.division end,
+          emp_id     = case when u.role in ('hr_admin', 'admin') then coalesce(excluded.emp_id, records.emp_id) else records.emp_id end,
           updated_at = now(), updated_by = u.user_id;
     saved := saved + 1;
   end loop;
@@ -408,7 +449,8 @@ begin
   u := cw_admin(p_user, p_key);
   return jsonb_build_object(
     'users', coalesce((select jsonb_agg(jsonb_build_object('user', user_id, 'role', role, 'contractor', contractor, 'division', division,
-                          'name', name, 'active', active, 'created_at', created_at, 'last_login', last_login, 'has_password', fp is not null)
+                          'name', name, 'active', active, 'created_at', created_at, 'last_login', last_login, 'has_password', fp is not null,
+                          'empId', emp_id, 'mustChange', must_change)
                         order by role, user_id) from app_users), '[]'::jsonb),
     'logins', coalesce((select jsonb_agg(x order by x.at desc) from
                         (select at, user_id, success, ip, user_agent, note from login_events order by at desc limit 500) x), '[]'::jsonb),
@@ -419,7 +461,8 @@ begin
     'candidates', coalesce((select jsonb_agg(jsonb_build_object('id', id, 'status', data->>'status', 'workerEmpId', data->>'workerEmpId',
                               'contractor', contractor, 'division', division, 'submittedOn', data->>'submittedOn',
                               'autoFilled', data->'autoFilled', 'history', data->'history')) from records where collection = 'candidates'), '[]'::jsonb),
-    'workers', coalesce((select jsonb_agg(jsonb_build_object('empId', id, 'status', data->>'status', 'candidateId', data->>'candidateId'))
+    'workers', coalesce((select jsonb_agg(jsonb_build_object('empId', id, 'status', data->>'status', 'candidateId', data->>'candidateId',
+                           'name', data->>'name', 'division', division, 'contractor', contractor))
                          from records where collection = 'workers'), '[]'::jsonb),
     'counts', coalesce((select jsonb_object_agg(collection, n) from (select collection, count(*) n from records group by collection) c), '{}'::jsonb),
     'recent_changes', coalesce((select jsonb_agg(x order by x.updated_at desc) from
@@ -531,7 +574,10 @@ declare u app_users; t text := lower(trim(coalesce(p_target, ''))); existing app
 begin
   u := cw_admin(p_user, p_key);
   if t !~ '^[a-z0-9][a-z0-9._-]{1,39}$' then raise exception 'User ID: 2-40 letters, numbers, dot, dash or underscore' using errcode = '22023'; end if;
-  if p_role not in ('admin','hr_admin','gm_production','production_manager','supervisor','contractor') then raise exception 'unknown role' using errcode = '22023'; end if;
+  if p_role not in ('admin','hr_admin','gm_production','production_manager','supervisor','contractor','employee') then raise exception 'unknown role' using errcode = '22023'; end if;
+  if p_role = 'employee' and not exists (select 1 from app_users where user_id = lower(trim(coalesce(p_target, ''))) and role = 'employee') then
+    raise exception 'Worker logins are created from the Employee Master: use Users → Create worker logins' using errcode = '22023';
+  end if;
   if p_role = 'contractor' and coalesce(trim(p_contractor), '') = '' then raise exception 'choose the contractor for this login' using errcode = '22023'; end if;
   if p_role in ('production_manager','supervisor') and coalesce(trim(p_division), '') = '' then raise exception 'choose the division for this login' using errcode = '22023'; end if;
   if t = u.user_id and (p_role <> 'admin' or not coalesce(p_active, true)) then raise exception 'you cannot remove your own admin access' using errcode = '22023'; end if;
@@ -545,8 +591,13 @@ begin
           case when p_role in ('production_manager','supervisor') then nullif(trim(p_division), '') end,
           nullif(trim(p_name), ''), coalesce(p_active, true))
   on conflict (user_id) do update set
-    role = excluded.role, contractor = excluded.contractor, division = excluded.division, name = excluded.name, active = excluded.active,
-    fp = coalesce(p_fp, app_users.fp), salt = coalesce(p_salt, app_users.salt);
+    role = excluded.role,
+    -- a worker login keeps the contractor and division of its worker record
+    contractor = case when excluded.role = 'employee' then app_users.contractor else excluded.contractor end,
+    division   = case when excluded.role = 'employee' then app_users.division   else excluded.division end,
+    name = excluded.name, active = excluded.active,
+    fp = coalesce(p_fp, app_users.fp), salt = coalesce(p_salt, app_users.salt),
+    must_change = case when p_fp is not null and excluded.role = 'employee' then true else app_users.must_change end;
   insert into audit_log (user_id, text) values (u.user_id, 'Admin ' || case when existing.user_id is null then 'created' else 'updated' end ||
     ' login ' || t || ' (' || p_role || ')' || case when p_fp is not null and existing.user_id is not null then ' and reset its password' else '' end ||
     case when not coalesce(p_active, true) then ' — deactivated' else '' end);
@@ -561,6 +612,42 @@ begin
   if t = u.user_id then raise exception 'you cannot delete your own login' using errcode = '22023'; end if;
   delete from app_users where user_id = t;
   insert into audit_log (user_id, text) values (u.user_id, 'Admin deleted login ' || t);
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- worker logins in bulk from the Employee Master: rows [{user, empId, name, fp, salt}]
+-- contractor and division are taken from the worker record, never from the request
+create or replace function cw_admin_create_logins(p_user text, p_key text, p_rows jsonb) returns jsonb
+language plpgsql volatile security definer set search_path = public as $$
+declare u app_users; x jsonb; w records; made int := 0; skipped jsonb := '[]'::jsonb; t text;
+begin
+  u := cw_admin(p_user, p_key);
+  for x in select * from jsonb_array_elements(coalesce(p_rows, '[]'::jsonb)) loop
+    t := lower(trim(coalesce(x->>'user', '')));
+    w := null;
+    select * into w from records where collection = 'workers' and id = x->>'empId';
+    if t !~ '^[a-z0-9][a-z0-9._-]{1,39}$' or w.id is null or coalesce(x->>'fp', '') !~ '^[0-9a-f]{64}$' or coalesce(x->>'salt', '') !~ '^[0-9a-f]{32}$'
+       or exists (select 1 from app_users where user_id = t or emp_id = w.id) then
+      skipped := skipped || jsonb_build_array(x->>'empId'); continue;
+    end if;
+    insert into app_users (user_id, fp, salt, role, contractor, division, name, active, emp_id, must_change)
+    values (t, x->>'fp', x->>'salt', 'employee', w.contractor, w.division, coalesce(nullif(trim(x->>'name'), ''), w.data->>'name'), true, w.id, true);
+    made := made + 1;
+  end loop;
+  if made > 0 then insert into audit_log (user_id, text) values (u.user_id, 'Admin created ' || made || ' worker login(s)'); end if;
+  return jsonb_build_object('ok', true, 'created', made, 'skipped', skipped);
+end $$;
+
+-- anyone changes their own password (workers must at their first sign-in)
+create or replace function cw_change_password(p_user text, p_key text, p_fp text, p_salt text) returns jsonb
+language plpgsql volatile security definer set search_path = public as $$
+declare u app_users;
+begin
+  u := cw_auth(p_user, p_key);
+  if coalesce(p_fp, '') !~ '^[0-9a-f]{64}$' or coalesce(p_salt, '') !~ '^[0-9a-f]{32}$' then raise exception 'bad password data' using errcode = '22023'; end if;
+  if p_fp = u.fp then raise exception 'choose a new password, not the current one' using errcode = '22023'; end if;
+  update app_users set fp = p_fp, salt = p_salt, must_change = false where user_id = u.user_id;
+  insert into audit_log (user_id, text) values (u.user_id, 'Changed their own password');
   return jsonb_build_object('ok', true);
 end $$;
 
@@ -612,7 +699,8 @@ revoke execute on function cw_admin(text, text), cw_user_json(app_users), cw_she
 grant execute on function cw_login_salt(text), cw_login(text, text, text, text), cw_whoami(text, text), cw_event(text, text, text, jsonb),
   cw_admin_overview(text, text), cw_admin_save_user(text, text, text, text, text, text, text, boolean, text, text),
   cw_admin_delete_user(text, text, text), cw_admin_set_contractors(text, text, jsonb), cw_admin_rename_contractor(text, text, text, text),
-  cw_admin_set_sheet(text, text, text, text, boolean), cw_admin_sheet_send(text, text, text, jsonb)
+  cw_admin_set_sheet(text, text, text, text, boolean), cw_admin_sheet_send(text, text, text, jsonb),
+  cw_admin_create_logins(text, text, jsonb), cw_change_password(text, text, text, text)
   to anon, authenticated;
 
 revoke all on function cw_auth(text, text), cw_load(text, text), cw_save(text, text, jsonb, jsonb, jsonb, jsonb) from public;
