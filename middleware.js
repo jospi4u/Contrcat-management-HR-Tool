@@ -224,6 +224,13 @@ export default async function middleware(req) {
   // app icon and install manifest: phones fetch these before anyone signs in; they hold nothing private
   if (PUBLIC_FILES.has(url.pathname)) return pass();
 
+  // daily keep-alive (Vercel Cron, see vercel.json): one harmless database read so the free
+  // Supabase project never counts as inactive and gets paused. Reveals nothing and changes nothing.
+  if (url.pathname === '/api/keepalive' && req.method === 'GET') {
+    const r = await call('cw_login_salt', { p_user: '__keepalive__' }).catch(() => ({ ok: false, status: 0 }));
+    return json({ ok: !!r.ok, at: new Date().toISOString() }, r.ok ? 200 : 502);
+  }
+
   if (url.pathname === '/login' && req.method === 'POST') {
     const form = await req.formData().catch(() => null);
     const user = String(form?.get('username') || '').trim().toLowerCase();

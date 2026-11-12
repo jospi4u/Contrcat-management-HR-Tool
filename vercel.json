@@ -4,5 +4,8 @@
     { "source": "/admin", "destination": "/admin.html" },
     { "source": "/me", "destination": "/ess.html" },
     { "source": "/recruitment", "destination": "/aristo-manpower-app.html" }
+  ],
+  "crons": [
+    { "path": "/api/keepalive", "schedule": "30 0 * * *" }
   ]
 }
