@@ -85,6 +85,8 @@ nav.tabs a.on{color:var(--gold)}
   <section id="home" class="on">
     <h2 id="hello">Hello</h2>
     <p class="sub" id="who"></p>
+    <div id="h-celebrate"></div>
+    <div id="h-ann"></div>
     <div class="card">
       <div class="punch">
         <div><div class="k">Today · <span id="today-label"></span></div>
@@ -152,6 +154,16 @@ nav.tabs a.on{color:var(--gold)}
   <section id="more">
     <h2>More</h2>
     <div class="card"><h3>My pay</h3><p class="mut" style="margin:0 0 8px;font-size:12px">Monthly pay as processed by HR. Downloadable payslips are coming next.</p><div class="scroll"><table><thead><tr><th>Month</th><th>Days</th><th>Gross</th><th>Deductions</th><th>Net pay</th></tr></thead><tbody id="pay-list"></tbody></table></div></div>
+    <div class="card"><h3>Raise a ticket</h3>
+      <p class="mut" style="margin:0 0 4px;font-size:12px">A request, problem, reminder or complaint for a department. You can track it below.</p>
+      <label for="tk-dept">Department</label><select id="tk-dept"></select>
+      <label for="tk-nature">Nature</label><select id="tk-nature"><option>Request</option><option>Issue / problem</option><option>Reminder</option><option>Complaint / grievance</option><option>Information</option></select>
+      <label for="tk-subject">Subject</label><input id="tk-subject" maxlength="140" placeholder="e.g. Safety shoes not received">
+      <label for="tk-details">Details</label><textarea id="tk-details"></textarea>
+      <div class="grid2"><div><label for="tk-days">Resolve within (days)</label><input type="number" id="tk-days" min="0" max="90" value="3"></div><div><label for="tk-follow">Remind me on</label><input type="date" id="tk-follow"></div></div>
+      <div class="row"><button onclick="ESS.raiseTicket()">Raise ticket</button></div>
+    </div>
+    <div class="card"><h3>My tickets</h3><ul class="list" id="tk-list"></ul></div>
     <div class="card"><h3>Holiday calendar</h3><ul class="list" id="hol-list"></ul></div>
     <div class="card"><h3>Resign</h3>
       <div id="rs-open"></div>
@@ -386,7 +398,52 @@ const ESS = {
     const openRes = mine('resignations').find(r => !/Rejected|Cancelled/.test(r.status));
     document.getElementById('rs-open').innerHTML = openRes ? this.itemHtml('resignations', openRes, 'Resignation · last day ' + nice(openRes.lwd), openRes.reason) : '';
     document.getElementById('rs-form').style.display = openRes ? 'none' : 'block';
+    try { this.renderSocial(); } catch (e) { console.warn(e); }
   },
+  /* ---------- announcements, birthday greeting, tickets ---------- */
+  addDays(n) { const d = new Date(); d.setDate(d.getDate() + (+n || 0)); return iso(d); },
+  renderSocial() {
+    const me = this.me, w = this.worker || {}, t = todayISO();
+    // birthday / work anniversary greeting for the worker themselves
+    const md = s => /^\d{4}-\d{2}-\d{2}/.test(s || '') ? s.slice(5, 10) : '', yrs = w.doj ? Number(t.slice(0, 4)) - Number(w.doj.slice(0, 4)) : 0;
+    const greet = md(w.dob) === t.slice(5) ? '🎂 Happy birthday, ' + esc((w.name || '').split(' ')[0]) + '! Best wishes from all of us at Aristo.'
+      : md(w.doj) === t.slice(5) && yrs >= 1 ? '🎉 Happy work anniversary — ' + yrs + (yrs === 1 ? ' year' : ' years') + ' with Aristo today. Thank you!' : '';
+    document.getElementById('h-celebrate').innerHTML = greet ? `<div class="card" style="border-color:var(--gold)"><b>${greet}</b></div>` : '';
+    // announcements meant for this worker (the database sends only those)
+    const ann = this.list('announcements').filter(a => (a.status || 'Published') === 'Published' && (!a.expires || a.expires >= t))
+      .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || String(b.at).localeCompare(String(a.at))).slice(0, 5);
+    document.getElementById('h-ann').innerHTML = ann.length ? `<div class="card"><h3>Announcements</h3><ul class="list">${ann.map(a => `<li class="item"><div class="t"><b>${a.pinned ? '📌 ' : ''}${esc(a.title)}</b><span class="mut">${nice(String(a.at).slice(0, 10))}</span></div><div class="d" style="white-space:pre-wrap">${esc(a.body)}</div><div class="d">${esc(a.byName || '')}</div></li>`).join('')}</ul></div>` : '';
+    // tickets
+    const depts = (Array.isArray(this.settings.ticketDepartments) ? this.settings.ticketDepartments : [{ name: 'HR' }]).filter(d => d && d.name);
+    const sel = document.getElementById('tk-dept'), keep = sel.value;
+    sel.innerHTML = '<option value="">— Select department —</option>' + depts.map(d => `<option>${esc(d.name)}</option>`).join(''); if (keep) sel.value = keep;
+    const fu = document.getElementById('tk-follow'); if (!fu.value) fu.value = this.addDays(3);
+    const open = s => !['Resolved', 'Closed'].includes(s);
+    const mine = this.list('tickets').filter(x => x.raisedBy === me.user).sort((a, b) => (open(b.status) - open(a.status)) || String(b.createdAt).localeCompare(String(a.createdAt)));
+    document.getElementById('tk-list').innerHTML = mine.length ? mine.map(x => {
+      const over = open(x.status) && x.dueDate && x.dueDate < t, last = (x.history || []).slice(-1)[0];
+      return `<li class="item"><div class="t"><b>${esc(x.no)} · ${esc(x.subject)}</b><span class="badge ${x.status === 'Resolved' ? 'ok' : open(x.status) ? 'warn' : 'mut'}">${esc(x.status)}</span></div>` +
+        `<div class="d">${esc(x.toDept)} · ${esc(x.nature)} · due ${nice(x.dueDate)}${over ? ' · <span class="bad">overdue</span>' : ''}${x.escalated ? ' · <span class="bad">escalated</span>' : ''}</div>` +
+        (last ? `<div class="d">${esc(last.action)} · ${esc(last.by)}${last.note ? ' — ' + esc(last.note) : ''}</div>` : '') +
+        `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">` +
+        (open(x.status) ? `<button class="ghost sm" onclick="ESS.ticketNote('${esc(x.id)}')">Add note</button>` + (!x.escalated ? `<button class="ghost sm" onclick="ESS.ticketEscalate('${esc(x.id)}')">Escalate to HR</button>` : '') : '') +
+        (x.status === 'Resolved' ? `<button class="sm" onclick="ESS.ticketStatus('${esc(x.id)}','Closed')">Confirm and close</button><button class="ghost sm" onclick="ESS.ticketStatus('${esc(x.id)}','Reopened')">Not solved — reopen</button>` : '') +
+        `</div></li>`; }).join('') : '<li class="mut">No tickets yet.</li>';
+  },
+  ticketLog(x, action, note) { const now = new Date().toISOString(); return Object.assign({}, x, { updatedAt: now, history: (x.history || []).concat([{ at: now, by: (this.worker && this.worker.name) || this.me.name || this.me.user, action, note: note || '' }]) }); },
+  async raiseTicket() {
+    const g = id => document.getElementById(id), dept = g('tk-dept').value, subject = g('tk-subject').value.trim(), days = Math.max(0, parseInt(g('tk-days').value || '0', 10));
+    if (!dept) return toast('Choose the department.');
+    if (!subject) return toast('Enter a subject.');
+    const w = this.worker || {}, now = new Date().toISOString(), no = 'TK-' + Date.now().toString(36).toUpperCase().slice(-6);
+    const rec = { id: no, no, raisedBy: this.me.user, raisedByName: w.name || this.me.name || this.me.user, raisedByRole: 'Worker · ' + this.me.empId, empId: this.me.empId, division: w.division || '', contractor: w.contractor || '',
+      toDept: dept, nature: g('tk-nature').value, subject, details: g('tk-details').value.trim(), priority: 'Normal', dueDays: days, dueDate: this.addDays(days), followUp: g('tk-follow').value || this.addDays(days),
+      status: 'Open', assignee: '', createdAt: now, updatedAt: now, escalated: false, history: [{ at: now, by: w.name || this.me.user, action: 'Raised to ' + dept }] };
+    try { await this.save('tickets', rec, 'raised ticket ' + no + ' to ' + dept); ['tk-subject', 'tk-details'].forEach(i => g(i).value = ''); g('tk-follow').value = ''; toast('Ticket ' + no + ' raised'); } catch (e) { toast(e.message); }
+  },
+  async ticketNote(id) { const x = (this.recs.tickets || {})[id]; if (!x) return; const n = prompt('Your note'); if (!n || !n.trim()) return; try { await this.save('tickets', this.ticketLog(x, 'Note', n.trim())); toast('Note added'); } catch (e) { toast(e.message); } },
+  async ticketEscalate(id) { const x = (this.recs.tickets || {})[id]; if (!x) return; const n = prompt('Escalate to HR — why?'); if (n === null) return; try { await this.save('tickets', Object.assign(this.ticketLog(x, 'Escalated to HR', n), { escalated: true, escalatedAt: new Date().toISOString() })); toast('Escalated to HR'); } catch (e) { toast(e.message); } },
+  async ticketStatus(id, st) { const x = (this.recs.tickets || {})[id]; if (!x) return; const y = Object.assign(this.ticketLog(x, st), { status: st }); if (st === 'Reopened') { y.escalated = false; y.dueDate = this.addDays(x.dueDays || 3); } try { await this.save('tickets', y); toast(st === 'Closed' ? 'Ticket closed' : 'Ticket reopened'); } catch (e) { toast(e.message); } },
   itemHtml(c, r, title, detail) {
     const last = (r.history || []).slice(-1)[0], canCancel = /^Pending (Supervisor|HR)$/.test(r.status) && c !== 'resignations';
     const why = r.status && /Rejected/.test(r.status) ? ((r.hr && r.hr.remarks) || (r.supervisor && r.supervisor.remarks) || '') : '';

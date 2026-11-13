@@ -741,6 +741,8 @@
         <nav>
             <ul>
                 <li data-roles="hr_admin,gm_production,production_manager,supervisor,contractor"><a href="#dashboard" class="nav-link" onclick="switchTab('dashboard')">Dashboard</a></li>
+                <li data-roles="hr_admin,gm_production,production_manager,supervisor,contractor"><a href="#announcements" class="nav-link" onclick="switchTab('announcements')">Announcements</a></li>
+                <li data-roles="hr_admin,gm_production,production_manager,supervisor,contractor"><a href="#tickets" class="nav-link" onclick="switchTab('tickets')">Tickets &amp; Reminders</a></li>
                 <li data-roles="hr_admin,contractor,gm_production"><a href="#master" class="nav-link active" onclick="switchTab('master')">Workers Master Data</a></li>
                 <li data-roles="hr_admin,production_manager,supervisor"><a href="#requisition-form" class="nav-link" onclick="switchTab('requisition-form')">Hiring Requisition Form</a></li>
                 <li data-roles="hr_admin,production_manager,supervisor,contractor,gm_production"><a href="#requisition-tracker" class="nav-link" onclick="switchTab('requisition-tracker')">Requisition Tracker</a></li>
@@ -761,6 +763,19 @@
             <div id="dashboard" class="tab-content">
                 <h2 id="dash-title">Dashboard</h2>
                 <div id="dash-body"></div>
+            </div>
+
+            <!-- ANNOUNCEMENTS: HR, GM and HODs / Managers post; everyone reads what is meant for them -->
+            <div id="announcements" class="tab-content">
+                <h2>Announcements</h2>
+                <div id="ann-body"></div>
+            </div>
+
+            <!-- TICKETS & REMINDERS: anyone raises a ticket to a department; the department works on it -->
+            <div id="tickets" class="tab-content">
+                <h2>Tickets &amp; Reminders</h2>
+                <div id="tk-tabs" class="cw-filter"></div>
+                <div id="tk-body"></div>
             </div>
 
             <!-- 1. WORKERS MASTER DATA -->
@@ -4625,11 +4640,227 @@
                 const views = { hr_admin: ['HR Dashboard', 'hr'], gm_production: ['GM Dashboard', 'gm'], production_manager: [ROLE_LABELS.production_manager + ' Dashboard — ' + currentDivision, 'manager'], supervisor: ['Supervisor Dashboard — ' + currentDivision, 'supervisor'], contractor: ['Contractor Dashboard — ' + currentContractorName, 'contractor'] };
                 const v = views[r]; if (!v) { body.innerHTML = ''; return; }
                 title.textContent = v[0];
-                try { body.innerHTML = this[v[1]]() + '<p style="color:var(--aw-muted);font-size:11px;margin-top:14px">Today\'s attendance comes from web check-ins and approved leave; monthly figures from the attendance of ' + escH(CURRENT_PERIOD) + '. ' + (['hr_admin', 'gm_production'].includes(r) ? '' : 'Salary information is not shown on this dashboard.') + '</p>'; }
+                try { body.innerHTML = (typeof SOC !== 'undefined' ? SOC.dashTop() : '') + this[v[1]]() + '<p style="color:var(--aw-muted);font-size:11px;margin-top:14px">Today\'s attendance comes from web check-ins and approved leave; monthly figures from the attendance of ' + escH(CURRENT_PERIOD) + '. ' + (['hr_admin', 'gm_production'].includes(r) ? '' : 'Salary information is not shown on this dashboard.') + '</p>'; }
                 catch (e) { console.warn(e); body.innerHTML = '<div class="access-note">The dashboard could not be built: ' + escH(e.message) + '</div>'; }
             }
         };
         function cw_normJs(s) { return String(s || '').trim().toLowerCase(); }
+
+        /* ---------- Announcements · Birthdays & work anniversaries · Tickets & reminders ----------
+           Announcements: HR posts to everyone, contractors or chosen departments; GM likewise; a HOD / Manager to their own department.
+           Celebrations: birthdays and work anniversaries in the next 7 days, for the workers this login looks after.
+           Tickets: anyone raises a ticket to a department (nature, resolve-within days, follow-up date); the department's
+           handlers work it; overdue and escalated tickets are flagged; HR sees every ticket. The database enforces who sees what. */
+        let announcements = [], tickets = [];
+        let ticketDepartments = [{ name: 'HR', handlers: [] }, { name: 'Admin', handlers: [] }, { name: 'IT', handlers: [] }, { name: 'Finance', handlers: [] }];
+        SYNC.collections.announcements = { get: () => announcements, set: v => { announcements = v; }, key: x => x.id };
+        SYNC.collections.tickets = { get: () => tickets, set: v => { tickets = v; }, key: x => x.id };
+        var SOC = {
+            NATURE: ['Request', 'Issue / problem', 'Reminder', 'Complaint / grievance', 'Information'],
+            OPEN: s => !['Resolved', 'Closed'].includes(s),
+            view: 'mine', open: null,
+            me() { const m = signedInUser || {}; return { user: m.user || 'local', name: m.name || ROLE_LABELS[currentRole] || '', role: currentRole }; },
+            today() { return DASH.iso(new Date()); },
+            nice(d) { if (!d) return '-'; const x = new Date(String(d).slice(0, 10) + 'T00:00:00'); return isNaN(x) ? d : x.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }); },
+            addDays(n) { const d = new Date(); d.setDate(d.getDate() + (+n || 0)); return DASH.iso(d); },
+            isHR() { return currentRole === 'hr_admin'; },
+            myDivs() { return String((signedInUser && signedInUser.division) || currentDivision || '').split('|').map(s => s.trim()).filter(Boolean); },
+
+            /* ---- announcements ---- */
+            canPost() { return ['hr_admin', 'gm_production', 'production_manager'].includes(currentRole); },
+            audiences() { return ['hr_admin', 'gm_production'].includes(currentRole) ? [['all', 'Everyone'], ['contractors', 'All contractors']].concat(DIVISIONS.map(d => [d, d])) : this.myDivs().map(d => [d, d]); },
+            audLabel(a) { return (a || ['all']).map(x => x === 'all' ? 'Everyone' : x === 'contractors' ? 'Contractors' : x).join(', '); },
+            live() { const t = this.today(); return announcements.filter(a => (a.status || 'Published') === 'Published' && (!a.expires || a.expires >= t)).sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || String(b.at).localeCompare(String(a.at))); },
+            annCard(a, actions) {
+                return '<div class="cw-panel" style="margin:0 0 10px;' + (a.pinned ? 'border-color:var(--aw-gold-line)' : '') + '"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><b style="color:var(--aw-gold)">' + (a.pinned ? '📌 ' : '') + escH(a.title) + '</b>' +
+                    '<span style="font-size:11px;color:var(--aw-muted)">' + escH(a.byName || a.by) + ' · ' + this.nice(a.at) + ' · to ' + escH(this.audLabel(a.audience)) + (a.expires ? ' · until ' + this.nice(a.expires) : '') + ((a.status || 'Published') !== 'Published' ? ' · <b>' + escH(a.status) + '</b>' : '') + '</span></div>' +
+                    '<div style="white-space:pre-wrap;margin-top:6px;font-size:13px">' + escH(a.body) + '</div>' + (actions || '') + '</div>';
+            },
+            renderAnn() {
+                const el = document.getElementById('ann-body'); if (!el) return;
+                const me = this.me(), mine = a => a.by === me.user || this.isHR();
+                const form = this.canPost() ? '<div class="section-header">Post an announcement</div><div class="cw-panel"><div class="mini-form" style="grid-template-columns:repeat(2,1fr)">' +
+                    '<div class="form-group full-width"><label>Title</label><input type="text" id="an-title" maxlength="120" placeholder="e.g. Plant closed on 15 August"></div>' +
+                    '<div class="form-group full-width"><label>Message</label><textarea id="an-body" rows="3"></textarea></div>' +
+                    '<div class="form-group"><label>Send to</label><select id="an-aud" multiple size="4" style="min-height:90px">' + this.audiences().map(([v, l], i) => '<option value="' + escH(v) + '"' + (i === 0 ? ' selected' : '') + '>' + escH(l) + '</option>').join('') + '</select><div style="font-size:11px;color:var(--aw-muted)">Hold Ctrl to pick more than one.</div></div>' +
+                    '<div class="form-group"><label>Show until (optional)</label><input type="date" id="an-exp"><label style="margin-top:8px"><input type="checkbox" id="an-pin" style="width:auto"> Pin to the top</label></div>' +
+                    '<div class="form-group full-width"><button type="button" onclick="SOC.post()">Post announcement</button></div></div></div>' : '';
+                const list = announcements.slice().sort((a, b) => String(b.at).localeCompare(String(a.at)));
+                const live = this.live();
+                el.innerHTML = form + '<div class="section-header">Current announcements</div>' + (live.map(a => this.annCard(a, mine(a) ? '<div class="cw-decision"><button type="button" class="cw-btn-ghost" onclick="SOC.archive(\'' + escH(a.id) + '\')">Take down</button></div>' : '')).join('') || '<p style="color:var(--aw-muted)">No announcements right now.</p>') +
+                    (this.canPost() ? '<div class="section-header">Earlier / taken down</div>' + (list.filter(a => !live.includes(a) && mine(a)).slice(0, 15).map(a => this.annCard(a)).join('') || '<p style="color:var(--aw-muted)">None.</p>') : '');
+            },
+            post() {
+                const g = id => document.getElementById(id), title = g('an-title').value.trim(), body = g('an-body').value.trim();
+                const audience = Array.from(g('an-aud').selectedOptions).map(o => o.value);
+                if (!title || !body) { alert('Enter a title and a message.'); return; }
+                if (!audience.length) { alert('Choose who it is for.'); return; }
+                const me = this.me();
+                announcements.push({ id: uid('AN'), title, body, audience: audience.includes('all') ? ['all'] : audience, by: me.user, byName: me.name + ' (' + (ROLE_LABELS[currentRole] || currentRole) + ')', at: new Date().toISOString(), expires: g('an-exp').value || '', pinned: g('an-pin').checked, status: 'Published' });
+                addAudit((ROLE_LABELS[currentRole] || currentRole) + ' posted the announcement "' + title + '" to ' + this.audLabel(audience));
+                persistAll(); this.renderAnn(); DASH.render();
+            },
+            archive(id) {
+                const a = announcements.find(x => x.id === id); if (!a || !confirm('Take this announcement down?')) return;
+                a.status = 'Taken down'; addAudit('Announcement "' + a.title + '" taken down'); persistAll(); this.renderAnn(); DASH.render();
+            },
+
+            /* ---- birthdays & work anniversaries (next 7 days) ---- */
+            celebrations() {
+                const list = DASH.scope().filter(w => (w.status || 'Active') === 'Active'), now = new Date(), t0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()), out = [];
+                const next = md => { let d = new Date(t0.getFullYear(), md[0] - 1, md[1]); if (d < t0) d = new Date(t0.getFullYear() + 1, md[0] - 1, md[1]); return d; };
+                list.forEach(w => {
+                    if (/^\d{4}-\d{2}-\d{2}/.test(w.dob || '')) { const d = next([+w.dob.slice(5, 7), +w.dob.slice(8, 10)]), days = Math.round((d - t0) / 864e5); if (days <= 7) out.push({ w, kind: 'Birthday', days, d }); }
+                    if (/^\d{4}-\d{2}-\d{2}/.test(w.doj || '')) { const d = next([+w.doj.slice(5, 7), +w.doj.slice(8, 10)]), days = Math.round((d - t0) / 864e5), yrs = d.getFullYear() - +w.doj.slice(0, 4); if (days <= 7 && yrs >= 1) out.push({ w, kind: yrs + (yrs === 1 ? ' year' : ' years') + ' with us', days, d }); }
+                });
+                return out.sort((a, b) => a.days - b.days);
+            },
+            celebHtml() {
+                const c = this.celebrations(); if (!c.length) return '';
+                return '<div class="section-header">Birthdays &amp; work anniversaries — next 7 days</div><div class="cw-panel" style="margin-bottom:12px">' + c.slice(0, 12).map(x => '<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid var(--aw-line,#333)"><span>' + (x.kind === 'Birthday' ? '🎂' : '🎉') + ' <b>' + escH(x.w.name) + '</b> <span style="color:var(--aw-muted);font-size:11px">' + escH(x.w.empId) + ' · ' + escH(x.w.division || '') + '</span></span><span style="font-size:12px">' + escH(x.kind) + ' · <b style="color:var(--aw-gold)">' + (x.days === 0 ? 'Today' : x.days === 1 ? 'Tomorrow' : x.d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })) + '</b></span></div>').join('') + '</div>';
+            },
+
+            /* ---- tickets ---- */
+            depts() { return (ticketDepartments || []).filter(d => d && d.name); },
+            myQueues() { const u = this.me().user; return this.isHR() ? this.depts().map(d => d.name) : this.depts().filter(d => (d.handlers || []).includes(u)).map(d => d.name); },
+            isHandler(t) { return this.isHR() || this.myQueues().includes(t.toDept); },
+            overdue(t) { return this.OPEN(t.status) && t.dueDate && t.dueDate < this.today(); },
+            escalated(t) { if (!this.OPEN(t.status)) return false; if (t.escalated) return true; if (!t.dueDate) return false; return (new Date(this.today()) - new Date(t.dueDate)) / 864e5 >= 2; },
+            followDue(t) { return this.OPEN(t.status) && t.followUp && t.followUp <= this.today(); },
+            mine() { const u = this.me().user; return tickets.filter(t => t.raisedBy === u); },
+            queue() { const q = this.myQueues(); return tickets.filter(t => this.isHR() || q.includes(t.toDept)); },
+            stats() { const m = this.mine(), q = this.queue().filter(t => t.raisedBy !== this.me().user || this.isHR()); return { myOpen: m.filter(t => this.OPEN(t.status)).length, myFollow: m.filter(t => this.followDue(t)).length, qOpen: q.filter(t => this.OPEN(t.status)).length, qOver: q.filter(t => this.overdue(t)).length, qEsc: q.filter(t => this.escalated(t)).length, qFollow: q.filter(t => this.followDue(t)).length, handler: this.isHR() || this.myQueues().length > 0 }; },
+            badge(t) {
+                const cls = { Open: 'badge-pending', 'In Progress': 'badge-pending', 'Waiting for information': 'badge-neutral', Resolved: 'badge-active', Closed: 'badge-neutral', Reopened: 'badge-danger' }[t.status] || 'badge-neutral';
+                return '<span class="badge ' + cls + '">' + escH(t.status) + '</span>' + (this.escalated(t) ? ' <span class="badge badge-danger">Escalated</span>' : this.overdue(t) ? ' <span class="badge badge-danger">Overdue</span>' : '') + (this.followDue(t) ? ' <span class="badge badge-pending">Follow up</span>' : '');
+            },
+            setView(v) { this.view = v; this.open = null; this.render(); },
+            render() {
+                const tabs = document.getElementById('tk-tabs'), el = document.getElementById('tk-body'); if (!tabs || !el || !currentRole) return;
+                const s = this.stats(), views = [['mine', 'My tickets (' + s.myOpen + ' open)'], ['new', '+ Raise a ticket']].concat(s.handler ? [['queue', (this.isHR() ? 'All tickets' : 'My department queue') + ' (' + s.qOpen + ')']] : []).concat(this.isHR() ? [['depts', 'Departments & handlers']] : []);
+                if (!views.some(v => v[0] === this.view)) this.view = 'mine';
+                tabs.innerHTML = views.map(([k, l]) => '<button type="button" class="' + (this.view === k ? 'on' : '') + '" onclick="SOC.setView(\'' + k + '\')">' + l + '</button>').join('');
+                el.innerHTML = this['v_' + this.view]();
+            },
+            v_new() {
+                const due = this.addDays(3);
+                return '<div class="cw-panel"><div class="mini-form" style="grid-template-columns:repeat(2,1fr)">' +
+                    '<div class="form-group"><label>Department it is for</label><select id="tk-dept"><option value="">-- Select department --</option>' + this.depts().map(d => '<option>' + escH(d.name) + '</option>').join('') + '</select></div>' +
+                    '<div class="form-group"><label>Nature</label><select id="tk-nature">' + this.NATURE.map(n => '<option>' + n + '</option>').join('') + '</select></div>' +
+                    '<div class="form-group full-width"><label>Subject</label><input type="text" id="tk-subject" maxlength="140" placeholder="e.g. Safety shoes not issued to 3 new joiners"></div>' +
+                    '<div class="form-group full-width"><label>Details</label><textarea id="tk-details" rows="4"></textarea></div>' +
+                    '<div class="form-group"><label>Priority</label><select id="tk-priority"><option>Normal</option><option>High</option><option>Urgent</option></select></div>' +
+                    '<div class="form-group"><label>Resolve within (days)</label><input type="number" id="tk-days" min="0" max="90" value="3" oninput="document.getElementById(\'tk-due\').textContent=SOC.nice(SOC.addDays(this.value));document.getElementById(\'tk-follow\').value=SOC.addDays(this.value)"><div style="font-size:11px;color:var(--aw-muted)">Due by <b id="tk-due">' + this.nice(due) + '</b></div></div>' +
+                    '<div class="form-group"><label>Follow-up / reminder date</label><input type="date" id="tk-follow" value="' + due + '"></div>' +
+                    '<div class="form-group full-width"><button type="button" onclick="SOC.raise()">Raise ticket</button></div></div></div>';
+            },
+            raise() {
+                const g = id => document.getElementById(id), dept = g('tk-dept').value, subject = g('tk-subject').value.trim(), details = g('tk-details').value.trim(), days = Math.max(0, parseInt(g('tk-days').value || '0', 10));
+                if (!dept) { alert('Choose the department this ticket is for.'); return; }
+                if (!subject) { alert('Enter a subject.'); return; }
+                const me = this.me(), now = new Date().toISOString(), no = 'TK-' + Date.now().toString(36).toUpperCase().slice(-6);
+                const t = { id: no, no, raisedBy: me.user, raisedByName: me.name, raisedByRole: ROLE_LABELS[currentRole] || currentRole, division: currentDivision || '', contractor: currentRole === 'contractor' ? currentContractorName : '',
+                    toDept: dept, nature: g('tk-nature').value, subject, details, priority: g('tk-priority').value, dueDays: days, dueDate: this.addDays(days), followUp: g('tk-follow').value || this.addDays(days),
+                    status: 'Open', assignee: '', createdAt: now, updatedAt: now, escalated: false, history: [{ at: now, by: me.name, action: 'Raised to ' + dept }] };
+                tickets.push(t); addAudit(me.name + ' raised ticket ' + no + ' to ' + dept + ': ' + subject); persistAll();
+                this.view = 'mine'; this.open = t.id; this.render(); DASH.render();
+            },
+            table(list, empty) {
+                return '<div class="table-wrapper"><table><thead><tr><th>Ticket</th><th>Subject</th><th>Department</th><th>Raised by</th><th>Raised on</th><th>Due</th><th>Follow up</th><th>Status</th><th></th></tr></thead><tbody>' +
+                    (list.length ? list.map(t => '<tr' + (this.escalated(t) ? ' style="background:rgba(229,72,77,.08)"' : '') + '><td>' + escH(t.no) + '</td><td class="text-left">' + escH(t.subject) + '<div style="font-size:11px;color:var(--aw-muted)">' + escH(t.nature) + (t.priority !== 'Normal' ? ' · <b>' + escH(t.priority) + '</b>' : '') + '</div></td><td>' + escH(t.toDept) + '</td><td>' + escH(t.raisedByName) + '<div style="font-size:11px;color:var(--aw-muted)">' + escH(t.raisedByRole || '') + '</div></td><td>' + this.nice(t.createdAt) + '</td><td>' + this.nice(t.dueDate) + '</td><td>' + this.nice(t.followUp) + '</td><td>' + this.badge(t) + '</td><td><button type="button" class="action-btn edit" onclick="SOC.show(\'' + escH(t.id) + '\')">Open</button></td></tr>').join('')
+                        : '<tr><td colspan="9">' + (empty || 'No tickets.') + '</td></tr>') + '</tbody></table></div>';
+            },
+            sortT(list) { return list.slice().sort((a, b) => (this.escalated(b) - this.escalated(a)) || (this.overdue(b) - this.overdue(a)) || (this.OPEN(b.status) - this.OPEN(a.status)) || String(b.createdAt).localeCompare(String(a.createdAt))); },
+            v_mine() {
+                const m = this.sortT(this.mine()), s = this.stats();
+                return DASH.grid([DASH.card(s.myOpen, 'Open'), DASH.card(m.filter(t => this.overdue(t)).length, 'Overdue'), DASH.card(s.myFollow, 'Follow-ups due'), DASH.card(m.filter(t => !this.OPEN(t.status)).length, 'Completed')]) +
+                    '<div id="tk-detail"></div>' + this.table(m, 'You have not raised any tickets yet. Use <b>+ Raise a ticket</b>.') + this.reopenDetail();
+            },
+            qFilter: 'open',
+            v_queue() {
+                const all = this.queue(), f = this.qFilter, s = this.stats();
+                const list = this.sortT(all.filter(t => f === 'all' ? true : f === 'open' ? this.OPEN(t.status) : f === 'overdue' ? this.overdue(t) : f === 'escalated' ? this.escalated(t) : f === 'follow' ? this.followDue(t) : !this.OPEN(t.status)));
+                const btn = (k, l) => '<button type="button" class="' + (f === k ? 'on' : '') + '" onclick="SOC.qFilter=\'' + k + '\';SOC.render()">' + l + '</button>';
+                return DASH.grid([DASH.card(s.qOpen, 'Open'), DASH.card(s.qOver, 'Overdue'), DASH.card(s.qEsc, 'Escalated'), DASH.card(s.qFollow, 'Follow-ups due today')]) +
+                    '<div style="font-size:12px;color:var(--aw-muted);margin:4px 0 8px">' + (this.isHR() ? 'HR sees every department\'s tickets.' : 'Departments you handle: <b>' + escH(this.myQueues().join(', ')) + '</b>') + '</div>' +
+                    '<div class="cw-filter">' + btn('open', 'Open') + btn('overdue', 'Overdue') + btn('escalated', 'Escalated') + btn('follow', 'Follow up') + btn('done', 'Resolved / closed') + btn('all', 'All') + '</div>' +
+                    '<div id="tk-detail"></div>' + this.table(list, 'Nothing here.') + this.reopenDetail();
+            },
+            reopenDetail() { if (this.open) setTimeout(() => this.show(this.open, true), 0); return ''; },
+            show(id, quiet) {
+                const t = tickets.find(x => x.id === id), el = document.getElementById('tk-detail'); if (!t || !el) return;
+                this.open = id;
+                const me = this.me(), raiser = t.raisedBy === me.user, handler = this.isHandler(t), f = (l, v) => '<div><span>' + l + '</span>' + escH(v || '-') + '</div>';
+                const hist = (t.history || []).slice().reverse().map(h => '<li><b>' + escH(h.action) + '</b> · ' + escH(h.by) + ' · ' + new Date(h.at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + (h.note ? '<div style="white-space:pre-wrap">' + escH(h.note) + '</div>' : '') + '</li>').join('');
+                let act = '<div class="form-group" style="flex:1;min-width:220px"><label>Note / reply</label><input type="text" id="tk-note" placeholder="Add a note"></div>';
+                if (handler && this.OPEN(t.status)) act += '<div class="form-group"><label>Status</label><select id="tk-status">' + ['Open', 'In Progress', 'Waiting for information', 'Resolved'].map(s => '<option' + (s === t.status ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></div>' +
+                    '<div class="form-group"><label>Assigned to</label><input type="text" id="tk-assignee" value="' + escH(t.assignee || '') + '" placeholder="Name"></div>' +
+                    '<div class="form-group"><label>Follow-up date</label><input type="date" id="tk-follow2" value="' + escH(t.followUp || '') + '"></div>' +
+                    '<div class="form-group"><label>Move to department</label><select id="tk-move"><option value="">— keep —</option>' + this.depts().filter(d => d.name !== t.toDept).map(d => '<option>' + escH(d.name) + '</option>').join('') + '</select></div>' +
+                    '<button type="button" onclick="SOC.update(\'' + escH(t.id) + '\')">Save</button>';
+                else if (raiser && this.OPEN(t.status)) act += '<div class="form-group"><label>Follow-up date</label><input type="date" id="tk-follow2" value="' + escH(t.followUp || '') + '"></div><button type="button" onclick="SOC.update(\'' + escH(t.id) + '\')">Add note</button>' +
+                    (!t.escalated ? '<button type="button" class="cw-btn-ghost" onclick="SOC.escalate(\'' + escH(t.id) + '\')">Escalate to HR</button>' : '') + '<button type="button" class="cw-btn-ghost" onclick="SOC.setStatus(\'' + escH(t.id) + '\',\'Closed\')">Withdraw / close</button>';
+                if (!this.OPEN(t.status) && (raiser || handler)) act += (t.status === 'Resolved' && raiser ? '<button type="button" onclick="SOC.setStatus(\'' + escH(t.id) + '\',\'Closed\')">Confirm and close</button>' : '') + '<button type="button" class="cw-btn-ghost" onclick="SOC.setStatus(\'' + escH(t.id) + '\',\'Reopened\')">Reopen</button>';
+                el.innerHTML = '<div class="cw-panel" style="margin:6px 0 14px"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center"><b style="color:var(--aw-gold)">' + escH(t.no + ' · ' + t.subject) + '</b><span>' + this.badge(t) + ' <button type="button" class="cw-btn-ghost" onclick="SOC.open=null;document.getElementById(\'tk-detail\').innerHTML=\'\'">Close</button></span></div>' +
+                    '<div class="cw-detail-grid">' + f('Department', t.toDept) + f('Nature', t.nature) + f('Priority', t.priority) + f('Raised by', t.raisedByName + ' · ' + (t.raisedByRole || '')) + f('Raised on', this.nice(t.createdAt)) + f('Resolve within', (t.dueDays != null ? t.dueDays + ' days · ' : '') + 'due ' + this.nice(t.dueDate)) + f('Follow-up / reminder', this.nice(t.followUp)) + f('Assigned to', t.assignee) + (t.division ? f('Division', t.division) : '') + (t.contractor ? f('Contractor', t.contractor) : '') + '</div>' +
+                    (t.details ? '<div style="white-space:pre-wrap;margin:4px 0 10px;font-size:13px">' + escH(t.details) + '</div>' : '') +
+                    '<div class="cw-decision">' + act + '</div><div class="section-header" style="margin-top:12px">History</div><ul style="font-size:12px;margin:0;padding-left:18px">' + hist + '</ul></div>';
+                if (!quiet) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            },
+            log(t, action, note) { const now = new Date().toISOString(); t.history = (t.history || []).concat([{ at: now, by: this.me().name, action, note: note || '' }]); t.updatedAt = now; },
+            update(id) {
+                const t = tickets.find(x => x.id === id); if (!t) return;
+                const g = k => document.getElementById(k), note = (g('tk-note') || {}).value || '', changes = [];
+                if (g('tk-status') && g('tk-status').value !== t.status) { t.status = g('tk-status').value; changes.push('Status → ' + t.status); if (t.status === 'Resolved') t.resolvedAt = new Date().toISOString(); }
+                if (g('tk-assignee') && g('tk-assignee').value.trim() !== (t.assignee || '')) { t.assignee = g('tk-assignee').value.trim(); changes.push('Assigned to ' + (t.assignee || 'nobody')); }
+                if (g('tk-follow2') && g('tk-follow2').value !== (t.followUp || '')) { t.followUp = g('tk-follow2').value; changes.push('Follow-up ' + this.nice(t.followUp)); }
+                if (g('tk-move') && g('tk-move').value) { changes.push('Moved from ' + t.toDept + ' to ' + g('tk-move').value); t.toDept = g('tk-move').value; }
+                if (!changes.length && !note.trim()) { alert('Nothing to save: add a note or change something.'); return; }
+                this.log(t, changes.join(' · ') || 'Note', note.trim()); persistAll(); this.render(); DASH.render();
+            },
+            setStatus(id, st) {
+                const t = tickets.find(x => x.id === id); if (!t) return;
+                if (st === 'Reopened' && !confirm('Reopen this ticket?')) return;
+                t.status = st; if (st === 'Reopened') { t.escalated = false; t.dueDate = this.addDays(t.dueDays || 3); }
+                this.log(t, st === 'Closed' ? 'Closed' : st); persistAll(); this.render(); DASH.render();
+            },
+            escalate(id) {
+                const t = tickets.find(x => x.id === id); if (!t) return;
+                const why = prompt('Escalate to HR — why? (e.g. no response after the due date)'); if (why === null) return;
+                t.escalated = true; t.escalatedAt = new Date().toISOString(); this.log(t, 'Escalated to HR', why); persistAll(); this.render(); DASH.render();
+            },
+            v_depts() {
+                return '<p style="color:var(--aw-muted);font-size:12px">Each department\'s <b>handlers</b> (user IDs from the Admin Portal, comma separated) see and work its tickets. HR sees every ticket, so departments without handlers still reach HR.</p>' +
+                    '<div class="table-wrapper"><table><thead><tr><th>Department</th><th>Handlers (user IDs)</th><th></th></tr></thead><tbody>' +
+                    this.depts().map((d, i) => '<tr><td><input type="text" id="td-name-' + i + '" value="' + escH(d.name) + '"></td><td><input type="text" style="min-width:280px" id="td-h-' + i + '" value="' + escH((d.handlers || []).join(', ')) + '"></td><td><button type="button" class="action-btn delete" onclick="SOC.delDept(' + i + ')">Remove</button></td></tr>').join('') +
+                    '</tbody></table></div><div class="cw-decision"><button type="button" onclick="SOC.saveDepts()">Save departments</button><button type="button" class="cw-btn-ghost" onclick="SOC.addDept()">+ Add department</button></div>';
+            },
+            readDepts() { return this.depts().map((d, i) => ({ name: document.getElementById('td-name-' + i).value.trim(), handlers: document.getElementById('td-h-' + i).value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) })); },
+            saveDepts() { const l = this.readDepts(); if (l.some(d => !d.name)) { alert('Every department needs a name.'); return; } if (new Set(l.map(d => d.name.toLowerCase())).size !== l.length) { alert('Two departments have the same name.'); return; } ticketDepartments = l; addAudit('HR updated ticket departments and handlers'); persistAll(); this.render(); },
+            addDept() { ticketDepartments = this.readDepts().concat([{ name: 'New department', handlers: [] }]); this.render(); },
+            delDept(i) { if (!confirm('Remove this department? Its existing tickets stay with HR.')) return; const l = this.readDepts(); l.splice(i, 1); ticketDepartments = l; this.render(); },
+
+            /* ---- dashboard strip: announcements, celebrations, tickets ---- */
+            dashTop() {
+                const live = this.live().slice(0, 3), s = this.stats();
+                const ann = live.length ? '<div class="section-header">Announcements</div>' + live.map(a => this.annCard(a)).join('') + (this.live().length > 3 ? '<p style="font-size:12px"><a href="#announcements" onclick="document.querySelector(\'nav a[href=&quot;#announcements&quot;]\').click();return false;">See all announcements</a></p>' : '') : '';
+                const tk = '<div class="section-header">Tickets &amp; reminders</div>' + DASH.grid([DASH.card(s.myOpen, 'My open tickets', s.myFollow ? s.myFollow + ' follow-up due' : '')].concat(s.handler ? [DASH.card(s.qOpen, this.isHR() ? 'Open tickets (all)' : 'Open in my department'), DASH.card(s.qOver, 'Overdue'), DASH.card(s.qEsc, 'Escalated')] : []));
+                return ann + this.celebHtml() + tk;
+            }
+        };
+        // ticket departments travel with the shared settings (only HR can change them; the database refuses others)
+        const settingsNowSoc = SYNC.settingsNow, applySettingsSoc = SYNC.applySettings;
+        SYNC.settingsNow = function () { return Object.assign(settingsNowSoc(), { ticketDepartments }); };
+        SYNC.applySettings = function (s) { applySettingsSoc(s); if (Array.isArray(s.ticketDepartments) && s.ticketDepartments.length) ticketDepartments = s.ticketDepartments; };
+        const switchTabSoc = switchTab;
+        switchTab = function (id) { switchTabSoc(id); if (id === 'announcements') SOC.renderAnn(); if (id === 'tickets') SOC.render(); };
+        const syncRerenderSoc = SYNC.rerender.bind(SYNC);
+        SYNC.rerender = function () {
+            syncRerenderSoc();
+            // refresh the open tab, but never while someone is typing in it
+            const a = document.activeElement, typing = a && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && a.closest('#tickets,#announcements');
+            if (!typing) { try { SOC.renderAnn(); SOC.render(); } catch (e) { console.warn(e); } }
+        };
         Object.keys(ROLE_DEFAULT_TAB).forEach(k => { ROLE_DEFAULT_TAB[k] = 'dashboard'; });   // everyone lands on their dashboard
         const applyRolePermissionsDash = applyRolePermissions;
         applyRolePermissions = function () { try { applyRolePermissionsDash(); } finally { DASH.render(); } };
