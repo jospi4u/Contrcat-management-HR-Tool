@@ -740,7 +740,7 @@
     <div class="container">
         <nav>
             <ul>
-                <li data-roles="hr_admin,contractor"><a href="#master" class="nav-link active" onclick="switchTab('master')">Workers Master Data</a></li>
+                <li data-roles="hr_admin,contractor,gm_production"><a href="#master" class="nav-link active" onclick="switchTab('master')">Workers Master Data</a></li>
                 <li data-roles="hr_admin,production_manager,supervisor"><a href="#requisition-form" class="nav-link" onclick="switchTab('requisition-form')">Hiring Requisition Form</a></li>
                 <li data-roles="hr_admin,production_manager,supervisor,contractor,gm_production"><a href="#requisition-tracker" class="nav-link" onclick="switchTab('requisition-tracker')">Requisition Tracker</a></li>
                 <li data-roles="hr_admin,production_manager,supervisor"><a href="#manpower" class="nav-link" onclick="switchTab('manpower')">Manpower Planning</a></li>
@@ -3231,6 +3231,9 @@
             }
             if (me.role === 'production_manager' || me.role === 'supervisor') {
                 document.getElementById('division-select').value = me.division;
+                // a login whose name is a job title (HOD, Admin Manager, Asset Manager…) shows that title
+                // everywhere the role name appears: header badge, approvals, audit trail
+                if (me.name && /^(HOD|Admin HOD|Admin Manager|Asset Manager|Production Manager|Supervisor|[A-Za-z &]{2,30} (HOD|Manager|Supervisor))$/.test(me.name.trim())) ROLE_LABELS[me.role] = me.name.trim();
             }
             login();
             const badge = document.getElementById('role-badge');
@@ -4353,6 +4356,87 @@
             if (reason && !reason.value.trim()) reason.value = 'Replacement for ' + d.name + ' (' + d.empId + ') — ' + (d.exitStatus || d.status) + (d.lwd ? ', last working day ' + d.lwd : '') + (d.exitReason ? ': ' + d.exitReason : '');
         };
         REQX.fill();
+
+        /* ---------- GM Production: complete Employee Master, read-only ----------
+           All divisions and contractors, with filters, a full details view per worker and a CSV download.
+           GM cannot add, edit or delete workers (the database refuses it too). */
+        const GMX = {
+            f: { q: '', division: '', contractor: '', status: '' },
+            LABELS: [['empId', 'Emp ID'], ['name', 'Name'], ['status', 'Status'], ['contractor', 'Contractor'], ['division', 'Division'], ['location', 'Location'],
+                ['designation', 'Designation'], ['department', 'Department'], ['section', 'Section'], ['skill', 'Skill grade'], ['shift', 'Shift'], ['doj', 'Date of joining'],
+                ['expYr', 'Experience (years)'], ['expMo', 'Experience (months)'], ['mobile', 'Mobile'], ['emergency', 'Emergency contact'], ['email', 'Email'],
+                ['dob', 'Date of birth'], ['age', 'Age'], ['state', 'State'], ['permAddr', 'Permanent address'], ['presAddr', 'Present address'],
+                ['aadhar', 'Aadhaar'], ['pan', 'PAN'], ['uan', 'UAN'], ['esi', 'ESIC no.'], ['bankName', 'Bank'], ['bankAccount', 'Bank account'], ['ifsc', 'IFSC'],
+                ['nominee', 'Nominee'], ['family', 'Family details'], ['ppeDate', 'PPE issued on'], ['basicDa', 'Basic + DA'], ['hra', 'HRA'], ['gross', 'Fixed gross']],
+            isGM() { return currentRole === 'gm_production'; },
+            mask(k, v) { v = String(v == null ? '' : v); const d = v.replace(/\D/g, ''); return (k === 'aadhar' || k === 'bankAccount') && d.length > 4 ? 'XXXX XXXX ' + d.slice(-4) : v; },
+            list() {
+                const f = this.f, q = f.q.trim().toLowerCase();
+                return workers.filter(w => (!f.division || w.division === f.division) && (!f.contractor || w.contractor === f.contractor) &&
+                    (!f.status || (f.status === 'Left' ? !['Active', 'Onboarding'].includes(w.status || 'Active') : (w.status || 'Active') === f.status)) &&
+                    (!q || [w.empId, w.name, w.designation, w.department, w.mobile].some(x => String(x || '').toLowerCase().includes(q))));
+            },
+            bar() {
+                let el = document.getElementById('gm-master-bar');
+                if (!el) {
+                    el = document.createElement('div'); el.id = 'gm-master-bar';
+                    const hdr = document.getElementById('master-filter-label').closest('.section-header'); hdr.parentNode.insertBefore(el, hdr);
+                }
+                const uniq = k => Array.from(new Set(workers.map(w => w[k]).filter(Boolean))).sort();
+                const opt = (vals, cur, all) => '<option value="">' + all + '</option>' + vals.map(v => '<option' + (v === cur ? ' selected' : '') + '>' + escH(v) + '</option>').join('');
+                const all = workers, act = all.filter(w => (w.status || 'Active') === 'Active').length, onb = all.filter(w => w.status === 'Onboarding').length;
+                el.innerHTML = '<div class="access-note">Complete Employee Master — every division and contractor, read-only. Contact HR to change a record.</div>' +
+                    '<div class="cw-decision" style="flex-wrap:wrap">' +
+                    '<div class="form-group" style="flex:1;min-width:180px"><label>Search</label><input type="text" id="gm-q" placeholder="Name, Emp ID, designation, mobile" value="' + escH(this.f.q) + '" oninput="GMX.f.q=this.value;GMX.table()"></div>' +
+                    '<div class="form-group"><label>Division</label><select onchange="GMX.f.division=this.value;GMX.table()">' + opt(uniq('division'), this.f.division, 'All divisions') + '</select></div>' +
+                    '<div class="form-group"><label>Contractor</label><select onchange="GMX.f.contractor=this.value;GMX.table()">' + opt(uniq('contractor'), this.f.contractor, 'All contractors') + '</select></div>' +
+                    '<div class="form-group"><label>Status</label><select onchange="GMX.f.status=this.value;GMX.table()">' + opt(['Active', 'Onboarding', 'Left'], this.f.status, 'All') + '</select></div>' +
+                    '<button type="button" class="cw-btn-ghost" onclick="GMX.csv()">Download CSV</button></div>' +
+                    '<div style="font-size:12px;color:var(--aw-muted);margin:4px 0 8px">' + all.length + ' workers · ' + act + ' active · ' + onb + ' onboarding · ' + (all.length - act - onb) + ' left</div>' +
+                    '<div id="gm-worker-detail"></div>';
+            },
+            table() {
+                const tbody = document.getElementById('workers-table-body'), list = this.list();
+                document.getElementById('master-actions-col').style.display = '';
+                document.getElementById('master-actions-col').textContent = 'Details';
+                document.getElementById('master-filter-label').textContent = ' — ' + list.length + ' shown';
+                tbody.innerHTML = list.length ? list.map(w => '<tr><td>' + escH(w.empId) + '</td><td class="text-left">' + escH(w.name) + '</td><td>' + escH(w.contractor) + '</td><td>' + escH(w.division || '-') + '</td><td>' + escH(w.location || '-') +
+                    '</td><td>' + escH(w.designation || '-') + '</td><td>' + escH(w.department || '-') + '</td><td>' + escH(w.skill || '-') + '</td><td>' + escH(w.doj || '-') + '</td><td>' + escH(w.mobile || '-') +
+                    '</td><td>' + statusBadge(w.status || 'Active') + '</td><td>' + (w.gross ? '₹' + Number(w.gross).toLocaleString('en-IN') : '-') +
+                    '</td><td><button type="button" class="action-btn edit" onclick="GMX.show(\'' + escH(String(w.empId).replace(/'/g, '')) + '\')">View</button></td></tr>').join('')
+                    : '<tr><td colspan="13">No workers match these filters.</td></tr>';
+            },
+            show(empId) {
+                const w = workers.find(x => String(x.empId).replace(/'/g, '') === empId), el = document.getElementById('gm-worker-detail'); if (!w || !el) return;
+                const known = new Set(this.LABELS.map(l => l[0]));
+                const rows = this.LABELS.filter(([k]) => w[k] !== undefined && w[k] !== '').map(([k, l]) => [l, k === 'gross' || k === 'basicDa' || k === 'hra' ? '₹ ' + Number(w[k]).toLocaleString('en-IN') : this.mask(k, w[k])])
+                    .concat(Object.keys(w).filter(k => !known.has(k) && w[k] !== '' && w[k] != null && typeof w[k] !== 'object').map(k => [k, String(w[k])]));
+                const ex = resignations.filter(r => r.empId === w.empId).slice(-1)[0];
+                if (ex) rows.push(['Exit', [ex.finalStatus || ex.status, ex.type, ex.lwd ? 'LWD ' + ex.lwd : '', ex.reason].filter(Boolean).join(' · ')]);
+                el.innerHTML = '<div class="cw-panel" style="margin:8px 0 14px"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><b style="color:var(--aw-gold)">' + escH(w.name) + ' · ' + escH(w.empId) + '</b>' +
+                    '<button type="button" class="cw-btn-ghost" onclick="document.getElementById(\'gm-worker-detail\').innerHTML=\'\'">Close</button></div>' +
+                    '<div class="cw-detail-grid">' + rows.map(([l, v]) => '<div><span>' + escH(l) + '</span>' + escH(v) + '</div>').join('') + '</div></div>';
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            },
+            csv() {
+                const cols = this.LABELS, cell = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+                const lines = [cols.map(c => cell(c[1])).join(',')].concat(this.list().map(w => cols.map(([k]) => cell(this.mask(k, w[k]))).join(',')));
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv' }));
+                a.download = 'Employee Master ' + new Date().toISOString().slice(0, 10) + '.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+            }
+        };
+        const renderWorkersTableGm = renderWorkersTable;
+        renderWorkersTable = function () {
+            const bar = document.getElementById('gm-master-bar');
+            if (!GMX.isGM()) { if (bar) bar.style.display = 'none'; const h = document.getElementById('master-actions-col'); if (h) h.textContent = 'Actions'; return renderWorkersTableGm(); }
+            GMX.bar(); document.getElementById('gm-master-bar').style.display = ''; GMX.table();
+        };
+        const applyRolePermissionsGm = applyRolePermissions;
+        applyRolePermissions = function () {
+            applyRolePermissionsGm();
+            if (GMX.isGM()) { const h = document.querySelector('#master h2'); if (h) h.textContent = 'Employee Master (all divisions)'; }
+        };
 
         /* ---------- install as a phone / desktop app ---------- */
         if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
