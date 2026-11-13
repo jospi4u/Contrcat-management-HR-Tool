@@ -740,9 +740,11 @@
     <div class="container">
         <nav>
             <ul>
-                <li data-roles="hr_admin,gm_production,production_manager,supervisor,contractor"><a href="#dashboard" class="nav-link" onclick="switchTab('dashboard')">Dashboard</a></li>
-                <li data-roles="hr_admin,gm_production,production_manager,supervisor,contractor"><a href="#announcements" class="nav-link" onclick="switchTab('announcements')">Announcements</a></li>
-                <li data-roles="hr_admin,gm_production,production_manager,supervisor,contractor"><a href="#tickets" class="nav-link" onclick="switchTab('tickets')">Tickets &amp; Reminders</a></li>
+                <li data-roles="hr_admin,gm_production,production_manager,supervisor,contractor,store"><a href="#dashboard" class="nav-link" onclick="switchTab('dashboard')">Dashboard</a></li>
+                <li data-roles="hr_admin,gm_production,production_manager,supervisor,contractor,store"><a href="#announcements" class="nav-link" onclick="switchTab('announcements')">Announcements</a></li>
+                <li data-roles="hr_admin,gm_production,production_manager,supervisor,contractor,store"><a href="#tickets" class="nav-link" onclick="switchTab('tickets')">Tickets &amp; Reminders</a></li>
+                <li data-roles="hr_admin,contractor"><a href="#onboarding" class="nav-link" onclick="switchTab('onboarding')">Onboarding &amp; Induction</a></li>
+                <li data-roles="hr_admin,store,production_manager" id="nav-ppe"><a href="#ppe" class="nav-link" onclick="switchTab('ppe')">PPE &amp; Store</a></li>
                 <li data-roles="hr_admin,contractor,gm_production"><a href="#master" class="nav-link active" onclick="switchTab('master')">Workers Master Data</a></li>
                 <li data-roles="hr_admin,production_manager,supervisor"><a href="#requisition-form" class="nav-link" onclick="switchTab('requisition-form')">Hiring Requisition Form</a></li>
                 <li data-roles="hr_admin,production_manager,supervisor,contractor,gm_production"><a href="#requisition-tracker" class="nav-link" onclick="switchTab('requisition-tracker')">Requisition Tracker</a></li>
@@ -769,6 +771,20 @@
             <div id="announcements" class="tab-content">
                 <h2>Announcements</h2>
                 <div id="ann-body"></div>
+            </div>
+
+            <!-- ONBOARDING & INDUCTION: contractor confirms joining; HR verifies, activates (payroll), runs the induction checklist -->
+            <div id="onboarding" class="tab-content">
+                <h2>Onboarding &amp; Induction</h2>
+                <div id="onb-tabs" class="cw-filter"></div>
+                <div id="onb-body"></div>
+            </div>
+
+            <!-- PPE & STORE: Admin confirms PPE needs, Store issues and keeps stock; history per employee -->
+            <div id="ppe" class="tab-content">
+                <h2>PPE &amp; Store</h2>
+                <div id="ppe-tabs" class="cw-filter"></div>
+                <div id="ppe-body"></div>
             </div>
 
             <!-- TICKETS & REMINDERS: anyone raises a ticket to a department; the department works on it -->
@@ -1135,6 +1151,15 @@
                             </div>
                             <span class="cw-drop-list" id="cf-list-education"></span>
                         </div>
+                        <div class="cw-drop">
+                            <span class="cw-drop-title">Additional documents</span>
+                            <span class="cw-drop-sub">Experience letters, photo, bank passbook… (optional)</span>
+                            <div class="cw-pick">
+                                <label class="cw-pick-btn cw-camera">📷 Take photo<input type="file" accept="image/*" capture="environment" onchange="RECRUIT.addFiles('other', this)"></label>
+                                <label class="cw-pick-btn">Upload file<input type="file" id="cf-doc-other" accept="image/*,application/pdf,.docx" multiple onchange="RECRUIT.addFiles('other', this)"></label>
+                            </div>
+                            <span class="cw-drop-list" id="cf-list-other"></span>
+                        </div>
                     </div>
                     <p class="cw-hint">On a phone, <b>Take photo</b> opens the camera. Lay the document flat in good light and fill the frame. Take one photo per page.</p>
                     <div id="cf-read-status" class="cw-read-status"></div>
@@ -1165,6 +1190,8 @@
                         </div>
                         <div class="form-group full-width"><label>Key Skills (from CV)</label><input type="text" id="cf-skills"></div>
                         <div class="form-group full-width"><label>Remarks for HR</label><input type="text" id="cf-remarks"></div>
+                        <div class="form-group full-width"><label>Your interview comments (how the candidate did in your screening) *</label><textarea id="cf-intcomments" rows="2" placeholder="e.g. Handled glass cutting test well, 3 years at a tempering unit, can join in a week"></textarea></div>
+                        <div class="form-group full-width"><label style="font-weight:normal;text-transform:none;letter-spacing:0"><input type="checkbox" id="cf-suitable" style="width:auto"> I confirm this candidate is suitable for <b id="cf-suitable-pos">this position</b> and the details above are correct.</label></div>
                     </div>
                     <button type="button" id="cf-submit-btn" onclick="RECRUIT.submit()">Submit Candidate to HR</button>
                     <button type="button" style="background:#64748b;" onclick="closeCandidateForm()">Cancel</button>
@@ -3469,7 +3496,7 @@
         const todayStr = () => new Date().toISOString().slice(0, 10);
 
         const RECRUIT = {
-            files: { aadhaar: [], cv: [], education: [] },   // {file, name, mime, status, text, docId}
+            files: { aadhaar: [], cv: [], education: [], other: [] },   // {file, name, mime, status, text, docId}
             editingId: null, auto: {}, filter: 'action',
 
             /* ---------- helpers ---------- */
@@ -3632,6 +3659,7 @@
                     const entry = { file, name: file.name, mime: file.type || 'application/octet-stream', status: 'Reading…' };
                     if (kind === 'cv') this.files.cv = [];
                     this.files[kind].push(entry); this.renderFiles(kind);
+                    if (kind === 'other') { entry.status = 'Read'; this.renderFiles(kind); continue; }   // supporting documents are stored, not read
                     this.status('Reading ' + file.name + '… (photos take 10–30 seconds)');
                     try {
                         entry.text = await this.readFile(file);
@@ -3652,8 +3680,8 @@
             clearForm() {
                 ['cf-name', 'cf-gender', 'cf-dob', 'cf-age', 'cf-mobile', 'cf-email', 'cf-aadhaar', 'cf-pincode', 'cf-address', 'cf-state', 'cf-education',
                  'cf-board', 'cf-passyear', 'cf-experience', 'cf-skills', 'cf-remarks'].forEach(id => { const el = document.getElementById(id); el.value = ''; el.classList.remove('cw-autofilled'); });
-                this.files = { aadhaar: [], cv: [], education: [] }; this.auto = {}; this.editingId = null;
-                ['aadhaar', 'cv', 'education'].forEach(k => this.renderFiles(k)); this.status('');
+                this.files = { aadhaar: [], cv: [], education: [], other: [] }; this.auto = {}; this.editingId = null;
+                ['aadhaar', 'cv', 'education', 'other'].forEach(k => this.renderFiles(k)); this.status(''); ['cf-intcomments'].forEach(i => { const e = document.getElementById(i); if (e) e.value = ''; }); const sb = document.getElementById('cf-suitable'); if (sb) sb.checked = false;
             },
             open(reqId, cand) {
                 if (currentRole !== 'contractor') return;
@@ -3662,6 +3690,7 @@
                 const req = requisitions.find(r => r.id === reqId);
                 document.getElementById('cf-req-id').textContent = reqId + (req ? ' — ' + req.position + ' (' + req.division + ')' : '');
                 if (req) document.getElementById('cf-skill').value = req.skill;
+                document.getElementById('cf-suitable-pos').textContent = req ? req.position + ' (' + req.division + ', ' + req.skill + ')' : 'this position';
                 if (cand) {   // resubmitting a candidate HR sent back
                     this.editingId = cand.id;
                     const set = (id, v) => { document.getElementById(id).value = v == null ? '' : v; };
@@ -3670,7 +3699,7 @@
                     set('cf-education', cand.education); set('cf-board', cand.board); set('cf-passyear', cand.passYear); set('cf-experience', cand.experience);
                     set('cf-skills', cand.skills); set('cf-skill', cand.skill); set('cf-remarks', cand.remarks);
                     (cand.docs || []).forEach(d => this.files[d.kind] && this.files[d.kind].push({ name: d.name, mime: d.mime, status: 'Saved', docId: d.id }));
-                    ['aadhaar', 'cv', 'education'].forEach(k => this.renderFiles(k)); this.updateAge();
+                    ['aadhaar', 'cv', 'education', 'other'].forEach(k => this.renderFiles(k)); this.updateAge(); set('cf-intcomments', (cand.contractorInterview || {}).comments);
                     this.status(cand.hrRemarks ? 'HR asked for: ' + cand.hrRemarks : '');
                 }
                 const w = document.getElementById('candidate-form-wrapper'); w.style.display = 'block'; w.scrollIntoView({ behavior: 'smooth' });
@@ -3698,14 +3727,16 @@
                 if (!/^\d{10}$/.test(v('cf-mobile').replace(/\D/g, '').slice(-10))) missing.push('a 10-digit mobile number');
                 if (!v('cf-education')) missing.push('highest qualification');
                 ['aadhaar', 'cv', 'education'].forEach(k => { if (!this.files[k].length) missing.push(k === 'aadhaar' ? 'Aadhaar card' : k === 'cv' ? 'CV' : 'education certificate'); });
+                if (!v('cf-intcomments')) missing.push('your interview comments');
                 if (missing.length) { alert('Please add: ' + missing.join(', ') + '.'); return; }
+                if (!document.getElementById('cf-suitable').checked) { alert('Please tick the box to confirm the candidate is suitable for this position.'); return; }
                 if (!this.allRead()) { alert('Please wait until all documents have been read.'); return; }
                 if (!SYNC.on) { alert('Documents can only be submitted while the shared database is connected. Please try again in a moment.'); return; }
                 const btn = document.getElementById('cf-submit-btn'); btn.disabled = true; btn.textContent = 'Uploading documents…';
                 const id = this.editingId || uid('CD');
                 try {
                     const docs = [];
-                    for (const kind of ['aadhaar', 'cv', 'education']) {
+                    for (const kind of ['aadhaar', 'cv', 'education', 'other']) {
                         for (const f of this.files[kind]) {
                             if (!f.docId) {
                                 const data = await this.toBase64(f), docId = uid('DOC');
@@ -3727,7 +3758,9 @@
                         education: v('cf-education'), board: v('cf-board'), passYear: v('cf-passyear'),
                         experience: v('cf-experience'), skills: v('cf-skills'), skill: v('cf-skill'), remarks: v('cf-remarks'),
                         docs, submittedOn: (prev && prev.submittedOn) || todayStr(),
-                        autoFilled: { fields: Object.keys(this.auto).length, docs: docs.length }
+                        autoFilled: { fields: Object.keys(this.auto).length, docs: docs.length },
+                        contractorInterview: { comments: v('cf-intcomments'), by: currentContractorName, at: new Date().toISOString() },
+                        contractorConfirmed: true, stageAt: new Date().toISOString()
                     });
                     rec.history = ((prev && prev.history) || []).concat([{ at: new Date().toLocaleString(), by: currentContractorName, what: prev ? 'Resubmitted to HR' : 'Submitted to HR' }]);
                     if (prev) Object.assign(prev, rec); else candidates.push(rec);
@@ -3753,7 +3786,7 @@
                 } catch (e) { if (w) w.close(); alert('This document could not be opened. You may not have access to it.'); }
             },
             docButtons(c) {
-                const label = { aadhaar: 'Aadhaar', cv: 'CV', education: 'Certificate', other: 'Document' };
+                const label = { aadhaar: 'Aadhaar', cv: 'CV', education: 'Certificate', other: 'Other doc' };
                 return (c.docs || []).map(d => '<button type="button" class="action-btn cw-doc-btn" onclick="RECRUIT.openDoc(\'' + d.id + '\')" title="' + escH(d.name) + '">' + label[d.kind] + '</button>').join(' ') || '-';
             },
 
@@ -4881,6 +4914,526 @@
         SYNC.rerender = function () { try { syncRerenderDash(); } finally { DASH.render(); } };
         const switchTabDash = switchTab;
         switchTab = function (id) { switchTabDash(id); if (id === 'dashboard') DASH.render(); };
+
+        /* =====================================================================
+           RECRUITMENT PIPELINE · ONBOARDING · INDUCTION · PPE · NOTIFICATIONS
+           One candidate record from submission to joining (its id stays as candidateId on the employee):
+           Submitted → HR Interview Scheduled → Supervisor Interview → PM Review → HR Officer Verification
+           → HR Head Approval (grade + salary) → Approved for Onboarding (employee master created, Emp ID)
+           → Joined (contractor confirms) → Onboarded (HR verifies, worker Active = in payroll) → induction, PPE.
+           Rejections: Rejected by HR / Supervisor / PM / HR Head. Returned for Clarification goes back to the HR Officer.
+           Contractors have 7 days from assignment to submit candidates; each interview step 1 working day (max 2).
+           ===================================================================== */
+        const ST = { SUB: 'Submitted', HRSCH: 'HR Interview Scheduled', SUP: 'Supervisor Interview', PM: 'PM Review', HRV: 'HR Officer Verification',
+            HEAD: 'HR Head Approval', CLAR: 'Returned for Clarification', APPR: 'Approved for Onboarding', JOINED: 'Joined', NOTJ: 'Not Joined', ONB: 'Onboarded',
+            RET: 'Returned to Contractor', REJ_HR: 'Rejected by HR', REJ_SUP: 'Rejected by Supervisor', REJ_PM: 'Rejected by PM', REJ_HEAD: 'Rejected by HR Head' };
+        const NEW_FLOW = new Set([ST.SUB, ST.HRSCH, ST.SUP, ST.PM, ST.HRV, ST.HEAD, ST.CLAR, ST.APPR, ST.JOINED, ST.NOTJ, ST.ONB, ST.REJ_HR, ST.REJ_SUP, ST.REJ_PM, ST.REJ_HEAD]);
+        const PPE_ITEMS = ['Shoes', 'T-Shirt', 'Hand Gloves', 'Hand Sleeves', 'Mask', 'Goggles', 'Helmet', 'Ear Plug'];
+        const INDUCTION = [['intro', 'Company introduction'], ['rules', 'Company rules and policies explained'], ['attendance', 'Attendance and leave procedures explained'],
+            ['safety', 'Safety guidelines explained'], ['reporting', 'Department and reporting structure explained'], ['ppe', 'PPE requirements explained'],
+            ['docs', 'Employee details and documents verified'], ['training', 'Induction training completed'], ['ack', 'Employee acknowledgement']];
+        let ppeRequests = [], ppeStock = [], gradeSalaryStructure = {}, ppeDesk = { admin: ['hod.admin', 'mgr.admin'], store: ['store'] };
+        SYNC.collections.ppeRequests = { get: () => ppeRequests, set: v => { ppeRequests = v; }, key: x => x.id };
+        SYNC.collections.ppeStock = { get: () => ppeStock, set: v => { ppeStock = v; }, key: x => x.id };
+        ROLE_LABELS.store = 'Store'; ROLE_DEFAULT_TAB.store = 'dashboard';
+
+        var PIPE = {
+            meName() { const m = signedInUser || {}; return m.name || ROLE_LABELS[currentRole] || ''; },
+            meUser() { return (signedInUser && signedInUser.user) || 'local'; },
+            isHR() { return currentRole === 'hr_admin'; },
+            isHead() { return currentRole === 'hr_admin' && (!signedInUser || !!signedInUser.hrHead); },
+            isLine() { return currentRole === 'production_manager' || currentRole === 'supervisor' || (currentRole === 'gm_production' && false); },
+            iso: () => new Date().toISOString(),
+            day: () => DASH.iso(new Date()),
+            nice(d) { return SOC.nice(d); },
+            grades() { return Object.keys(gradeSalaryBudget); },
+            // working days (Mon–Sat, not holidays) since a timestamp
+            wdays(since) {
+                if (!since) return 0; const hol = new Set((holidaysList || []).map(h => h.date)); let d = new Date(String(since).slice(0, 10) + 'T00:00:00'), n = 0; const end = new Date(this.day() + 'T00:00:00');
+                while (d < end) { d.setDate(d.getDate() + 1); if (d.getDay() !== 0 && !hol.has(DASH.iso(d))) n++; } return n;
+            },
+            cdays(since) { return since ? Math.max(0, Math.round((new Date(this.day() + 'T00:00:00') - new Date(String(since).slice(0, 10) + 'T00:00:00')) / 864e5)) : 0; },
+            stageSince(c) { return c.stageAt || c.submittedOn || ''; },
+            ageBadge(c) {
+                const n = this.wdays(this.stageSince(c)); if (![ST.SUB, ST.HRSCH, ST.SUP, ST.PM, ST.HRV, ST.HEAD, ST.CLAR].includes(c.status)) return '';
+                return n > 2 ? '<span class="badge badge-danger">' + n + ' working days — overdue</span>' : n >= 1 ? '<span class="badge badge-pending">' + n + ' working day' + (n > 1 ? 's' : '') + '</span>' : '<span class="badge badge-neutral">today</span>';
+            },
+            struct(grade) {
+                const s = gradeSalaryStructure[grade]; if (s && +s.basicDa) return { basicDa: +s.basicDa, hra: +s.hra || 0, gross: (+s.basicDa) + (+s.hra || 0) };
+                const b = +gradeSalaryBudget[grade] || 0, hra = Math.round(b * 0.2 / 100) * 100; return { basicDa: b - hra, hra, gross: b };
+            },
+            // who acts on this candidate now
+            owner(c) {
+                return { [ST.SUB]: 'HR Officer', [ST.HRSCH]: 'HR Officer (interview)', [ST.SUP]: 'Department Supervisor', [ST.PM]: 'Production Manager', [ST.HRV]: 'HR Officer', [ST.CLAR]: 'HR Officer', [ST.HEAD]: 'HR Head',
+                    [ST.APPR]: 'Contractor (joining)', [ST.JOINED]: 'HR Officer (verify)', [ST.RET]: 'Contractor' }[c.status] || '';
+            },
+            mine(c) {
+                const r = currentRole, s = c.status;
+                if (r === 'hr_admin') return [ST.SUB, ST.HRSCH, ST.HRV, ST.CLAR, ST.JOINED].includes(s) || (s === ST.HEAD && this.isHead()) || (s === ST.APPR);
+                if (r === 'supervisor') return s === ST.SUP && c.division === currentDivision;
+                if (r === 'production_manager') return (s === ST.PM || s === ST.SUP) && c.division === currentDivision;
+                if (r === 'contractor') return cw_normJs(c.contractor) === cw_normJs(currentContractorName) && (s === ST.RET || s === ST.APPR || (s === ST.HRSCH && !c.contractorAck));
+                return false;
+            },
+            hist(c, what, remarks) { c.history = (c.history || []).concat([{ at: new Date().toLocaleString(), iso: this.iso(), by: this.meName() + (ROLE_LABELS[currentRole] && ROLE_LABELS[currentRole] !== this.meName() ? ' (' + ROLE_LABELS[currentRole] + ')' : ''), what, remarks: remarks || '' }]); },
+            move(c, status, what, extra, remarks) {
+                Object.assign(c, extra || {}); c.status = status; c.stageAt = this.iso(); this.hist(c, what, remarks);
+                addAudit(this.meName() + ': ' + what + ' — ' + c.name + ' (' + c.id + ')'); persistAll();
+                document.getElementById('candidate-detail').style.display = 'none'; renderCandidates(); this.refresh();
+            },
+            refresh() { try { DASH.render(); NOTIF.render(); ONB.render(); PPEX.render(); } catch (e) { console.warn(e); } },
+            val(id) { const e = document.getElementById(id); return e ? String(e.value || '').trim() : ''; },
+            needDelay(c) { return this.wdays(this.stageSince(c)) > 2; },
+            delayField(c) { return this.needDelay(c) ? '<div class="form-group" style="flex:1;min-width:220px"><label>Reason for the delay (over 2 working days) *</label><input type="text" id="pp-delay"></div>' : ''; },
+            delayOk(c) { if (this.needDelay(c) && !this.val('pp-delay')) { alert('This step is over 2 working days. Please record the reason for the delay.'); return null; } return this.val('pp-delay'); },
+            gradeSel(id, cur) { return '<select id="' + id + '">' + this.grades().map(g => '<option' + (g === cur ? ' selected' : '') + '>' + escH(g) + '</option>').join('') + '</select>'; },
+
+            /* ---------- candidate detail for the staged flow ---------- */
+            detail(id) {
+                const c = candidates.find(x => x.id === id); if (!c) return;
+                const req = requisitions.find(r => r.id === c.requisitionId) || {}, f = (l, v) => '<div><span>' + l + '</span>' + escH(v === 0 ? '0' : (v || '-')) + '</div>';
+                const fb = (title, o, extra) => o ? '<div class="cw-panel" style="margin:6px 0"><b style="color:var(--aw-gold)">' + title + '</b> <span style="font-size:11px;color:var(--aw-muted)">' + escH([o.by, o.date || o.scheduled ? 'on ' + this.nice(o.date || o.scheduled) : '', o.at ? new Date(o.at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''].filter(Boolean).join(' · ')) + '</span>' +
+                    (o.comments ? '<div style="white-space:pre-wrap;font-size:13px;margin-top:4px">' + escH(o.comments) + '</div>' : '') + (extra || '') + (o.delay ? '<div style="font-size:11px;color:var(--aw-danger,#e5484d)">Delay reason: ' + escH(o.delay) + '</div>' : '') + '</div>' : '';
+                const st = this.struct(c.recommendedGrade || c.skill || req.skill);
+                let act = '';
+                const r = currentRole, s = c.status, own = r === 'contractor' && cw_normJs(c.contractor) === cw_normJs(currentContractorName);
+                const btn = (label, fn, cls) => '<button type="button"' + (cls ? ' class="' + cls + '"' : '') + ' onclick="' + fn + '">' + label + '</button>';
+                const q = "'" + c.id + "'";
+                if (r === 'hr_admin' && s === ST.SUB) act = '<div class="section-header">HR screening</div><p style="font-size:12px;color:var(--aw-muted)">Check the CV, Aadhaar details, certificates and the contractor\'s comments, then schedule the HR interview. The contractor is notified.</p><div class="cw-decision">' +
+                    '<div class="form-group"><label>HR interview date</label><input type="date" id="pp-date" value="' + this.day() + '"></div><div class="form-group"><label>Time</label><input type="time" id="pp-time" value="10:00"></div>' +
+                    '<div class="form-group" style="flex:1;min-width:220px"><label>Remarks (needed to return or reject)</label><input type="text" id="pp-rem"></div>' + this.delayField(c) + '</div><div class="cw-decision">' +
+                    btn('Schedule HR interview', 'PIPE.act(' + q + ',\'schedule\')') + btn('Send back to contractor', 'PIPE.act(' + q + ',\'return\')', 'cw-btn-ghost') + btn('Reject', 'PIPE.act(' + q + ',\'hr-reject\')', 'cw-btn-danger') + '</div>';
+                if (r === 'hr_admin' && s === ST.HRSCH) act = '<div class="section-header">HR interview — result</div><div class="cw-decision"><div class="form-group" style="flex:1;min-width:260px"><label>Interview comments and observations *</label><textarea id="pp-rem" rows="2"></textarea></div>' + this.delayField(c) +
+                    '<div class="form-group"><label>Change date</label><input type="date" id="pp-date" value="' + escH((c.hrInterview || {}).scheduled || this.day()) + '"></div></div><div class="cw-decision">' +
+                    btn('Selected — send to Supervisor', 'PIPE.act(' + q + ',\'hr-select\')') + btn('Reject', 'PIPE.act(' + q + ',\'hr-reject\')', 'cw-btn-danger') + btn('Reschedule', 'PIPE.act(' + q + ',\'reschedule\')', 'cw-btn-ghost') + '</div>';
+                if (own && s === ST.HRSCH) act = '<div class="access-note">HR interview on <b>' + escH(this.nice((c.hrInterview || {}).scheduled)) + (c.hrInterview && c.hrInterview.time ? ' at ' + escH(c.hrInterview.time) : '') + '</b>. Please make sure the candidate attends.</div>' +
+                    (c.contractorAck ? '<p style="font-size:12px">You confirmed the candidate will attend.</p>' : '<div class="cw-decision">' + btn('Candidate will attend', 'PIPE.act(' + q + ',\'ack\')') + '</div>');
+                if ((r === 'supervisor' || r === 'production_manager') && s === ST.SUP && c.division === currentDivision) act = '<div class="section-header">Department interview (Supervisor)</div><p style="font-size:12px;color:var(--aw-muted)">Verify the documents, review experience and suitability, interview, and assign the skill grade. Schedule it today or the next working day.</p>' +
+                    '<div class="cw-decision"><div class="form-group"><label>Interview date</label><select id="pp-date"><option value="' + this.day() + '">Today</option><option value="' + SOC.addDays(new Date().getDay() === 6 ? 2 : 1) + '">Next working day</option></select></div>' + btn('Set interview date', 'PIPE.act(' + q + ',\'sup-schedule\')', 'cw-btn-ghost') + '</div>' +
+                    '<div class="cw-decision"><div class="form-group"><label>Skill grade</label>' + this.gradeSel('pp-grade', c.recommendedGrade || c.skill || req.skill) + '</div><div class="form-group" style="flex:1;min-width:260px"><label>Interview comments and observations *</label><textarea id="pp-rem" rows="2"></textarea></div>' + this.delayField(c) + '</div>' +
+                    '<label style="font-weight:normal;text-transform:none;letter-spacing:0"><input type="checkbox" id="pp-docs" style="width:auto"> I have verified the candidate\'s documents</label><div class="cw-decision">' +
+                    btn('Selected — send to Production Manager', 'PIPE.act(' + q + ',\'sup-select\')') + btn('Reject', 'PIPE.act(' + q + ',\'sup-reject\')', 'cw-btn-danger') + '</div>';
+                if (r === 'production_manager' && s === ST.PM && c.division === currentDivision) act = '<div class="section-header">Production Manager verification</div><div class="cw-decision"><div class="form-group"><label>Skill grade (verify)</label>' + this.gradeSel('pp-grade', c.recommendedGrade || c.skill) + '</div>' +
+                    '<div class="form-group" style="flex:1;min-width:260px"><label>Comments and observations *</label><textarea id="pp-rem" rows="2"></textarea></div>' + this.delayField(c) + '</div><label style="font-weight:normal;text-transform:none;letter-spacing:0"><input type="checkbox" id="pp-extra" style="width:auto"> I held an additional interview</label><div class="cw-decision">' +
+                    btn('Approve — send to HR', 'PIPE.act(' + q + ',\'pm-approve\')') + btn('Reject', 'PIPE.act(' + q + ',\'pm-reject\')', 'cw-btn-danger') + '</div>';
+                if (r === 'hr_admin' && (s === ST.HRV || s === ST.CLAR)) act = '<div class="section-header">HR Officer — final verification</div>' + (s === ST.CLAR ? '<div class="access-note">HR Head asked for clarification: <b>' + escH((c.headDecision || {}).remarks || '') + '</b></div>' : '') +
+                    ['All interview feedback verified', 'Candidate documents verified', 'Recommended skill grade checked (' + escH(c.recommendedGrade || '-') + ')', 'Suitable for the approved requisition ' + escH(c.requisitionId)].map((t, i) => '<label style="display:block;font-weight:normal;text-transform:none;letter-spacing:0"><input type="checkbox" class="pp-chk" style="width:auto"> ' + t + '</label>').join('') +
+                    '<div class="cw-decision"><div class="form-group" style="flex:1;min-width:260px"><label>Notes for the HR Head</label><input type="text" id="pp-rem"></div>' + this.delayField(c) + '</div><div class="cw-decision">' + btn('Forward to HR Head', 'PIPE.act(' + q + ',\'hrv-forward\')') + btn('Reject', 'PIPE.act(' + q + ',\'hr-reject\')', 'cw-btn-danger') + '</div>';
+                if (r === 'hr_admin' && s === ST.HEAD) act = this.isHead() ? '<div class="section-header">HR Head — final approval &amp; salary</div><div class="cw-decision"><div class="form-group"><label>Skill grade (verify)</label>' + this.gradeSel('pp-grade', c.recommendedGrade || c.skill).replace('<select ', '<select onchange="PIPE.fillSalary()" ') + '</div>' +
+                    '<div class="form-group"><label>Basic + DA (₹/month)</label><input type="number" id="pp-basic" value="' + st.basicDa + '" oninput="PIPE.grossCalc()"></div><div class="form-group"><label>HRA (₹/month)</label><input type="number" id="pp-hra" value="' + st.hra + '" oninput="PIPE.grossCalc()"></div><div class="form-group"><label>Fixed gross</label><input type="text" id="pp-gross" readonly value="' + st.gross + '"></div></div>' +
+                    '<div id="pp-std" style="font-size:12px;color:var(--aw-muted)">Standard for ' + escH(c.recommendedGrade || c.skill || '') + ': Basic + DA ₹' + st.basicDa.toLocaleString('en-IN') + ' · HRA ₹' + st.hra.toLocaleString('en-IN') + ' · gross ₹' + st.gross.toLocaleString('en-IN') + '</div>' +
+                    '<div class="cw-decision"><div class="form-group" style="flex:1;min-width:260px"><label>Justification if the salary differs from the grade standard</label><input type="text" id="pp-just"></div><div class="form-group" style="flex:1;min-width:220px"><label>Remarks (needed to return or reject)</label><input type="text" id="pp-rem"></div>' + this.delayField(c) + '</div><div class="cw-decision">' +
+                    btn('Approve candidate', 'PIPE.act(' + q + ',\'head-approve\')') + btn('Return for clarification', 'PIPE.act(' + q + ',\'head-clarify\')', 'cw-btn-ghost') + btn('Reject', 'PIPE.act(' + q + ',\'head-reject\')', 'cw-btn-danger') + '</div>'
+                    : '<div class="access-note">Waiting for the <b>HR Head</b>\'s final approval and salary fixing.</div>';
+                if ((own || r === 'hr_admin') && s === ST.APPR) act = '<div class="section-header">Joining confirmation</div><p style="font-size:12px;color:var(--aw-muted)">Employee ID <b>' + escH(c.workerEmpId || '') + '</b> is ready. Confirm when the candidate actually joins.</p><div class="cw-decision">' +
+                    '<div class="form-group"><label>Joining status</label><select id="pp-join"><option value="Joined">Joined</option><option value="Not Joined">Did not join</option></select></div><div class="form-group"><label>Actual joining date</label><input type="date" id="pp-date" value="' + this.day() + '"></div>' +
+                    '<div class="form-group" style="flex:1;min-width:220px"><label>Joining information (shift reported, documents handed over…)</label><input type="text" id="pp-rem"></div></div><div class="cw-decision">' + btn('Confirm joining status', 'PIPE.act(' + q + ',\'join\')') + '</div>';
+                if (r === 'hr_admin' && s === ST.JOINED) act = '<div class="access-note">Joined on <b>' + escH(this.nice((c.joining || {}).date)) + '</b>. Verify the employee details and activate in <a href="#onboarding" onclick="PIPE.go(\'onboarding\');return false;">Onboarding &amp; Induction</a>.</div>';
+                const timeline = this.timeline(c);
+                const panel = document.getElementById('candidate-detail');
+                panel.innerHTML = '<div class="section-header" style="margin-top:0">' + escH(c.name) + ' — ' + escH(req.position ? req.position + ', ' + req.division : c.requisitionId) + ' &nbsp;' + statusBadge(c.status) + ' ' + this.ageBadge(c) + '</div>' +
+                    '<div style="font-size:12px;color:var(--aw-muted);margin-bottom:6px">Candidate ID ' + escH(c.id) + (c.workerEmpId ? ' · Employee ID <b>' + escH(c.workerEmpId) + '</b>' : '') + (this.owner(c) ? ' · now with <b>' + escH(this.owner(c)) + '</b>' : '') + '</div>' +
+                    '<div class="cw-detail-grid">' + f('Contractor', c.contractor) + f('Gender', c.gender) + f('Date of birth', c.dob) + f('Age', c.age) + f('Mobile', c.mobile) + f('Email', c.email) + f('Aadhaar', c.aadhaar) +
+                    f('State', c.state) + f('Qualification', c.education) + f('Board / University', c.board) + f('Experience', c.experience !== '' && c.experience != null ? c.experience + ' years' : '') + f('Grade asked for', req.skill || c.skill) + f('Recommended grade', c.recommendedGrade) + f('Submitted on', c.submittedOn) + '</div>' +
+                    '<div class="cw-detail-grid">' + f('Permanent address', c.permAddr) + f('Key skills', c.skills) + f('Contractor remarks', c.remarks) + '</div>' +
+                    '<div class="section-header">Documents</div><div class="cw-docs">' + RECRUIT.docButtons(c) + '</div>' +
+                    '<div class="section-header">Interview feedback</div>' + (fb('Contractor screening', c.contractorInterview ? Object.assign({}, c.contractorInterview, { by: c.contractorInterview.by + (c.contractorConfirmed ? ' · confirmed suitable' : '') }) : null) +
+                        fb('HR interview', c.hrInterview) + fb('Supervisor interview', c.supInterview, c.supInterview && c.supInterview.grade ? '<div style="font-size:12px">Grade: <b>' + escH(c.supInterview.grade) + '</b>' + (c.supInterview.docsVerified ? ' · documents verified' : '') + '</div>' : '') +
+                        fb('Production Manager', c.pmReview, c.pmReview && c.pmReview.grade ? '<div style="font-size:12px">Grade approved: <b>' + escH(c.pmReview.grade) + '</b>' + (c.pmReview.extraInterview ? ' · additional interview held' : '') + '</div>' : '') +
+                        fb('HR Officer verification', c.hrVerification) + fb('HR Head', c.headDecision, c.headDecision && c.headDecision.salary && SALX.indiv() ? '<div style="font-size:12px">Grade <b>' + escH(c.headDecision.grade) + '</b> · Basic + DA ₹' + (+c.headDecision.salary.basicDa).toLocaleString('en-IN') + ' · HRA ₹' + (+c.headDecision.salary.hra).toLocaleString('en-IN') + ' · gross ₹' + (+c.headDecision.salary.gross).toLocaleString('en-IN') + (c.headDecision.justification ? ' · deviation: ' + escH(c.headDecision.justification) : '') + '</div>' : '') +
+                        fb('Joining', c.joining ? { by: c.joining.by, date: c.joining.date, comments: c.joining.status + (c.joining.info ? ' — ' + c.joining.info : '') } : null) || '<p style="color:var(--aw-muted)">No interview yet.</p>') +
+                    act + '<div class="section-header">Recruitment timeline</div>' + timeline +
+                    '<button type="button" class="cw-btn-ghost" onclick="document.getElementById(\'candidate-detail\').style.display=\'none\'">Close</button>';
+                panel.style.display = 'block'; panel.scrollIntoView({ behavior: 'smooth' });
+            },
+            timeline(c) {
+                const h = (c.history || []), req = requisitions.find(r => r.id === c.requisitionId);
+                const rows = (req ? [['Requisition ' + req.id + ' raised', req.date, ''], ['Assigned to contractor', req.assignedOn || '', (req.assignedContractors || []).join(', ')]] : []).concat(h.map(x => [x.what, x.iso || x.at, x.by + (x.remarks ? ' — ' + x.remarks : '')]));
+                let prev = null;
+                return '<div class="table-wrapper"><table><thead><tr><th>Step</th><th>When</th><th>Days since previous</th><th>By / notes</th></tr></thead><tbody>' + rows.map(([w, at, by]) => {
+                    const d = at && /^\d{4}-/.test(String(at)) ? String(at).slice(0, 10) : '', gap = prev && d ? this.cdays(prev) - this.cdays(d) : ''; if (d) prev = d;
+                    return '<tr><td class="text-left">' + escH(w) + '</td><td>' + escH(d ? this.nice(d) : at || '-') + '</td><td>' + (gap === '' ? '-' : gap) + '</td><td class="text-left" style="font-size:11px">' + escH(by) + '</td></tr>'; }).join('') + '</tbody></table></div>';
+            },
+            fillSalary() { const s = this.struct(this.val('pp-grade')); document.getElementById('pp-basic').value = s.basicDa; document.getElementById('pp-hra').value = s.hra; this.grossCalc(); document.getElementById('pp-std').textContent = 'Standard for ' + this.val('pp-grade') + ': Basic + DA ₹' + s.basicDa.toLocaleString('en-IN') + ' · HRA ₹' + s.hra.toLocaleString('en-IN') + ' · gross ₹' + s.gross.toLocaleString('en-IN'); },
+            grossCalc() { document.getElementById('pp-gross').value = (+this.val('pp-basic') || 0) + (+this.val('pp-hra') || 0); },
+            go(tab) { const a = document.querySelector('nav a[href="#' + tab + '"]'); if (a) a.click(); },
+
+            act(id, what) {
+                const c = candidates.find(x => x.id === id); if (!c) return;
+                const rem = this.val('pp-rem'), me = this.meName(), at = this.iso();
+                const need = msg => { if (!rem) { alert(msg); return false; } return true; };
+                let delay;
+                const withDelay = () => { delay = this.delayOk(c); return delay !== null; };
+                switch (what) {
+                    case 'schedule': if (!withDelay()) return; return this.move(c, ST.HRSCH, 'HR interview scheduled for ' + this.nice(this.val('pp-date')) + ' ' + this.val('pp-time'), { hrInterview: { scheduled: this.val('pp-date'), time: this.val('pp-time'), by: me, at, delay } }, rem);
+                    case 'reschedule': c.hrInterview = Object.assign({}, c.hrInterview, { scheduled: this.val('pp-date') }); return this.move(c, ST.HRSCH, 'HR interview moved to ' + this.nice(this.val('pp-date')), {}, rem);
+                    case 'return': if (!need('Please say what the contractor should correct.')) return; return this.move(c, ST.RET, 'Sent back to contractor', { hrRemarks: rem }, rem);
+                    case 'hr-reject': if (!need('Please record the rejection reason.')) return; return this.move(c, ST.REJ_HR, 'Rejected by HR', { rejection: { stage: 'HR', reason: rem, by: me, at } }, rem);
+                    case 'ack': c.contractorAck = { by: currentContractorName, at }; this.hist(c, 'Contractor confirmed the candidate will attend'); persistAll(); return this.detail(id);
+                    case 'hr-select': if (!need('Please add your interview comments.') || !withDelay()) return; return this.move(c, ST.SUP, 'HR interview: selected — sent to Supervisor', { hrInterview: Object.assign({}, c.hrInterview, { comments: rem, result: 'Selected', by: me, at, date: this.day(), delay }) }, rem);
+                    case 'sup-schedule': c.supInterview = Object.assign({}, c.supInterview, { scheduled: this.val('pp-date'), by: me }); this.hist(c, 'Supervisor interview set for ' + this.nice(this.val('pp-date'))); c.stageAt = c.stageAt || at; persistAll(); return this.detail(id);
+                    case 'sup-select': if (!need('Please add your interview comments.') || !withDelay()) return; if (!document.getElementById('pp-docs').checked) { alert('Please verify the documents and tick the box.'); return; }
+                        return this.move(c, ST.PM, 'Supervisor interview: selected, grade ' + this.val('pp-grade') + ' — sent to Production Manager', { recommendedGrade: this.val('pp-grade'), supInterview: Object.assign({}, c.supInterview, { comments: rem, grade: this.val('pp-grade'), docsVerified: true, result: 'Selected', by: me, at, date: this.day(), delay }) }, rem);
+                    case 'sup-reject': if (!need('Please record the rejection reason.') || !withDelay()) return; return this.move(c, ST.REJ_SUP, 'Rejected in Supervisor interview', { supInterview: Object.assign({}, c.supInterview, { comments: rem, result: 'Rejected', by: me, at, date: this.day(), delay }) }, rem);
+                    case 'pm-approve': if (!need('Please add your comments.') || !withDelay()) return; return this.move(c, ST.HRV, 'Production Manager approved, grade ' + this.val('pp-grade') + ' — back to HR', { recommendedGrade: this.val('pp-grade'), pmReview: { comments: rem, grade: this.val('pp-grade'), extraInterview: document.getElementById('pp-extra').checked, result: 'Approved', by: me, at, date: this.day(), delay } }, rem);
+                    case 'pm-reject': if (!need('Please record the rejection reason.') || !withDelay()) return; return this.move(c, ST.REJ_PM, 'Rejected by Production Manager', { pmReview: { comments: rem, result: 'Rejected', by: me, at, date: this.day(), delay } }, rem);
+                    case 'hrv-forward': if (Array.from(document.querySelectorAll('.pp-chk')).some(x => !x.checked)) { alert('Please confirm every check before forwarding.'); return; } if (!withDelay()) return;
+                        return this.move(c, ST.HEAD, 'HR Officer verified — sent to HR Head', { hrVerification: { comments: rem || 'All checks confirmed', by: me, at, date: this.day(), delay } }, rem);
+                    case 'head-clarify': if (!need('Please say what needs clarifying.')) return; return this.move(c, ST.CLAR, 'HR Head returned for clarification', { headDecision: { result: 'Clarification', remarks: rem, by: me, at } }, rem);
+                    case 'head-reject': if (!need('Please record the rejection reason.')) return; return this.move(c, ST.REJ_HEAD, 'Rejected by HR Head', { headDecision: { result: 'Rejected', remarks: rem, by: me, at }, rejection: { stage: 'HR Head', reason: rem, by: me, at } }, rem);
+                    case 'head-approve': {
+                        if (!this.isHead()) return;
+                        const grade = this.val('pp-grade'), basicDa = +this.val('pp-basic') || 0, hra = +this.val('pp-hra') || 0, std = this.struct(grade), just = this.val('pp-just');
+                        if (!(basicDa > 0)) { alert('Enter the Basic + DA.'); return; }
+                        if ((basicDa !== std.basicDa || hra !== std.hra) && !just) { alert('The salary differs from the standard for ' + grade + '. Please enter the justification.'); return; }
+                        if (!withDelay()) return;
+                        const salary = { basicDa, hra, gross: basicDa + hra };
+                        const empId = c.workerEmpId || this.createEmployee(c, grade, salary);
+                        return this.move(c, ST.APPR, 'HR Head approved — grade ' + grade + ', employee ' + empId + ' created for onboarding', { workerEmpId: empId, recommendedGrade: grade, headDecision: { result: 'Approved', grade, salary, justification: just, remarks: rem, by: me, at, delay } }, rem);
+                    }
+                    case 'join': {
+                        const js = this.val('pp-join'), date = this.val('pp-date'); if (!date) { alert('Enter the joining date.'); return; }
+                        const by = currentRole === 'contractor' ? currentContractorName : me;
+                        if (js === 'Joined') this.ppeForJoining(c, date);
+                        return this.move(c, js === 'Joined' ? ST.JOINED : ST.NOTJ, js === 'Joined' ? 'Joined on ' + this.nice(date) + ' (confirmed by ' + by + ')' : 'Did not join (reported by ' + by + ')', { joining: { status: js, date, info: rem, by, at } }, rem);
+                    }
+                }
+            },
+            // HR Head approval creates the Employee Master record from the candidate (one record; candidateId kept)
+            createEmployee(c, grade, salary) {
+                const req = requisitions.find(r => r.id === c.requisitionId) || {}, con = (typeof CONTRACTORS !== 'undefined' ? CONTRACTORS : []).find(x => x.name === c.contractor), exp = parseFloat(c.experience) || 0;
+                const empId = generateEmployeeId(c.contractor);
+                workers.push({ empId, name: c.name, contractor: c.contractor, division: c.division || req.division || '', location: con ? con.location : '', doj: '', designation: req.position || c.position || '',
+                    department: req.department || '', section: '', skill: grade, expYr: Math.floor(exp), expMo: Math.round((exp % 1) * 12), mobile: c.mobile, emergency: '', dob: c.dob, age: c.age,
+                    state: c.state, permAddr: c.permAddr, presAddr: c.permAddr, aadhar: c.aadhaar, pan: '', uan: '', esi: '', ppeDate: '', basicDa: salary.basicDa, hra: salary.hra, gross: salary.gross,
+                    shift: req.shift || '', status: 'Onboarding', category: 'Contract labour', email: c.email, education: c.education, board: c.board, passYear: c.passYear, skills: c.skills,
+                    candidateId: c.id, requisitionId: c.requisitionId, docs: c.docs || [], salaryApprovedBy: this.meName() });
+                addAudit('Employee Master ' + empId + ' created from approved candidate ' + c.name + ' (' + c.id + ')');
+                return empId;
+            },
+            ppeForJoining(c, date) {
+                const req = requisitions.find(r => r.id === c.requisitionId) || {}, id = 'PPE-J-' + c.id; if (ppeRequests.some(p => p.id === id)) return;
+                const items = (req.ppeKit && req.ppeKit.length ? req.ppeKit : PPE_ALL).map(i => ({ item: i, qty: 1 }));
+                ppeRequests.push({ id, type: 'joining', candidateId: c.id, empId: c.workerEmpId || '', name: c.name, division: c.division || req.division || '', contractor: c.contractor, position: req.position || '', joiningDate: date,
+                    count: 1, items, status: 'Pending Admin', raisedBy: currentRole === 'contractor' ? currentContractorName : this.meName(), raisedAt: this.iso(), issues: [], history: [{ at: this.iso(), by: currentRole === 'contractor' ? currentContractorName : this.meName(), what: 'Joined on ' + this.nice(date) + ' — PPE needed' }] });
+            },
+
+            /* ---------- 7-day contractor timeline ---------- */
+            assignments() {
+                const out = [];
+                requisitions.filter(r => r.status === 'Approved' && (r.assignedContractors || []).length).forEach(r => (r.assignedContractors || []).forEach(con => {
+                    if (currentRole === 'contractor' && cw_normJs(con) !== cw_normJs(currentContractorName)) return;
+                    const subs = candidates.filter(c => c.requisitionId === r.id && cw_normJs(c.contractor) === cw_normJs(con));
+                    const on = r.assignedOn || r.date, days = this.cdays(on), first = subs.map(c => c.submittedOn).filter(Boolean).sort()[0] || '';
+                    const flag = subs.length ? 'submitted' : days > 7 ? 'red' : days >= 5 ? 'amber' : 'ok';
+                    out.push({ r, con, on, days, subs: subs.length, first, flag });
+                }));
+                return out.sort((a, b) => ({ red: 0, amber: 1, ok: 2, submitted: 3 }[a.flag] - { red: 0, amber: 1, ok: 2, submitted: 3 }[b.flag]) || b.days - a.days);
+            },
+            flagBadge(a) { return a.flag === 'red' ? '<span class="badge badge-danger">RED FLAG · ' + a.days + ' days</span>' : a.flag === 'amber' ? '<span class="badge badge-pending">' + (7 - a.days) + ' day(s) left</span>' : a.flag === 'ok' ? '<span class="badge badge-neutral">day ' + a.days + ' of 7</span>' : '<span class="badge badge-active">' + a.subs + ' submitted</span>'; },
+            assignTable(list) { return DASH.table(['Requisition', 'Department', 'Position', 'Contractor', 'Assigned on', 'Candidates', '7-day target'], list.map(a => [escH(a.r.id), escH(a.r.division), escH(a.r.position) + ' ×' + a.r.count, escH(a.con), this.nice(a.on), a.subs, this.flagBadge(a)]), 'No open assignments.'); },
+
+            /* ---------- dashboard block ---------- */
+            stageCounts(list) { const n = s => list.filter(c => c.status === s).length; return { screen: n(ST.SUB), hrInt: n(ST.HRSCH), sup: n(ST.SUP), pm: n(ST.PM), hrv: n(ST.HRV) + n(ST.CLAR), head: n(ST.HEAD), join: n(ST.APPR), verify: n(ST.JOINED) }; },
+            pendingTable(list) {
+                const rows = list.filter(c => [ST.SUB, ST.HRSCH, ST.SUP, ST.PM, ST.HRV, ST.CLAR, ST.HEAD, ST.APPR, ST.JOINED].includes(c.status)).sort((a, b) => this.wdays(this.stageSince(b)) - this.wdays(this.stageSince(a)));
+                return DASH.table(['Candidate', 'Department', 'Contractor', 'Stage', 'With', 'Waiting', ''], rows.slice(0, 15).map(c => [escH(c.name), escH(c.division || '-'), escH(c.contractor), statusBadge(c.status), escH(this.owner(c)), this.ageBadge(c) || this.cdays(this.stageSince(c)) + ' days', '<button type="button" class="action-btn edit" onclick="PIPE.openCand(\'' + c.id + '\')">Open</button>']), 'No candidates in progress.');
+            },
+            openCand(id) { this.go('requisition-tracker'); setTimeout(() => RECRUIT.detail(id), 50); },
+            dashHtml() {
+                const r = currentRole; if (!r) return '';
+                if (r === 'store') return '';
+                const asg = this.assignments(), reds = asg.filter(a => a.flag === 'red').length;
+                let list = candidates;
+                if (r === 'contractor') list = candidates.filter(c => cw_normJs(c.contractor) === cw_normJs(currentContractorName));
+                if (r === 'production_manager' || r === 'supervisor') list = candidates.filter(c => c.division === currentDivision);
+                const k = this.stageCounts(list);
+                let h = '<div class="section-header">Recruitment pipeline</div>' + DASH.grid([DASH.card(reds, 'Requisitions RED-flagged', 'no candidates within 7 days'), DASH.card(k.screen + k.hrInt, 'HR screening / interview'), DASH.card(k.sup, 'Supervisor interviews'), DASH.card(k.pm, 'Production Manager review'), DASH.card(k.hrv + k.head, 'HR verification / HR Head'), DASH.card(k.join, 'Awaiting joining'), DASH.card(k.verify, 'Joined — to verify')]);
+                if (r !== 'supervisor') h += '<div class="section-header">Contractor timelines (7-day target)</div>' + this.assignTable(asg.filter(a => r === 'hr_admin' || r === 'gm_production' || r === 'contractor' || a.r.division === currentDivision).slice(0, 15));
+                h += '<div class="section-header">Candidates in progress — ageing</div>' + this.pendingTable(list);
+                if (r === 'hr_admin') {
+                    const fresh = workers.filter(w => w.candidateId && (w.status === 'Active' || w.status === 'Onboarding'));
+                    h += DASH.grid([DASH.card(fresh.filter(w => w.status === 'Active').length, 'Onboarded via recruitment', 'in payroll'), DASH.card(fresh.filter(w => !(w.induction && w.induction.completedAt)).length, 'Induction pending'), DASH.card(ppeRequests.filter(p => p.status === 'Pending Admin').length, 'PPE waiting for Admin'), DASH.card(ppeRequests.filter(p => p.status === 'Pending Store' || p.status === 'Partly Issued').length, 'PPE waiting for Store')]);
+                }
+                return h;
+            }
+        };
+
+        /* ---------- route the candidate screens through the staged flow (older candidates keep their old flow) ---------- */
+        (function () {
+            const detailOld = RECRUIT.detail.bind(RECRUIT), needsOld = RECRUIT.needsMe.bind(RECRUIT), visibleOld = RECRUIT.visible.bind(RECRUIT);
+            RECRUIT.detail = function (id) { const c = candidates.find(x => x.id === id); if (c && NEW_FLOW.has(c.status)) return PIPE.detail(id); return detailOld(id); };
+            RECRUIT.needsMe = function (c) { return NEW_FLOW.has(c.status) ? PIPE.mine(c) : needsOld(c); };
+            RECRUIT.visible = function () {
+                if (currentRole === 'production_manager' || currentRole === 'supervisor') {
+                    const later = [ST.SUP, ST.PM, ST.HRV, ST.CLAR, ST.HEAD, ST.APPR, ST.JOINED, ST.NOTJ, ST.ONB, ST.REJ_SUP, ST.REJ_PM, ST.REJ_HEAD];
+                    return visibleOld().concat(candidates.filter(c => c.division === currentDivision && later.includes(c.status)));
+                }
+                return visibleOld();
+            };
+            // a requisition approved by HR starts the contractor's 7-day clock
+            const approveOld = confirmApproveRequisition;
+            confirmApproveRequisition = function () {
+                const before = new Set(requisitions.filter(r => r.status === 'Approved').map(r => r.id));
+                approveOld();
+                requisitions.filter(r => r.status === 'Approved' && !before.has(r.id) && !r.assignedOn).forEach(r => { r.assignedOn = DASH.iso(new Date()); });
+                persistAll(); PIPE.refresh();
+            };
+            // a submitted requisition tells Admin / Store what PPE will be needed
+            const submitReqOld = submitRequisition;
+            submitRequisition = function () {
+                const n = requisitions.length; submitReqOld();
+                if (requisitions.length > n) {
+                    const r = requisitions[requisitions.length - 1];
+                    ppeRequests.push({ id: 'PPE-' + r.id, type: 'requisition', requisitionId: r.id, division: r.division, position: r.position, count: r.count, items: (r.ppeKit || []).map(i => ({ item: i, qty: r.count })),
+                        status: 'Pending Admin', raisedBy: PIPE.meName(), raisedAt: PIPE.iso(), issues: [], history: [{ at: PIPE.iso(), by: PIPE.meName(), what: 'Requisition ' + r.id + ' raised — PPE for ' + r.count + ' × ' + r.position }] });
+                    persistAll(); PIPE.refresh();
+                }
+            };
+        })();
+
+        /* ---------- Onboarding & Induction (HR and contractors) ---------- */
+        var ONB = {
+            view: 'join', openEmp: null,
+            render() {
+                const tabs = document.getElementById('onb-tabs'), el = document.getElementById('onb-body'); if (!tabs || !el || !currentRole) return;
+                const isC = currentRole === 'contractor', mine = c => !isC || cw_normJs(c.contractor) === cw_normJs(currentContractorName);
+                const awaiting = candidates.filter(c => c.status === ST.APPR && mine(c)), joined = candidates.filter(c => c.status === ST.JOINED && mine(c));
+                const fresh = workers.filter(w => w.candidateId && (w.status === 'Active' || w.status === 'Onboarding') && (!isC || cw_normJs(w.contractor) === cw_normJs(currentContractorName)));
+                const views = [['join', 'Awaiting joining (' + awaiting.length + ')']].concat(isC ? [['done', 'Joined']] : [['verify', 'Joined — verify (' + joined.length + ')'], ['induction', 'Induction (' + fresh.filter(w => !(w.induction && w.induction.completedAt)).length + ' pending)'], ['payroll', 'Payroll handover'], ['salary', 'Grade salary structure']]);
+                if (!views.some(v => v[0] === this.view)) this.view = 'join';
+                tabs.innerHTML = views.map(([k, l]) => '<button type="button" class="' + (this.view === k ? 'on' : '') + '" onclick="ONB.view=\'' + k + '\';ONB.openEmp=null;ONB.render()">' + l + '</button>').join('');
+                const open = id => '<button type="button" class="action-btn edit" onclick="PIPE.openCand(\'' + id + '\')">Open</button>';
+                if (this.view === 'join') el.innerHTML = '<p style="font-size:12px;color:var(--aw-muted)">Approved by the HR Head. ' + (isC ? 'Open a candidate to confirm their actual joining date.' : 'The contractor confirms joining; HR can confirm on their behalf.') + '</p>' +
+                    DASH.table(['Candidate', 'Employee ID', 'Department', 'Position', 'Contractor', 'Approved on', ''], awaiting.map(c => [escH(c.name), escH(c.workerEmpId || '-'), escH(c.division), escH(c.position || '-'), escH(c.contractor), SOC.nice((c.headDecision || {}).at), open(c.id)]), 'Nobody is waiting to join.');
+                if (this.view === 'done') el.innerHTML = DASH.table(['Candidate', 'Employee ID', 'Department', 'Joined on', 'Status'], candidates.filter(c => mine(c) && [ST.JOINED, ST.ONB, ST.NOTJ].includes(c.status)).map(c => [escH(c.name), escH(c.workerEmpId || '-'), escH(c.division), SOC.nice((c.joining || {}).date), statusBadge(c.status)]), 'None yet.');
+                if (this.view === 'verify') el.innerHTML = (this.openEmp ? this.verifyForm(this.openEmp) : '') + DASH.table(['Candidate', 'Employee ID', 'Department', 'Joined on', 'Reported by', ''], joined.map(c => [escH(c.name), escH(c.workerEmpId), escH(c.division), SOC.nice((c.joining || {}).date), escH((c.joining || {}).by), '<button type="button" class="action-btn edit" onclick="ONB.openEmp=\'' + c.id + '\';ONB.render()">Verify</button>']), 'No joined employees waiting for verification.') +
+                    '<div class="section-header">Did not join</div>' + DASH.table(['Candidate', 'Employee ID', 'Reported by', 'Note', ''], candidates.filter(c => c.status === ST.NOTJ).map(c => { const w = workers.find(x => x.empId === c.workerEmpId); return [escH(c.name), escH(c.workerEmpId || '-'), escH((c.joining || {}).by), escH((c.joining || {}).info || ''), w && w.status === 'Onboarding' ? '<button type="button" class="action-btn delete" onclick="ONB.closeNotJoined(\'' + c.id + '\')">Close profile</button>' : escH(w ? w.status : '')]; }), 'None.');
+                if (this.view === 'induction') el.innerHTML = (this.openEmp ? this.inductionForm(this.openEmp) : '') + DASH.table(['Employee', 'Emp ID', 'Department', 'Joined', 'Induction', ''], fresh.map(w => { const d = Object.values((w.induction || {}).items || {}).filter(i => i.done).length; return [escH(w.name), escH(w.empId), escH(w.division), SOC.nice(w.doj), w.induction && w.induction.completedAt ? '<span class="badge badge-active">Completed ' + SOC.nice(w.induction.completedAt) + '</span>' : '<span class="badge badge-pending">' + d + ' of ' + INDUCTION.length + '</span>', '<button type="button" class="action-btn edit" onclick="ONB.openEmp=\'' + escH(w.empId) + '\';ONB.render()">Checklist</button>']; }), 'No new joiners yet.');
+                if (this.view === 'payroll') el.innerHTML = '<p style="font-size:12px;color:var(--aw-muted)">After HR verification the employee is <b>Active</b> with the HR Head\'s approved salary, so payroll picks them up automatically — no re-entry.</p>' + DASH.table(['Emp ID', 'Name', 'Contractor', 'Department', 'Designation', 'Joined', 'Grade', 'Basic + DA', 'HRA', 'Gross', 'Payroll'], fresh.map(w => { const inPr = payrollRuns.some(p => p.empId === w.empId); return [escH(w.empId), escH(w.name), escH(w.contractor), escH(w.division), escH(w.designation), SOC.nice(w.doj), escH(w.skill), DASH.inr(w.basicDa), DASH.inr(w.hra), DASH.inr(w.gross), w.status === 'Active' ? (inPr ? '<span class="badge badge-active">In payroll</span>' : '<span class="badge badge-active">Ready for payroll</span>') : '<span class="badge badge-pending">Awaiting verification</span>']; }), 'No employees from recruitment yet.');
+                if (this.view === 'salary') el.innerHTML = this.salaryTable();
+            },
+            verifyForm(cid) {
+                const c = candidates.find(x => x.id === cid), w = c && workers.find(x => x.empId === c.workerEmpId); if (!c || !w) return '<div class="access-note">Employee record not found.</div>';
+                const inp = (id, l, v, t) => '<div class="form-group"><label>' + l + '</label><input type="' + (t || 'text') + '" id="ov-' + id + '" value="' + escH(v == null ? '' : v) + '"></div>';
+                return '<div class="cw-panel"><div class="section-header" style="margin-top:0">Verify employee — ' + escH(w.name) + ' · ' + escH(w.empId) + '</div><p style="font-size:12px;color:var(--aw-muted)">Filled in from the Aadhaar, CV, certificates and the approved recruitment. Correct anything wrong and fill what is missing.</p>' +
+                    '<div class="mini-form" style="grid-template-columns:repeat(4,1fr)">' + inp('name', 'Name', w.name) + '<div class="form-group"><label>Employee ID</label><input type="text" value="' + escH(w.empId) + '" readonly></div>' + inp('doj', 'Joining date', (c.joining || {}).date || w.doj, 'date') + '<div class="form-group"><label>Contractor</label><input type="text" value="' + escH(w.contractor) + '" readonly></div>' +
+                    inp('division', 'Division', w.division) + inp('department', 'Department', w.department) + inp('designation', 'Designation', w.designation) + '<div class="form-group"><label>Skill grade</label><input type="text" value="' + escH(w.skill) + '" readonly></div>' +
+                    '<div class="form-group"><label>Basic + DA (approved)</label><input type="text" value="' + escH(w.basicDa) + '" readonly></div><div class="form-group"><label>HRA (approved)</label><input type="text" value="' + escH(w.hra) + '" readonly></div><div class="form-group"><label>Gross (approved)</label><input type="text" value="' + escH(w.gross) + '" readonly></div>' +
+                    '<div class="form-group"><label>Employment category</label><select id="ov-category">' + ['Contract labour', 'Apprentice', 'Trainee', 'Fixed-term'].map(x => '<option' + (x === (w.category || 'Contract labour') ? ' selected' : '') + '>' + x + '</option>').join('') + '</select></div>' +
+                    inp('mobile', 'Mobile', w.mobile) + inp('emergency', 'Emergency contact', w.emergency) + inp('dob', 'Date of birth', w.dob, 'date') + inp('shift', 'Shift', w.shift) + inp('uan', 'UAN', w.uan) + inp('esi', 'ESIC no.', w.esi) + inp('pan', 'PAN', w.pan) +
+                    inp('bankAccount', 'Bank account', w.bankAccount) + inp('ifsc', 'IFSC', w.ifsc) + inp('bankName', 'Bank', w.bankName) + '<div class="form-group full-width"><label>Present address</label><input type="text" id="ov-presAddr" value="' + escH(w.presAddr || '') + '"></div></div>' +
+                    '<div class="section-header">Documents</div><div class="cw-docs">' + RECRUIT.docButtons(c) + '</div>' +
+                    ['Personal information verified', 'Employee ID and joining date confirmed', 'Contractor, department and designation confirmed', 'Skill grade and approved salary confirmed', 'Required documents received', 'Employment category confirmed'].map(t => '<label style="display:block;font-weight:normal;text-transform:none;letter-spacing:0"><input type="checkbox" class="ov-chk" style="width:auto"> ' + t + '</label>').join('') +
+                    '<div class="cw-decision"><button type="button" onclick="ONB.activate(\'' + c.id + '\')">Verify &amp; activate — send to payroll</button><button type="button" class="cw-btn-ghost" onclick="ONB.openEmp=null;ONB.render()">Cancel</button></div></div>';
+            },
+            activate(cid) {
+                const c = candidates.find(x => x.id === cid), w = c && workers.find(x => x.empId === c.workerEmpId); if (!c || !w) return;
+                if (Array.from(document.querySelectorAll('.ov-chk')).some(x => !x.checked)) { alert('Please confirm every check.'); return; }
+                const g = k => (document.getElementById('ov-' + k) || {}).value; if (!g('doj')) { alert('Enter the joining date.'); return; }
+                ['name', 'doj', 'division', 'department', 'designation', 'category', 'mobile', 'emergency', 'dob', 'shift', 'uan', 'esi', 'pan', 'bankAccount', 'ifsc', 'bankName', 'presAddr'].forEach(k => { const v = g(k); if (v != null) w[k] = String(v).trim(); });
+                w.status = 'Active'; w.verifiedBy = PIPE.meName(); w.verifiedAt = PIPE.iso(); w.payrollFrom = MONTHS[new Date(w.doj + 'T00:00:00').getMonth()] + ' ' + w.doj.slice(0, 4);
+                c.status = ST.ONB; c.stageAt = PIPE.iso(); PIPE.hist(c, 'HR verified and activated ' + w.empId + ' — in payroll from ' + w.payrollFrom);
+                addAudit('HR verified and activated ' + w.name + ' (' + w.empId + ') from recruitment; payroll from ' + w.payrollFrom);
+                persistAll(); this.openEmp = null; this.view = 'induction'; this.render(); renderWorkersTable(); PIPE.refresh();
+            },
+            closeNotJoined(cid) { const c = candidates.find(x => x.id === cid), w = c && workers.find(x => x.empId === c.workerEmpId); if (!w || !confirm('Close ' + w.empId + ' as not joined?')) return; w.status = 'Not Joined'; addAudit(w.empId + ' closed — did not join'); persistAll(); this.render(); renderWorkersTable(); },
+            inductionForm(empId) {
+                const w = workers.find(x => x.empId === empId); if (!w) return '';
+                const it = (w.induction || {}).items || {}, done = w.induction && w.induction.completedAt;
+                return '<div class="cw-panel"><div class="section-header" style="margin-top:0">Induction checklist — ' + escH(w.name) + ' · ' + escH(w.empId) + (done ? ' <span class="badge badge-active">Completed</span>' : '') + '</div>' +
+                    '<div class="table-wrapper"><table><thead><tr><th>Activity</th><th>Done</th><th>Date</th><th>Confirmed by</th></tr></thead><tbody>' + INDUCTION.map(([k, l]) => { const x = it[k] || {}; return '<tr><td class="text-left">' + escH(l) + '</td><td><input type="checkbox" id="in-' + k + '" style="width:auto"' + (x.done ? ' checked' : '') + (done ? ' disabled' : '') + '></td><td><input type="date" id="in-d-' + k + '" value="' + escH(x.date || PIPE.day()) + '"' + (done ? ' disabled' : '') + '></td><td>' + escH(x.by || '') + '</td></tr>'; }).join('') + '</tbody></table></div>' +
+                    (done ? '<p style="font-size:12px;color:var(--aw-muted)">Permanent record against ' + escH(w.empId) + '. Completed ' + SOC.nice(done) + '.</p>' : '<div class="cw-decision"><button type="button" onclick="ONB.saveInduction(\'' + escH(w.empId) + '\')">Save checklist</button><button type="button" class="cw-btn-ghost" onclick="ONB.openEmp=null;ONB.render()">Close</button></div>') + '</div>';
+            },
+            saveInduction(empId) {
+                const w = workers.find(x => x.empId === empId); if (!w) return;
+                const items = Object.assign({}, (w.induction || {}).items);
+                INDUCTION.forEach(([k]) => { const on = document.getElementById('in-' + k).checked, d = document.getElementById('in-d-' + k).value; if (on && !(items[k] && items[k].done)) items[k] = { done: true, date: d, by: PIPE.meName() }; else if (!on) delete items[k]; });
+                const all = INDUCTION.every(([k]) => items[k] && items[k].done);
+                w.induction = { items, completedAt: all ? PIPE.day() : '' }; addAudit('Induction checklist ' + (all ? 'completed' : 'updated') + ' for ' + w.empId);
+                persistAll(); this.render(); PIPE.refresh();
+            },
+            salaryTable() {
+                const head = PIPE.isHead();
+                return '<p style="font-size:12px;color:var(--aw-muted)">Grade-wise salary structure used when the HR Head approves a candidate. ' + (head ? 'You can edit it.' : 'Only the HR Head can change it.') + '</p><div class="table-wrapper"><table><thead><tr><th>Grade</th><th>Basic + DA</th><th>HRA</th><th>Fixed gross</th></tr></thead><tbody>' +
+                    PIPE.grades().map((g, i) => { const s = PIPE.struct(g); return '<tr><td class="text-left">' + escH(g) + '</td><td>' + (head ? '<input type="number" id="gs-b-' + i + '" value="' + s.basicDa + '" style="width:110px">' : DASH.inr(s.basicDa)) + '</td><td>' + (head ? '<input type="number" id="gs-h-' + i + '" value="' + s.hra + '" style="width:110px">' : DASH.inr(s.hra)) + '</td><td>' + DASH.inr(s.gross) + '</td></tr>'; }).join('') +
+                    '</tbody></table></div>' + (head ? '<div class="cw-decision"><button type="button" onclick="ONB.saveSalary()">Save salary structure</button></div>' : '');
+            },
+            saveSalary() { const s = {}; PIPE.grades().forEach((g, i) => { s[g] = { basicDa: +document.getElementById('gs-b-' + i).value || 0, hra: +document.getElementById('gs-h-' + i).value || 0 }; }); gradeSalaryStructure = s; addAudit('HR Head updated the grade salary structure'); persistAll(); this.render(); }
+        };
+
+        /* ---------- PPE: Admin confirms, Store issues, stock, history per employee ---------- */
+        var PPEX = {
+            view: 'pending',
+            isAdmin() { return currentRole === 'hr_admin' || !!(signedInUser && signedInUser.ppeAdmin); },
+            isStore() { return currentRole === 'store' || currentRole === 'hr_admin' || !!(signedInUser && signedInUser.ppeStore); },
+            stock() { return (ppeStock.find(s => s.id === 'stock') || {}).items || {}; },
+            issued(p, item) { return (p.issues || []).filter(i => i.item === item).reduce((s, i) => s + (+i.qty || 0), 0); },
+            age(p) { return PIPE.cdays(p.raisedAt); },
+            render() {
+                const tabs = document.getElementById('ppe-tabs'), el = document.getElementById('ppe-body'); if (!tabs || !el || !currentRole) return;
+                const pa = ppeRequests.filter(p => p.status === 'Pending Admin'), ps = ppeRequests.filter(p => p.status === 'Pending Store' || p.status === 'Partly Issued');
+                const views = [['pending', 'Waiting (' + ((this.isAdmin() ? pa.length : 0) + (this.isStore() ? ps.length : 0)) + ')'], ['all', 'All requests'], ['stock', 'Stock'], ['employee', 'By employee']].concat(currentRole === 'hr_admin' ? [['desk', 'Admin & Store desks']] : []);
+                if (!views.some(v => v[0] === this.view)) this.view = 'pending';
+                tabs.innerHTML = views.map(([k, l]) => '<button type="button" class="' + (this.view === k ? 'on' : '') + '" onclick="PPEX.view=\'' + k + '\';PPEX.render()">' + l + '</button>').join('');
+                const row = p => [escH(p.type === 'joining' ? 'Joining' : 'Requisition'), escH(p.type === 'joining' ? p.name + ' (' + (p.empId || '-') + ')' : p.requisitionId + ' · ' + p.position + ' ×' + p.count), escH(p.division), (p.items || []).map(i => escH(i.item) + ' ×' + i.qty).join(', '), SOC.nice(p.raisedAt),
+                    '<span class="badge ' + (p.status === 'Issued' ? 'badge-active' : p.status === 'Not Required' ? 'badge-neutral' : this.age(p) > 2 ? 'badge-danger' : 'badge-pending') + '">' + escH(p.status) + '</span>' + (/^Pending|Partly/.test(p.status) && this.age(p) > 2 ? ' <span style="font-size:10px;color:var(--aw-danger,#e5484d)">' + this.age(p) + ' days</span>' : ''), '<button type="button" class="action-btn edit" onclick="PPEX.open(\'' + escH(p.id) + '\')">Open</button>'];
+                const head = ['Type', 'For', 'Department', 'Items', 'Raised', 'Status', ''];
+                if (this.view === 'pending') el.innerHTML = '<div id="ppe-detail"></div>' + (this.isAdmin() ? '<div class="section-header">Admin — confirm PPE requirement</div>' + DASH.table(head, pa.map(row), 'Nothing waiting for Admin.') : '') + (this.isStore() ? '<div class="section-header">Store — issue PPE</div>' + DASH.table(head, ps.map(row), 'Nothing waiting for Store.') : '');
+                if (this.view === 'all') el.innerHTML = '<div id="ppe-detail"></div>' + DASH.table(head, ppeRequests.slice().sort((a, b) => String(b.raisedAt).localeCompare(String(a.raisedAt))).map(row), 'No PPE requests yet.');
+                if (this.view === 'stock') { const st = this.stock(), can = currentRole === 'store' || !!(signedInUser && signedInUser.ppeStore) || currentRole === 'hr_admin';
+                    el.innerHTML = DASH.table(['Item', 'In stock', 'Needed for open requests'], PPE_ITEMS.map((it, i) => { const need = ppeRequests.filter(p => /Pending|Partly/.test(p.status)).reduce((s, p) => s + Math.max(0, ((p.items || []).find(x => x.item === it) || { qty: 0 }).qty - this.issued(p, it)), 0);
+                        return [escH(it), can ? '<input type="number" min="0" id="stk-' + i + '" value="' + (+st[it] || 0) + '" style="width:90px">' : (+st[it] || 0), need > (+st[it] || 0) ? '<b style="color:var(--aw-danger,#e5484d)">' + need + '</b>' : need]; })) + (can ? '<div class="cw-decision"><button type="button" onclick="PPEX.saveStock()">Save stock</button></div>' : ''); }
+                if (this.view === 'employee') { const rows = []; ppeRequests.filter(p => p.type === 'joining').forEach(p => (p.issues || []).forEach(i => rows.push([escH(p.empId || '-'), escH(p.name), escH(p.division), escH(i.item), i.qty, SOC.nice(i.date), escH(i.by)])));
+                    el.innerHTML = '<p style="font-size:12px;color:var(--aw-muted)">Every PPE item issued, per employee — for replacement tracking.</p>' + DASH.table(['Emp ID', 'Name', 'Department', 'Item', 'Qty', 'Issued on', 'By'], rows.sort((a, b) => String(b[5]).localeCompare(String(a[5]))), 'Nothing issued yet.'); }
+                if (this.view === 'desk') el.innerHTML = '<p style="font-size:12px;color:var(--aw-muted)">User IDs (from the Admin Portal), comma separated. The <b>store</b> login is always a Store desk.</p><div class="mini-form" style="grid-template-columns:1fr 1fr"><div class="form-group"><label>Admin desk — confirms PPE needs</label><input type="text" id="pd-admin" value="' + escH((ppeDesk.admin || []).join(', ')) + '"></div><div class="form-group"><label>Store desk — issues PPE</label><input type="text" id="pd-store" value="' + escH((ppeDesk.store || []).join(', ')) + '"></div></div><div class="cw-decision"><button type="button" onclick="PPEX.saveDesk()">Save desks</button></div>';
+            },
+            open(id) {
+                const p = ppeRequests.find(x => x.id === id), el = document.getElementById('ppe-detail'); if (!p || !el) return;
+                const q = "'" + p.id + "'";
+                let act = '';
+                if (p.status === 'Pending Admin' && this.isAdmin()) act = '<div class="section-header">Confirm PPE requirement</div><div class="table-wrapper"><table><thead><tr><th>Item</th><th>Needed</th><th>Qty</th></tr></thead><tbody>' +
+                    PPE_ITEMS.map((it, i) => { const x = (p.items || []).find(y => y.item === it); return '<tr><td class="text-left">' + escH(it) + '</td><td><input type="checkbox" id="pa-' + i + '" style="width:auto"' + (x ? ' checked' : '') + '></td><td><input type="number" min="1" id="pq-' + i + '" value="' + (x ? x.qty : (p.count || 1)) + '" style="width:80px"></td></tr>'; }).join('') +
+                    '</tbody></table></div><div class="cw-decision"><div class="form-group" style="flex:1"><label>Remarks</label><input type="text" id="pa-rem"></div><button type="button" onclick="PPEX.adminConfirm(' + q + ')">Confirm — send to Store</button><button type="button" class="cw-btn-ghost" onclick="PPEX.adminNotRequired(' + q + ')">Not required</button></div>';
+                if ((p.status === 'Pending Store' || p.status === 'Partly Issued') && this.isStore()) { const st = this.stock();
+                    act = '<div class="section-header">Issue PPE</div><div class="table-wrapper"><table><thead><tr><th>Item</th><th>Approved</th><th>Already issued</th><th>In stock</th><th>Issue now</th></tr></thead><tbody>' +
+                    (p.items || []).map((x, i) => { const left = Math.max(0, x.qty - this.issued(p, x.item)); return '<tr><td class="text-left">' + escH(x.item) + '</td><td>' + x.qty + '</td><td>' + this.issued(p, x.item) + '</td><td>' + (+st[x.item] || 0) + '</td><td><input type="number" min="0" max="' + left + '" id="pi-' + i + '" value="' + Math.min(left, Math.max(0, +st[x.item] || 0)) + '" style="width:80px"></td></tr>'; }).join('') +
+                    '</tbody></table></div><div class="cw-decision"><div class="form-group"><label>Issue date</label><input type="date" id="pi-date" value="' + PIPE.day() + '"></div><button type="button" onclick="PPEX.issue(' + q + ')">Record issue</button></div>'; }
+                const hist = (p.history || []).slice().reverse().map(h => '<li><b>' + escH(h.what) + '</b> · ' + escH(h.by) + ' · ' + SOC.nice(h.at) + '</li>').join('');
+                el.innerHTML = '<div class="cw-panel" style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b style="color:var(--aw-gold)">' + escH(p.type === 'joining' ? 'Joining: ' + p.name + ' · ' + (p.empId || '') : 'Requisition ' + p.requisitionId + ': ' + p.position + ' ×' + p.count) + '</b><span>' + escH(p.status) + ' <button type="button" class="cw-btn-ghost" onclick="document.getElementById(\'ppe-detail\').innerHTML=\'\'">Close</button></span></div>' +
+                    '<div class="cw-detail-grid">' + [['Department', p.division], ['Contractor', p.contractor], ['Joining date', p.joiningDate ? SOC.nice(p.joiningDate) : ''], ['Raised by', p.raisedBy], ['Raised on', SOC.nice(p.raisedAt)], ['Admin', p.admin ? p.admin.by + ' · ' + SOC.nice(p.admin.at) : '']].filter(x => x[1]).map(([l, v]) => '<div><span>' + l + '</span>' + escH(v) + '</div>').join('') + '</div>' +
+                    act + '<div class="section-header">History</div><ul style="font-size:12px">' + hist + '</ul></div>';
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            },
+            log(p, what) { p.history = (p.history || []).concat([{ at: PIPE.iso(), by: PIPE.meName(), what }]); },
+            adminConfirm(id) {
+                const p = ppeRequests.find(x => x.id === id); if (!p) return;
+                const items = PPE_ITEMS.map((it, i) => document.getElementById('pa-' + i).checked ? { item: it, qty: Math.max(1, +document.getElementById('pq-' + i).value || 1) } : null).filter(Boolean);
+                if (!items.length) { alert('Tick at least one item, or choose Not required.'); return; }
+                p.items = items; p.status = 'Pending Store'; p.admin = { by: PIPE.meName(), at: PIPE.iso(), remarks: document.getElementById('pa-rem').value.trim() };
+                this.log(p, 'Admin confirmed: ' + items.map(i => i.item + ' ×' + i.qty).join(', ')); persistAll(); this.render(); PIPE.refresh();
+            },
+            adminNotRequired(id) { const p = ppeRequests.find(x => x.id === id); if (!p) return; const r = document.getElementById('pa-rem').value.trim(); if (!r) { alert('Say why PPE is not required.'); return; } p.status = 'Not Required'; p.admin = { by: PIPE.meName(), at: PIPE.iso(), remarks: r }; this.log(p, 'Admin: not required — ' + r); persistAll(); this.render(); },
+            issue(id) {
+                const p = ppeRequests.find(x => x.id === id); if (!p) return;
+                const date = document.getElementById('pi-date').value || PIPE.day(), st = Object.assign({}, this.stock()), out = [];
+                (p.items || []).forEach((x, i) => { const n = Math.max(0, Math.min(+document.getElementById('pi-' + i).value || 0, x.qty - this.issued(p, x.item))); if (n) { out.push({ item: x.item, qty: n, date, by: PIPE.meName() }); st[x.item] = Math.max(0, (+st[x.item] || 0) - n); } });
+                if (!out.length) { alert('Enter the quantity issued.'); return; }
+                const short = out.filter(i => i.qty > (+this.stock()[i.item] || 0)).map(i => i.item);
+                if (short.length && !confirm('Stock shows less than you are issuing for: ' + short.join(', ') + '. Issue anyway? (Update the stock on the Stock tab afterwards.)')) return;
+                p.issues = (p.issues || []).concat(out); p.status = (p.items || []).every(x => this.issued(p, x.item) >= x.qty) ? 'Issued' : 'Partly Issued';
+                this.log(p, 'Store issued ' + out.map(i => i.item + ' ×' + i.qty).join(', ') + (p.status === 'Issued' ? ' — complete' : ''));
+                this.putStock(st); persistAll(); this.render(); PIPE.refresh();
+            },
+            putStock(items) { const s = ppeStock.find(x => x.id === 'stock'); if (s) { s.items = items; s.updatedAt = PIPE.iso(); s.by = PIPE.meName(); } else ppeStock.push({ id: 'stock', items, updatedAt: PIPE.iso(), by: PIPE.meName() }); },
+            saveStock() { const st = {}; PPE_ITEMS.forEach((it, i) => { st[it] = Math.max(0, +document.getElementById('stk-' + i).value || 0); }); this.putStock(st); addAudit('PPE stock updated'); persistAll(); this.render(); },
+            saveDesk() { const l = id => document.getElementById(id).value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean); ppeDesk = { admin: l('pd-admin'), store: l('pd-store') }; addAudit('HR updated the PPE Admin / Store desks'); persistAll(); this.render(); },
+            dashHtml() {
+                const pa = ppeRequests.filter(p => p.status === 'Pending Admin'), ps = ppeRequests.filter(p => p.status === 'Pending Store' || p.status === 'Partly Issued'), st = this.stock();
+                const low = PPE_ITEMS.filter(it => ppeRequests.filter(p => /Pending|Partly/.test(p.status)).reduce((s, p) => s + Math.max(0, ((p.items || []).find(x => x.item === it) || { qty: 0 }).qty - this.issued(p, it)), 0) > (+st[it] || 0));
+                return '<div class="section-header">PPE</div>' + DASH.grid([DASH.card(pa.length, 'Waiting for Admin'), DASH.card(ps.length, 'Waiting for Store', ps.filter(p => this.age(p) > 2).length + ' over 2 days'), DASH.card(ppeRequests.filter(p => p.status === 'Issued').length, 'Issued'), DASH.card(low.length, 'Items short in stock', low.join(', '))]);
+            }
+        };
+
+        /* ---------- Notifications (in the app; email comes later) ---------- */
+        var NOTIF = {
+            list() {
+                const r = currentRole, out = [], add = (lvl, text, fn) => out.push({ lvl, text, fn });
+                if (!r) return out;
+                const cand = c => 'PIPE.openCand(\'' + c.id + '\')';
+                if (r === 'contractor') {
+                    PIPE.assignments().forEach(a => { if (a.flag === 'red') add('red', 'RED FLAG: no candidates for ' + a.r.id + ' (' + a.r.position + ') after ' + a.days + ' days', "PIPE.go('requisition-tracker')"); else if (a.flag !== 'submitted') add('amber', 'Requisition ' + a.r.id + ' (' + a.r.position + ' ×' + a.r.count + ') — submit candidates within 7 days (day ' + a.days + ')', "PIPE.go('requisition-tracker')"); });
+                    candidates.filter(c => cw_normJs(c.contractor) === cw_normJs(currentContractorName)).forEach(c => {
+                        if (c.status === ST.HRSCH && !c.contractorAck) add('amber', 'HR interview for ' + c.name + ' on ' + SOC.nice((c.hrInterview || {}).scheduled) + ' — confirm attendance', cand(c));
+                        if (c.status === ST.RET) add('amber', c.name + ' returned by HR: ' + (c.hrRemarks || ''), cand(c));
+                        if (c.status === ST.APPR) add('amber', c.name + ' approved (' + (c.workerEmpId || '') + ') — confirm joining', cand(c));
+                        if (/^Rejected/.test(c.status) && PIPE.cdays(c.stageAt) <= 7) add('info', c.name + ': ' + c.status, cand(c));
+                    });
+                }
+                if (r === 'hr_admin') {
+                    candidates.forEach(c => {
+                        const late = PIPE.wdays(PIPE.stageSince(c)) > 2 ? 'red' : 'amber';
+                        if (c.status === ST.SUB) add(late, 'Screen ' + c.name + ' (' + c.contractor + ')', cand(c));
+                        if (c.status === ST.HRSCH) add(late, 'HR interview: ' + c.name + ' on ' + SOC.nice((c.hrInterview || {}).scheduled), cand(c));
+                        if (c.status === ST.HRV || c.status === ST.CLAR) add(late, 'Verify and forward ' + c.name + ' to HR Head' + (c.status === ST.CLAR ? ' (clarification asked)' : ''), cand(c));
+                        if (c.status === ST.HEAD && PIPE.isHead()) add(late, 'HR Head approval: ' + c.name + ' — grade ' + (c.recommendedGrade || '-'), cand(c));
+                        if (c.status === ST.JOINED) add('amber', c.name + ' joined on ' + SOC.nice((c.joining || {}).date) + ' — verify & activate', "ONB.view='verify';PIPE.go('onboarding')");
+                        if ([ST.SUP, ST.PM].includes(c.status) && PIPE.wdays(PIPE.stageSince(c)) > 2) add('red', c.name + ' stuck at ' + c.status + ' for ' + PIPE.wdays(PIPE.stageSince(c)) + ' working days', cand(c));
+                    });
+                    PIPE.assignments().filter(a => a.flag === 'red').forEach(a => add('red', 'RED FLAG: ' + a.con + ' — no candidates for ' + a.r.id + ' after ' + a.days + ' days', "PIPE.go('dashboard')"));
+                    workers.filter(w => w.candidateId && w.status === 'Active' && !(w.induction && w.induction.completedAt)).forEach(w => add('amber', 'Induction pending: ' + w.name + ' (' + w.empId + ')', "ONB.view='induction';PIPE.go('onboarding')"));
+                }
+                if (r === 'supervisor' || r === 'production_manager') candidates.filter(c => c.division === currentDivision).forEach(c => {
+                    const late = PIPE.wdays(PIPE.stageSince(c)) > 2 ? 'red' : 'amber';
+                    if (c.status === ST.SUP) add(late, 'Interview ' + c.name + ' (' + (c.position || '') + ')' + (c.supInterview && c.supInterview.scheduled ? ' — set for ' + SOC.nice(c.supInterview.scheduled) : ''), cand(c));
+                    if (c.status === ST.PM && r === 'production_manager') add(late, 'Approve ' + c.name + ' — grade ' + (c.recommendedGrade || '-'), cand(c));
+                    if ((c.status === ST.JOINED || c.status === ST.ONB) && PIPE.cdays((c.joining || {}).date) <= 7) add('info', c.name + ' (' + (c.workerEmpId || '') + ') joined on ' + SOC.nice((c.joining || {}).date), cand(c));
+                });
+                if (PPEX.isAdmin() && (r === 'hr_admin' || (signedInUser && signedInUser.ppeAdmin))) ppeRequests.filter(p => p.status === 'Pending Admin').forEach(p => add(PPEX.age(p) > 2 ? 'red' : 'amber', 'Confirm PPE: ' + (p.type === 'joining' ? p.name + ' joined' : p.requisitionId + ' ' + p.position + ' ×' + p.count), "PPEX.view='pending';PIPE.go('ppe')"));
+                if (r === 'store' || (signedInUser && signedInUser.ppeStore)) ppeRequests.filter(p => p.status === 'Pending Store' || p.status === 'Partly Issued').forEach(p => add(PPEX.age(p) > 2 ? 'red' : 'amber', 'Issue PPE: ' + (p.type === 'joining' ? p.name + ' (' + (p.empId || '') + ')' : p.requisitionId + ' ' + p.position), "PPEX.view='pending';PIPE.go('ppe')"));
+                const t = SOC.stats(); if (t.confirm) add('amber', t.confirm + ' ticket(s) resolved — confirm or reopen', "PIPE.go('tickets')");
+                if (t.handler && t.qEsc) add('red', t.qEsc + ' escalated ticket(s)', "SOC.view='queue';PIPE.go('tickets')");
+                return out.sort((a, b) => ({ red: 0, amber: 1, info: 2 }[a.lvl] - { red: 0, amber: 1, info: 2 }[b.lvl]));
+            },
+            render() {
+                let b = document.getElementById('notif-btn');
+                if (!b) {
+                    const badge = document.getElementById('role-badge'); if (!badge) return;
+                    b = document.createElement('button'); b.id = 'notif-btn'; b.type = 'button'; b.title = 'Notifications';
+                    b.style.cssText = 'background:transparent;border:1px solid var(--aw-gold-line);color:var(--aw-gold);padding:4px 10px;margin-left:8px;min-height:30px;cursor:pointer;position:relative';
+                    b.onclick = () => NOTIF.toggle(); badge.parentNode.insertBefore(b, badge);
+                    const p = document.createElement('div'); p.id = 'notif-panel';
+                    p.style.cssText = 'display:none;position:fixed;top:60px;right:16px;width:min(420px,calc(100vw - 32px));max-height:70vh;overflow:auto;z-index:50;background:var(--aw-black,#111);border:1px solid var(--aw-gold-line);padding:10px;box-shadow:0 10px 30px rgba(0,0,0,.5)';
+                    document.body.appendChild(p);
+                }
+                const l = this.list(), reds = l.filter(x => x.lvl === 'red').length;
+                b.innerHTML = '🔔 ' + l.length + (reds ? ' <span style="color:var(--aw-danger,#e5484d)">●</span>' : '');
+                const p = document.getElementById('notif-panel');
+                p.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:6px"><b style="color:var(--aw-gold)">Notifications</b><button type="button" class="cw-btn-ghost" style="min-height:24px;padding:2px 8px" onclick="NOTIF.toggle(false)">✕</button></div>' + (l.length ? l.map((x, i) => '<div style="padding:7px 4px;border-bottom:1px solid var(--aw-line,#333);cursor:pointer;font-size:12px;border-left:3px solid ' + (x.lvl === 'red' ? 'var(--aw-danger,#e5484d)' : x.lvl === 'amber' ? 'var(--aw-gold)' : 'var(--aw-muted)') + ';padding-left:8px" onclick="NOTIF.toggle(false);' + escH(x.fn) + '">' + escH(x.text) + '</div>').join('') : '<p style="color:var(--aw-muted);font-size:12px">Nothing needs you right now.</p>') + '<p style="font-size:10px;color:var(--aw-muted);margin-top:6px">Email alerts will be added later.</p>';
+            },
+            toggle(on) { const p = document.getElementById('notif-panel'); if (!p) return; p.style.display = (on === undefined ? p.style.display === 'none' : on) ? 'block' : 'none'; },
+            dashHtml() {
+                const l = this.list(); if (!l.length) return '';
+                return '<div class="section-header">Waiting for you</div><div class="cw-panel" style="margin-bottom:12px">' + l.slice(0, 8).map(x => '<div style="padding:5px 0 5px 8px;border-left:3px solid ' + (x.lvl === 'red' ? 'var(--aw-danger,#e5484d)' : x.lvl === 'amber' ? 'var(--aw-gold)' : 'var(--aw-muted)') + ';margin-bottom:4px;cursor:pointer;font-size:13px" onclick="' + escH(x.fn) + '">' + escH(x.text) + '</div>').join('') + (l.length > 8 ? '<div style="font-size:11px;color:var(--aw-muted)">+' + (l.length - 8) + ' more under 🔔</div>' : '') + '</div>';
+            }
+        };
+
+        /* ---------- wire it in: settings, dashboard, tabs, refresh, store role, PPE tab visibility ---------- */
+        (function () {
+            const sn = SYNC.settingsNow, sa = SYNC.applySettings;
+            SYNC.settingsNow = function () { return Object.assign(sn(), { gradeSalaryStructure, ppeDesk }); };
+            SYNC.applySettings = function (s) { sa(s); if (s.gradeSalaryStructure && typeof s.gradeSalaryStructure === 'object') gradeSalaryStructure = s.gradeSalaryStructure; if (s.ppeDesk && typeof s.ppeDesk === 'object') ppeDesk = s.ppeDesk; };
+            const dashRender = DASH.render.bind(DASH);
+            DASH.store = function () { return ''; };
+            DASH.render = function () {
+                dashRender();
+                const body = document.getElementById('dash-body'); if (!body || !currentRole) return;
+                if (currentRole === 'store') { document.getElementById('dash-title').textContent = 'Store Dashboard'; body.innerHTML = NOTIF.dashHtml() + PPEX.dashHtml() + (typeof SOC !== 'undefined' ? SOC.dashTop() : ''); return; }
+                try { body.insertAdjacentHTML('afterbegin', NOTIF.dashHtml()); const extra = PIPE.dashHtml() + ((currentRole === 'hr_admin' || (signedInUser && (signedInUser.ppeAdmin || signedInUser.ppeStore))) ? PPEX.dashHtml() : ''); const foot = body.lastElementChild; if (foot && foot.tagName === 'P') foot.insertAdjacentHTML('beforebegin', extra); else body.insertAdjacentHTML('beforeend', extra); } catch (e) { console.warn(e); }
+            };
+            const st = switchTab;
+            switchTab = function (id) { st(id); if (id === 'onboarding') ONB.render(); if (id === 'ppe') PPEX.render(); };
+            const rr = SYNC.rerender.bind(SYNC);
+            SYNC.rerender = function () {
+                rr(); const a = document.activeElement, typing = a && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && a.closest('#onboarding,#ppe,#candidate-detail');
+                try { NOTIF.render(); if (!typing) { ONB.render(); PPEX.render(); } } catch (e) { console.warn(e); }
+            };
+            const arp = applyRolePermissions;
+            applyRolePermissions = function () {
+                arp();
+                const nav = document.getElementById('nav-ppe');
+                if (nav) nav.style.display = (currentRole === 'hr_admin' || currentRole === 'store' || (signedInUser && (signedInUser.ppeAdmin || signedInUser.ppeStore))) ? '' : 'none';
+                try { NOTIF.render(); } catch (e) { console.warn(e); }
+            };
+            DASH.LEFT = s => !!s && !['Active', 'Onboarding', 'Not Joined'].includes(s) && !/^Pending/.test(s);
+            const sb = statusBadge;
+            statusBadge = function (s) {
+                if ([ST.HRSCH, ST.SUP, ST.PM, ST.HRV, ST.HEAD, ST.CLAR, ST.APPR].includes(s)) return '<span class="badge badge-pending">' + s + '</span>';
+                if (s === ST.JOINED || s === ST.ONB) return '<span class="badge badge-active">' + s + '</span>';
+                if ([ST.REJ_PM, ST.REJ_HEAD, ST.NOTJ].includes(s)) return '<span class="badge badge-danger">' + s + '</span>';
+                return sb(s);
+            };
+        })();
 
         /* ---------- install as a phone / desktop app ---------- */
         if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
