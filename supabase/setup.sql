@@ -189,13 +189,15 @@ create or replace function cw_can_read(u app_users, r records) returns boolean
 language sql stable as $$
   select case (case when u.role = 'admin' then 'hr_admin' else u.role end)
     when 'hr_admin' then true
-    when 'gm_production' then r.collection in ('requisitions','candidates','workers')
+    when 'gm_production' then r.collection in ('requisitions','candidates','workers',
+                                               -- GM dashboard: attendance and attrition across all divisions (no payroll)
+                                               'attendanceRecords','punches','leaveRequests','resignations')
       -- a GM who is also a division's HOD (division set on the login) sees that division like its HOD does
-      or (r.collection in ('resignations','exitClearances','attendanceRecords','leaveRequests','regularizations','punches')
-          and cw_in_div(u.division, r.division))
+      or (r.collection in ('exitClearances','regularizations') and cw_in_div(u.division, r.division))
     when 'contractor' then
       (r.collection in ('workers','pendingSubmissions','candidates','resignations','payrollRuns',
-                        'wageRegisters','invoices','attendanceRecords','exitClearances')
+                        'wageRegisters','invoices','attendanceRecords','exitClearances',
+                        'punches','leaveRequests')   -- contractor dashboard: their own workers present / on leave today
         and cw_norm(r.contractor) = cw_norm(u.contractor))
       or (r.collection = 'requisitions' and exists (
             select 1 from jsonb_array_elements_text(coalesce(r.data->'assignedContractors', '[]'::jsonb)) a

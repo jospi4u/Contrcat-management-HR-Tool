@@ -740,6 +740,7 @@
     <div class="container">
         <nav>
             <ul>
+                <li data-roles="hr_admin,gm_production,production_manager,supervisor,contractor"><a href="#dashboard" class="nav-link" onclick="switchTab('dashboard')">Dashboard</a></li>
                 <li data-roles="hr_admin,contractor,gm_production"><a href="#master" class="nav-link active" onclick="switchTab('master')">Workers Master Data</a></li>
                 <li data-roles="hr_admin,production_manager,supervisor"><a href="#requisition-form" class="nav-link" onclick="switchTab('requisition-form')">Hiring Requisition Form</a></li>
                 <li data-roles="hr_admin,production_manager,supervisor,contractor,gm_production"><a href="#requisition-tracker" class="nav-link" onclick="switchTab('requisition-tracker')">Requisition Tracker</a></li>
@@ -756,6 +757,12 @@
         </nav>
 
         <main>
+            <!-- 0. ROLE-BASED DASHBOARD (each role sees only what it is responsible for) -->
+            <div id="dashboard" class="tab-content">
+                <h2 id="dash-title">Dashboard</h2>
+                <div id="dash-body"></div>
+            </div>
+
             <!-- 1. WORKERS MASTER DATA -->
             <div id="master" class="tab-content active">
                 <h2>Workers Master Data Entry</h2>
@@ -3898,7 +3905,7 @@
                 const money = n => n ? '₹ ' + Number(n).toLocaleString('en-IN') + ' / month' : '-';
                 const repl = r.type === 'Replacement'
                     ? f('Employee being replaced', (r.replName ? r.replName + ' · ' : '') + r.replEmpId) + f('Their position', r.replPosition)
-                      + (r.replDetails ? f('Their skill grade', r.replDetails.skill) + f('Their department', [r.replDetails.department, r.replDetails.section].filter(Boolean).join(' · ')) + f('Their contractor', r.replDetails.contractor) + f('Joined', r.replDetails.doj) + f('Last working day', r.replDetails.lwd) + f('Service', r.replDetails.tenure) + f('Exit type', r.replDetails.exitType) + f('Exit reason', r.replDetails.exitReason) : '') + (SALX.can() ? f('Their salary', r.replSalary ? '₹ ' + r.replSalary : '') : '') + f('Exit status', r.replStatus) + f('Reason for replacement', r.replReason)
+                      + (r.replDetails ? f('Their skill grade', r.replDetails.skill) + f('Their department', [r.replDetails.department, r.replDetails.section].filter(Boolean).join(' · ')) + f('Their contractor', r.replDetails.contractor) + f('Joined', r.replDetails.doj) + f('Last working day', r.replDetails.lwd) + f('Service', r.replDetails.tenure) + f('Exit type', r.replDetails.exitType) + f('Exit reason', r.replDetails.exitReason) : '') + (SALX.indiv() ? f('Their salary', r.replSalary ? '₹ ' + r.replSalary : '') : '') + f('Exit status', r.replStatus) + f('Reason for replacement', r.replReason)
                     : f('Project / site', r.project) + f('Why new manpower is needed', r.whyNew) + f('Management approved?', r.mgmtApproved) + f('Justification', r.justification);
                 const trail = this.trail(r).map(t => '<li><b>' + escH(t.stage) + ' — ' + escH(t.decision) + '</b> · ' + escH(t.by) + (t.at ? ' · ' + escH(t.at) : '') + (t.remarks ? ' · “' + escH(t.remarks) + '”' : '') + '</li>').join('');
                 const cands = candidates.filter(c => c.requisitionId === r.id);
@@ -4351,7 +4358,7 @@
                     '<div class="cw-detail-grid">' + f('Designation', d.designation) + f('Department / section', [d.department, d.section].filter(Boolean).join(' · ')) + f('Skill grade', d.skill) +
                     f('Contractor', d.contractor) + f('Division', d.division) + f('Location', d.location) + f('Shift', d.shift) +
                     f('Date of joining', d.doj) + f('Resignation date', d.resignDate) + f('Last working day', d.lwd) + f('Length of service', d.tenure) + f('Experience at joining', d.experience) +
-                    (SALX.can() ? f('Gross salary', money(d.gross)) + f('Basic + DA', money(d.basicDa)) : '') + f('Exit type', d.exitType) + f('Exit status', d.exitStatus) +
+                    (SALX.indiv() ? f('Gross salary', money(d.gross)) + f('Basic + DA', money(d.basicDa)) : '') + f('Exit type', d.exitType) + f('Exit status', d.exitStatus) +
                     f('Exit reason', d.exitReason) + f('Exit remarks', d.exitRemarks) + f('PPE issued on', d.ppeDate) + f('UAN', d.uan) + f('ESIC no.', d.esi) + '</div></div>';
             }
         });
@@ -4396,6 +4403,7 @@
            All divisions and contractors, with filters, a full details view per worker and a CSV download.
            GM cannot add, edit or delete workers (the database refuses it too). */
         const GMX = {
+            SAL: ['basicDa', 'hra', 'gross'],   // individual salary fields: never shown to GM (totals are on the GM dashboard)
             f: { q: '', division: '', contractor: '', status: '' },
             LABELS: [['empId', 'Emp ID'], ['name', 'Name'], ['status', 'Status'], ['contractor', 'Contractor'], ['division', 'Division'], ['location', 'Location'],
                 ['designation', 'Designation'], ['department', 'Department'], ['section', 'Section'], ['skill', 'Skill grade'], ['shift', 'Shift'], ['doj', 'Date of joining'],
@@ -4437,14 +4445,14 @@
                 document.getElementById('master-filter-label').textContent = ' — ' + list.length + ' shown';
                 tbody.innerHTML = list.length ? list.map(w => '<tr><td>' + escH(w.empId) + '</td><td class="text-left">' + escH(w.name) + '</td><td>' + escH(w.contractor) + '</td><td>' + escH(w.division || '-') + '</td><td>' + escH(w.location || '-') +
                     '</td><td>' + escH(w.designation || '-') + '</td><td>' + escH(w.department || '-') + '</td><td>' + escH(w.skill || '-') + '</td><td>' + escH(w.doj || '-') + '</td><td>' + escH(w.mobile || '-') +
-                    '</td><td>' + statusBadge(w.status || 'Active') + '</td><td>' + (w.gross ? '₹' + Number(w.gross).toLocaleString('en-IN') : '-') +
+                    '</td><td>' + statusBadge(w.status || 'Active') + '</td>' +
                     '</td><td><button type="button" class="action-btn edit" onclick="GMX.show(\'' + escH(String(w.empId).replace(/'/g, '')) + '\')">View</button></td></tr>').join('')
                     : '<tr><td colspan="13">No workers match these filters.</td></tr>';
             },
             show(empId) {
                 const w = workers.find(x => String(x.empId).replace(/'/g, '') === empId), el = document.getElementById('gm-worker-detail'); if (!w || !el) return;
                 const known = new Set(this.LABELS.map(l => l[0]));
-                const rows = this.LABELS.filter(([k]) => w[k] !== undefined && w[k] !== '').map(([k, l]) => [l, k === 'gross' || k === 'basicDa' || k === 'hra' ? '₹ ' + Number(w[k]).toLocaleString('en-IN') : this.mask(k, w[k])])
+                const rows = this.LABELS.filter(([k]) => !this.SAL.includes(k) && w[k] !== undefined && w[k] !== '').map(([k, l]) => [l, k === 'gross' || k === 'basicDa' || k === 'hra' ? '₹ ' + Number(w[k]).toLocaleString('en-IN') : this.mask(k, w[k])])
                     .concat(Object.keys(w).filter(k => !known.has(k) && w[k] !== '' && w[k] != null && typeof w[k] !== 'object').map(k => [k, String(w[k])]));
                 const ex = resignations.filter(r => r.empId === w.empId).slice(-1)[0];
                 if (ex) rows.push(['Exit', [ex.finalStatus || ex.status, ex.type, ex.lwd ? 'LWD ' + ex.lwd : '', ex.reason].filter(Boolean).join(' · ')]);
@@ -4454,7 +4462,7 @@
                 el.scrollIntoView({ behavior: 'smooth', block: 'start' });
             },
             csv() {
-                const cols = this.LABELS, cell = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+                const cols = this.LABELS.filter(([k]) => !this.SAL.includes(k)), cell = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
                 const lines = [cols.map(c => cell(c[1])).join(',')].concat(this.list().map(w => cols.map(([k]) => cell(this.mask(k, w[k]))).join(',')));
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv' }));
@@ -4464,6 +4472,9 @@
         const renderWorkersTableGm = renderWorkersTable;
         renderWorkersTable = function () {
             const bar = document.getElementById('gm-master-bar');
+            // GM sees no individual salary: the Fixed Gross column is hidden for GM only
+            const grossTh = Array.from(document.querySelectorAll('#master thead th')).find(th => th.textContent.trim() === 'Fixed Gross');
+            if (grossTh) grossTh.style.display = GMX.isGM() ? 'none' : '';
             if (!GMX.isGM()) { if (bar) bar.style.display = 'none'; const h = document.getElementById('master-actions-col'); if (h) h.textContent = 'Actions'; return renderWorkersTableGm(); }
             GMX.bar(); document.getElementById('gm-master-bar').style.display = ''; GMX.table();
         };
@@ -4478,6 +4489,8 @@
            requisition details, and the leaving worker's salary on a replacement. HR, GM, HODs and Managers still see them. */
         const SALX = {
             can() { return !['supervisor', 'contractor'].includes(currentRole); },
+            // one person's salary (a leaving worker's gross on a replacement): HR only
+            indiv() { return currentRole === 'hr_admin'; },
             apply() {
                 const show = this.can();
                 const hdr = document.getElementById('grade-budget-header');
@@ -4488,7 +4501,7 @@
                     if (tbl) tbl.closest('.table-wrapper').style.display = show ? '' : 'none';
                 }
                 const bd = document.getElementById('rq-budget-display'); if (bd && !show) bd.textContent = '';
-                const rs = document.getElementById('rq-repl-salary'); if (rs) rs.closest('.form-group').style.display = show ? '' : 'none';
+                const rs = document.getElementById('rq-repl-salary'); if (rs) rs.closest('.form-group').style.display = this.indiv() ? '' : 'none';
             }
         };
         const updateReqBudgetDisplaySalx = updateReqBudgetDisplay;
@@ -4497,6 +4510,133 @@
         applyRolePermissions = function () { applyRolePermissionsSalx(); SALX.apply(); };
         const renderGradeBudgetTableSalx = renderGradeBudgetTable;
         renderGradeBudgetTable = function () { renderGradeBudgetTableSalx(); SALX.apply(); };
+
+        /* ---------- Role-based dashboards ----------
+           HR: everything incl. payroll · GM: overall manpower, attendance, attrition, total salary budget only (no one's salary)
+           HOD / Manager: their division, no salary · Supervisor: their team today and what waits on them, no salary
+           Contractor: their own workers, requirements assigned to them, joinings and exits, no salary.
+           Each view is built only from data that role is already allowed to load. */
+        const DASH = {
+            iso: d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10),
+            LEFT: s => !!s && !['Active', 'Onboarding'].includes(s) && !/^Pending/.test(s),
+            inr: n => '₹' + Math.round(+n || 0).toLocaleString('en-IN'),
+            pct: (a, b) => b ? (Math.round(a * 1000 / b) / 10) + '%' : '–',
+            role() { return currentRole; },
+            scope() {   // the workers this role is responsible for
+                const r = this.role();
+                if (r === 'contractor') return workers.filter(w => cw_normJs(w.contractor) === cw_normJs(currentContractorName));
+                if (r === 'production_manager' || r === 'supervisor') return workers.filter(w => w.division === currentDivision);
+                return workers;
+            },
+            exitDate(w) { const ex = resignations.filter(r => r.empId === w.empId).slice(-1)[0]; return (ex && (ex.lwd || ex.resignDate)) || ''; },
+            today(list) {
+                const t = this.iso(new Date()), dow = new Date().getDay(), hol = (typeof holidaysList !== 'undefined' ? holidaysList : []).find(h => h.date === t);
+                const act = list.filter(w => (w.status || 'Active') === 'Active');
+                const onLeave = new Set(leaveRequests.filter(l => l.status === 'Approved' && l.from <= t && l.to >= t).map(l => l.empId));
+                const inToday = new Set(punches.filter(p => p.date === t && p.in).map(p => p.empId));
+                const present = act.filter(w => inToday.has(w.empId)).length, leave = act.filter(w => !inToday.has(w.empId) && onLeave.has(w.empId)).length;
+                return { t, off: dow === 0 ? 'Sunday' : hol ? hol.name : '', active: act.length, present, leave, absent: Math.max(0, act.length - present - leave) };
+            },
+            month(list) {   // monthly attendance from the eSSL / attendance records of the current period
+                const ids = new Set(list.map(w => w.empId)), rec = attendanceRecords.filter(a => a.period === CURRENT_PERIOD && ids.has(a.empId));
+                const paid = (typeof rateConfig !== 'undefined' && rateConfig.paidDays) || 26, present = rec.reduce((s, a) => s + (+a.presentDays || 0), 0);
+                return { n: rec.length, avg: rec.length ? Math.round(present * 10 / rec.length) / 10 : 0, absentPct: rec.length ? this.pct(rec.length * paid - present, rec.length * paid) : '–' };
+            },
+            attrition(list) {   // last 12 months: exits ÷ average headcount
+                const now = new Date(), from = this.iso(new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()));
+                const left = list.filter(w => this.LEFT(w.status) && this.exitDate(w) >= from).length;
+                const joined = list.filter(w => (w.doj || '') >= from).length, active = list.filter(w => (w.status || 'Active') === 'Active').length;
+                const avg = (active + (active - joined + left)) / 2;
+                const months = []; for (let i = 5; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1), k = this.iso(d).slice(0, 7); months.push({ k, label: d.toLocaleString('en-IN', { month: 'short', year: '2-digit' }), joined: list.filter(w => (w.doj || '').slice(0, 7) === k).length, left: list.filter(w => this.LEFT(w.status) && this.exitDate(w).slice(0, 7) === k).length }); }
+                return { left, joined, rate: avg > 0 ? this.pct(left, avg) : '–', months };
+            },
+            reqs(div) {
+                const list = requisitions.filter(r => !div || r.division === div);
+                const filled = r => candidates.filter(c => c.requisitionId === r.id && /Selected|Joined/.test(c.status || '')).length;
+                const open = list.filter(r => r.status === 'Approved'), pend = list.filter(r => /^Pending/.test(r.status || ''));
+                return { list, pend, open, shortage: open.reduce((s, r) => s + Math.max(0, (+r.count || 0) - filled(r)), 0), repl: list.filter(r => r.type === 'Replacement' && (/^Pending/.test(r.status || '') || r.status === 'Approved')), filled };
+            },
+            card: (v, l, sub) => '<div class="metric-card"><div class="value">' + v + '</div><div class="label">' + l + '</div>' + (sub ? '<div style="font-size:11px;color:var(--aw-muted);margin-top:4px">' + sub + '</div>' : '') + '</div>',
+            grid(cards) { return '<div class="metrics-grid">' + cards.join('') + '</div>'; },
+            sec: t => '<div class="section-header">' + t + '</div>',
+            table(head, rows, empty) { return '<div class="table-wrapper"><table><thead><tr>' + head.map(h => '<th>' + h + '</th>').join('') + '</tr></thead><tbody>' + (rows.length ? rows.map(r => '<tr>' + r.map((c, i) => '<td' + (i === 0 ? ' class="text-left"' : '') + '>' + c + '</td>').join('') + '</tr>').join('') : '<tr><td colspan="' + head.length + '">' + (empty || 'Nothing yet.') + '</td></tr>') + '</tbody></table></div>'; },
+            groupBy(list, key) {   // headcount + today's attendance per contractor or per division
+                const t = this.iso(new Date()), inToday = new Set(punches.filter(p => p.date === t && p.in).map(p => p.empId));
+                const onLeave = new Set(leaveRequests.filter(l => l.status === 'Approved' && l.from <= t && l.to >= t).map(l => l.empId));
+                const g = {}; list.forEach(w => { const k = w[key] || '—'; const x = g[k] = g[k] || { active: 0, onb: 0, left: 0, present: 0, leave: 0, cons: new Set(), divs: new Set() };
+                    const s = w.status || 'Active'; if (s === 'Active') { x.active++; if (inToday.has(w.empId)) x.present++; else if (onLeave.has(w.empId)) x.leave++; } else if (s === 'Onboarding') x.onb++; else if (this.LEFT(s)) x.left++;
+                    if (w.contractor) x.cons.add(w.contractor); if (w.division) x.divs.add(w.division); });
+                return Object.entries(g).sort((a, b) => b[1].active - a[1].active);
+            },
+            headline(list, extra) {
+                const td = this.today(list), mo = this.month(list), at = this.attrition(list);
+                return this.grid([
+                    this.card(td.active, 'Active workers', list.filter(w => w.status === 'Onboarding').length + ' onboarding'),
+                    this.card(td.off ? '–' : td.present, 'Present today', td.off ? td.off : 'web check-ins'),
+                    this.card(td.off ? '–' : td.absent, 'Absent today', td.off ? '' : td.leave + ' on approved leave'),
+                    this.card(mo.n ? mo.absentPct : '–', 'Absenteeism ' + CURRENT_PERIOD, mo.n ? 'avg ' + mo.avg + ' days present' : 'no attendance yet'),
+                    this.card(at.rate, 'Attrition (12 months)', at.left + ' left · ' + at.joined + ' joined')
+                ].concat(extra || []));
+            },
+            turnover(list) { const at = this.attrition(list); return this.sec('Joining and exits — last 6 months') + this.table(['Month', 'Joined', 'Left', 'Net'], at.months.map(m => [m.label, m.joined, m.left, (m.joined - m.left > 0 ? '+' : '') + (m.joined - m.left)])); },
+            byContractor(list) { return this.sec('Contractor-wise manpower') + this.table(['Contractor', 'Active', 'Onboarding', 'Present today', 'On leave', 'Left (all time)'], this.groupBy(list, 'contractor').map(([k, x]) => [escH(k), x.active, x.onb, x.present, x.leave, x.left])); },
+            byDivision(list) { return this.sec('Department-wise manpower') + this.table(['Department', 'Active', 'Contractors', 'Onboarding', 'Present today', 'Left (all time)'], this.groupBy(list, 'division').map(([k, x]) => [escH(k), x.active, x.cons.size, x.onb, x.present, x.left])); },
+            reqBlock(div, title) {
+                const q = this.reqs(div);
+                return this.sec(title || 'Manpower requirements') + this.grid([this.card(q.pend.length, 'Awaiting approval', q.pend.reduce((s, r) => s + (+r.count || 0), 0) + ' workers'), this.card(q.open.length, 'Approved, being filled', 'with contractors'), this.card(q.shortage, 'Shortage', 'workers still to join'), this.card(q.repl.length, 'Pending replacements')]) +
+                    this.table(['Requisition', 'Department', 'Position', 'Type', 'Needed', 'Joined', 'Status'], q.list.filter(r => /^Pending/.test(r.status || '') || r.status === 'Approved').slice(-12).reverse().map(r => [escH(r.id), escH(r.division), escH(r.position), escH(r.type), r.count, q.filled(r), statusBadge(r.status)]), 'No open requirements.');
+            },
+            hr() {
+                const list = workers, pr = payrollRuns.filter(p => p.period === CURRENT_PERIOD), wr = wageRegisters.some(w => w.period === CURRENT_PERIOD);
+                const act = list.filter(w => (w.status || 'Active') === 'Active'), fixed = act.reduce((s, w) => s + (+w.gross || 0), 0);
+                const st = {}; pr.forEach(p => st[p.status] = (st[p.status] || 0) + 1);
+                const paidHist = [...new Set(payrollRuns.map(p => p.period))].slice(-6).map(per => { const rs = payrollRuns.filter(p => p.period === per); return [escH(per), rs.length, this.inr(rs.reduce((s, p) => s + (+p.gross || 0), 0)), this.inr(rs.reduce((s, p) => s + (+p.net || 0), 0)), wageRegisters.some(w => w.period === per) ? '<span class="badge badge-active">Final</span>' : '<span class="badge badge-pending">Open</span>']; });
+                return this.headline(list, [this.card(this.inr(fixed), 'Fixed monthly salary', act.length + ' active workers')]) +
+                    this.sec('Payroll — ' + CURRENT_PERIOD) + this.grid([this.card(pr.length, 'Payslips generated', pr.length ? Object.entries(st).map(([k, v]) => v + ' ' + k).join(' · ') : 'not generated yet'), this.card(this.inr(pr.reduce((s, p) => s + (+p.gross || 0), 0)), 'Gross'), this.card(this.inr(pr.reduce((s, p) => s + (+p.net || 0), 0)), 'Net pay'), this.card(wr ? 'Final' : 'Open', 'Wage register')]) +
+                    this.sec('Salary paid — recent months') + this.table(['Period', 'Workers', 'Gross', 'Net paid', 'Wage register'], paidHist.reverse(), 'No payroll yet.') +
+                    this.byContractor(list) + this.byDivision(list) + this.turnover(list) + this.reqBlock('', 'Manpower requirements — all departments');
+            },
+            gm() {
+                const list = workers, act = list.filter(w => (w.status || 'Active') === 'Active'), fixed = act.reduce((s, w) => s + (+w.gross || 0), 0);
+                const q = this.reqs(''), reqBudget = q.open.concat(q.pend).reduce((s, r) => s + (+r.gradeBudget || 0) * (+r.count || 0), 0);
+                return this.headline(list) + this.sec('Salary budget (overall)') + this.grid([this.card(this.inr(fixed), 'Monthly fixed salary', 'all ' + act.length + ' active workers, total only'), this.card(this.inr(reqBudget), 'Budget of open requirements', 'per month, if all are filled')]) +
+                    this.byDivision(list) + this.byContractor(list) + this.turnover(list) + this.reqBlock('', 'Manpower requirements — all departments');
+            },
+            manager() { const list = this.scope(); return this.headline(list) + this.reqBlock(currentDivision) + this.byContractor(list) + this.turnover(list); },
+            supervisor() {
+                const list = this.scope(), mine = leaveRequests.concat(regularizations, resignations.filter(r => r.source === 'employee')).filter(x => x.status === 'Pending Supervisor' && list.some(w => w.empId === x.empId)).length;
+                const q = this.reqs(currentDivision), td = this.today(list);
+                return this.grid([this.card(td.active, 'In my team'), this.card(td.off ? '–' : td.present, 'Present today', td.off || ''), this.card(td.off ? '–' : td.absent, 'Absent today', td.off ? '' : td.leave + ' on approved leave'), this.card(mine, 'Waiting for my approval', 'leave, corrections, resignations'), this.card(q.pend.length, 'Requisitions awaiting approval')]) +
+                    '<p style="color:var(--aw-muted);font-size:12px">See who is in today under <b>Team &amp; Approvals → Team today</b>.</p>' + this.reqBlock(currentDivision, 'Requisitions for ' + escH(currentDivision));
+            },
+            contractor() {
+                const list = this.scope(), mine = requisitions.filter(r => (r.assignedContractors || []).some(c => cw_normJs(c) === cw_normJs(currentContractorName)) && r.status === 'Approved');
+                const myC = candidates.filter(c => cw_normJs(c.contractor) === cw_normJs(currentContractorName));
+                const exits = resignations.filter(r => list.some(w => w.empId === r.empId)).slice(-10).reverse();
+                return this.headline(list) +
+                    this.sec('Requirements assigned to you') + this.table(['Requisition', 'Department', 'Position', 'Type', 'Needed', 'Submitted', 'Joined', 'Deadline'], mine.map(r => [escH(r.id), escH(r.division), escH(r.position), escH(r.type), r.count, myC.filter(c => c.requisitionId === r.id).length, myC.filter(c => c.requisitionId === r.id && /Selected|Joined/.test(c.status || '')).length, escH(r.deadline || '-')]), 'No open requirements assigned to you.') +
+                    this.sec('Deployment by department') + this.table(['Department', 'Active', 'Onboarding', 'Present today', 'Left (all time)'], this.groupBy(list, 'division').map(([k, x]) => [escH(k), x.active, x.onb, x.present, x.left])) +
+                    this.sec('Joining') + this.table(['Emp ID', 'Name', 'Department', 'Joining date', 'Status'], list.filter(w => w.status === 'Onboarding' || (w.doj || '') >= this.iso(new Date(Date.now() - 45 * 864e5))).map(w => [escH(w.empId), escH(w.name), escH(w.division || '-'), escH(w.doj || '-'), statusBadge(w.status || 'Active')]), 'No recent joinings.') +
+                    this.sec('Exits') + this.table(['Emp ID', 'Name', 'Type', 'Last working day', 'Status'], exits.map(r => [escH(r.empId), escH(r.name), escH(r.type || '-'), escH(r.lwd || '-'), statusBadge(r.finalStatus || r.status)]), 'No exits.') + this.turnover(list);
+            },
+            render() {
+                const body = document.getElementById('dash-body'); if (!body || !currentRole) return;
+                const r = this.role(), title = document.getElementById('dash-title');
+                const views = { hr_admin: ['HR Dashboard', 'hr'], gm_production: ['GM Dashboard', 'gm'], production_manager: [ROLE_LABELS.production_manager + ' Dashboard — ' + currentDivision, 'manager'], supervisor: ['Supervisor Dashboard — ' + currentDivision, 'supervisor'], contractor: ['Contractor Dashboard — ' + currentContractorName, 'contractor'] };
+                const v = views[r]; if (!v) { body.innerHTML = ''; return; }
+                title.textContent = v[0];
+                try { body.innerHTML = this[v[1]]() + '<p style="color:var(--aw-muted);font-size:11px;margin-top:14px">Today\'s attendance comes from web check-ins and approved leave; monthly figures from the attendance of ' + escH(CURRENT_PERIOD) + '. ' + (['hr_admin', 'gm_production'].includes(r) ? '' : 'Salary information is not shown on this dashboard.') + '</p>'; }
+                catch (e) { console.warn(e); body.innerHTML = '<div class="access-note">The dashboard could not be built: ' + escH(e.message) + '</div>'; }
+            }
+        };
+        function cw_normJs(s) { return String(s || '').trim().toLowerCase(); }
+        Object.keys(ROLE_DEFAULT_TAB).forEach(k => { ROLE_DEFAULT_TAB[k] = 'dashboard'; });   // everyone lands on their dashboard
+        const applyRolePermissionsDash = applyRolePermissions;
+        applyRolePermissions = function () { try { applyRolePermissionsDash(); } finally { DASH.render(); } };
+        const syncRerenderDash = SYNC.rerender.bind(SYNC);
+        SYNC.rerender = function () { try { syncRerenderDash(); } finally { DASH.render(); } };
+        const switchTabDash = switchTab;
+        switchTab = function (id) { switchTabDash(id); if (id === 'dashboard') DASH.render(); };
 
         /* ---------- install as a phone / desktop app ---------- */
         if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
