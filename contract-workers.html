@@ -4728,16 +4728,21 @@
             escalated(t) { if (!this.OPEN(t.status)) return false; if (t.escalated) return true; if (!t.dueDate) return false; return (new Date(this.today()) - new Date(t.dueDate)) / 864e5 >= 2; },
             followDue(t) { return this.OPEN(t.status) && t.followUp && t.followUp <= this.today(); },
             mine() { const u = this.me().user; return tickets.filter(t => t.raisedBy === u); },
+            // the raising side: the person who raised it, or the HOD / Manager of the division it was raised from
+            isMgr() { return ['production_manager', 'gm_production'].includes(currentRole); },
+            raiserSide(t) { return t.raisedBy === this.me().user || (this.isMgr() && !!t.division && this.myDivs().includes(t.division)); },
+            deptRaised() { const u = this.me().user; return this.isMgr() ? tickets.filter(t => t.raisedBy !== u && this.raiserSide(t)) : []; },
+            awaitingConfirm(t) { return t.status === 'Resolved' && this.raiserSide(t); },
             queue() { const q = this.myQueues(); return tickets.filter(t => this.isHR() || q.includes(t.toDept)); },
-            stats() { const m = this.mine(), q = this.queue().filter(t => t.raisedBy !== this.me().user || this.isHR()); return { myOpen: m.filter(t => this.OPEN(t.status)).length, myFollow: m.filter(t => this.followDue(t)).length, qOpen: q.filter(t => this.OPEN(t.status)).length, qOver: q.filter(t => this.overdue(t)).length, qEsc: q.filter(t => this.escalated(t)).length, qFollow: q.filter(t => this.followDue(t)).length, handler: this.isHR() || this.myQueues().length > 0 }; },
+            stats() { const m = this.mine(), q = this.queue().filter(t => t.raisedBy !== this.me().user || this.isHR()); return { confirm: m.concat(this.deptRaised()).filter(t => this.awaitingConfirm(t)).length, deptOpen: this.deptRaised().filter(t => this.OPEN(t.status)).length, myOpen: m.filter(t => this.OPEN(t.status)).length, myFollow: m.filter(t => this.followDue(t)).length, qOpen: q.filter(t => this.OPEN(t.status)).length, qOver: q.filter(t => this.overdue(t)).length, qEsc: q.filter(t => this.escalated(t)).length, qFollow: q.filter(t => this.followDue(t)).length, handler: this.isHR() || this.myQueues().length > 0 }; },
             badge(t) {
                 const cls = { Open: 'badge-pending', 'In Progress': 'badge-pending', 'Waiting for information': 'badge-neutral', Resolved: 'badge-active', Closed: 'badge-neutral', Reopened: 'badge-danger' }[t.status] || 'badge-neutral';
-                return '<span class="badge ' + cls + '">' + escH(t.status) + '</span>' + (this.escalated(t) ? ' <span class="badge badge-danger">Escalated</span>' : this.overdue(t) ? ' <span class="badge badge-danger">Overdue</span>' : '') + (this.followDue(t) ? ' <span class="badge badge-pending">Follow up</span>' : '');
+                return '<span class="badge ' + cls + '">' + escH(t.status) + '</span>' + (this.awaitingConfirm(t) ? ' <span class="badge badge-pending">Confirm closure</span>' : '') + (this.escalated(t) ? ' <span class="badge badge-danger">Escalated</span>' : this.overdue(t) ? ' <span class="badge badge-danger">Overdue</span>' : '') + (this.followDue(t) ? ' <span class="badge badge-pending">Follow up</span>' : '');
             },
             setView(v) { this.view = v; this.open = null; this.render(); },
             render() {
                 const tabs = document.getElementById('tk-tabs'), el = document.getElementById('tk-body'); if (!tabs || !el || !currentRole) return;
-                const s = this.stats(), views = [['mine', 'My tickets (' + s.myOpen + ' open)'], ['new', '+ Raise a ticket']].concat(s.handler ? [['queue', (this.isHR() ? 'All tickets' : 'My department queue') + ' (' + s.qOpen + ')']] : []).concat(this.isHR() ? [['depts', 'Departments & handlers']] : []);
+                const s = this.stats(), views = [['mine', (this.isMgr() ? 'My & my department\'s tickets' : 'My tickets') + ' (' + (s.myOpen + s.deptOpen) + ' open' + (s.confirm ? ', ' + s.confirm + ' to confirm' : '') + ')'], ['new', '+ Raise a ticket']].concat(s.handler ? [['queue', (this.isHR() ? 'All tickets' : 'My department queue') + ' (' + s.qOpen + ')']] : []).concat(this.isHR() ? [['depts', 'Departments & handlers']] : []);
                 if (!views.some(v => v[0] === this.view)) this.view = 'mine';
                 tabs.innerHTML = views.map(([k, l]) => '<button type="button" class="' + (this.view === k ? 'on' : '') + '" onclick="SOC.setView(\'' + k + '\')">' + l + '</button>').join('');
                 el.innerHTML = this['v_' + this.view]();
@@ -4772,9 +4777,12 @@
             },
             sortT(list) { return list.slice().sort((a, b) => (this.escalated(b) - this.escalated(a)) || (this.overdue(b) - this.overdue(a)) || (this.OPEN(b.status) - this.OPEN(a.status)) || String(b.createdAt).localeCompare(String(a.createdAt))); },
             v_mine() {
-                const m = this.sortT(this.mine()), s = this.stats();
-                return DASH.grid([DASH.card(s.myOpen, 'Open'), DASH.card(m.filter(t => this.overdue(t)).length, 'Overdue'), DASH.card(s.myFollow, 'Follow-ups due'), DASH.card(m.filter(t => !this.OPEN(t.status)).length, 'Completed')]) +
-                    '<div id="tk-detail"></div>' + this.table(m, 'You have not raised any tickets yet. Use <b>+ Raise a ticket</b>.') + this.reopenDetail();
+                const m = this.sortT(this.mine()), s = this.stats(), dr = this.sortT(this.deptRaised()), conf = this.sortT(m.concat(dr).filter(t => this.awaitingConfirm(t)));
+                return DASH.grid([DASH.card(s.myOpen, 'Open'), DASH.card(s.confirm, 'Waiting for your confirmation', 'resolved by the other department'), DASH.card(m.filter(t => this.overdue(t)).length, 'Overdue'), DASH.card(s.myFollow, 'Follow-ups due'), DASH.card(m.filter(t => !this.OPEN(t.status)).length, 'Completed')]) +
+                    '<div id="tk-detail"></div>' +
+                    (conf.length ? '<div class="section-header">Resolved — please confirm or reopen</div>' + this.table(conf) : '') +
+                    '<div class="section-header">Raised by me</div>' + this.table(m, 'You have not raised any tickets yet. Use <b>+ Raise a ticket</b>.') +
+                    (this.isMgr() ? '<div class="section-header">Raised by my department (' + escH(this.myDivs().join(' + ')) + ')</div>' + this.table(dr, 'No tickets raised by your department\'s staff.') : '') + this.reopenDetail();
             },
             qFilter: 'open',
             v_queue() {
@@ -4790,7 +4798,7 @@
             show(id, quiet) {
                 const t = tickets.find(x => x.id === id), el = document.getElementById('tk-detail'); if (!t || !el) return;
                 this.open = id;
-                const me = this.me(), raiser = t.raisedBy === me.user, handler = this.isHandler(t), f = (l, v) => '<div><span>' + l + '</span>' + escH(v || '-') + '</div>';
+                const me = this.me(), raiser = this.raiserSide(t), handler = this.isHandler(t), f = (l, v) => '<div><span>' + l + '</span>' + escH(v || '-') + '</div>';
                 const hist = (t.history || []).slice().reverse().map(h => '<li><b>' + escH(h.action) + '</b> · ' + escH(h.by) + ' · ' + new Date(h.at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + (h.note ? '<div style="white-space:pre-wrap">' + escH(h.note) + '</div>' : '') + '</li>').join('');
                 let act = '<div class="form-group" style="flex:1;min-width:220px"><label>Note / reply</label><input type="text" id="tk-note" placeholder="Add a note"></div>';
                 if (handler && this.OPEN(t.status)) act += '<div class="form-group"><label>Status</label><select id="tk-status">' + ['Open', 'In Progress', 'Waiting for information', 'Resolved'].map(s => '<option' + (s === t.status ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></div>' +
@@ -4800,10 +4808,13 @@
                     '<button type="button" onclick="SOC.update(\'' + escH(t.id) + '\')">Save</button>';
                 else if (raiser && this.OPEN(t.status)) act += '<div class="form-group"><label>Follow-up date</label><input type="date" id="tk-follow2" value="' + escH(t.followUp || '') + '"></div><button type="button" onclick="SOC.update(\'' + escH(t.id) + '\')">Add note</button>' +
                     (!t.escalated ? '<button type="button" class="cw-btn-ghost" onclick="SOC.escalate(\'' + escH(t.id) + '\')">Escalate to HR</button>' : '') + '<button type="button" class="cw-btn-ghost" onclick="SOC.setStatus(\'' + escH(t.id) + '\',\'Closed\')">Withdraw / close</button>';
-                if (!this.OPEN(t.status) && (raiser || handler)) act += (t.status === 'Resolved' && raiser ? '<button type="button" onclick="SOC.setStatus(\'' + escH(t.id) + '\',\'Closed\')">Confirm and close</button>' : '') + '<button type="button" class="cw-btn-ghost" onclick="SOC.setStatus(\'' + escH(t.id) + '\',\'Reopened\')">Reopen</button>';
+                if (!this.OPEN(t.status) && (raiser || handler)) act += (t.status === 'Resolved' && raiser ? '<button type="button" onclick="SOC.setStatus(\'' + escH(t.id) + '\',\'Closed\')">Confirm and close</button>' : '') + '<button type="button" class="cw-btn-ghost" onclick="SOC.setStatus(\'' + escH(t.id) + '\',\'Reopened\')">' + (t.status === 'Resolved' && raiser ? 'Not solved — reopen' : 'Reopen') + '</button>';
+                const lastRes = (t.history || []).filter(h => /Resolved/.test(h.action)).slice(-1)[0];
+                const banner = this.awaitingConfirm(t) ? '<div class="access-note" style="margin:8px 0">' + escH(t.toDept) + ' marked this ticket <b>resolved</b>' + (lastRes ? ' (' + escH(lastRes.by) + (lastRes.note ? ': “' + escH(lastRes.note) + '”' : '') + ')' : '') + '. Please <b>confirm and close</b> it, or <b>reopen</b> it if the problem is not solved.' + (t.raisedBy !== me.user ? ' You can do this as the HOD / Manager of the department that raised it.' : '') + '</div>'
+                    : t.status === 'Closed' ? '<div style="font-size:12px;color:var(--aw-muted);margin:6px 0">Closed' + (t.closedBy ? ' by ' + escH(t.closedBy) : '') + '. Reopen it if the problem comes back.</div>' : '';
                 el.innerHTML = '<div class="cw-panel" style="margin:6px 0 14px"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center"><b style="color:var(--aw-gold)">' + escH(t.no + ' · ' + t.subject) + '</b><span>' + this.badge(t) + ' <button type="button" class="cw-btn-ghost" onclick="SOC.open=null;document.getElementById(\'tk-detail\').innerHTML=\'\'">Close</button></span></div>' +
                     '<div class="cw-detail-grid">' + f('Department', t.toDept) + f('Nature', t.nature) + f('Priority', t.priority) + f('Raised by', t.raisedByName + ' · ' + (t.raisedByRole || '')) + f('Raised on', this.nice(t.createdAt)) + f('Resolve within', (t.dueDays != null ? t.dueDays + ' days · ' : '') + 'due ' + this.nice(t.dueDate)) + f('Follow-up / reminder', this.nice(t.followUp)) + f('Assigned to', t.assignee) + (t.division ? f('Division', t.division) : '') + (t.contractor ? f('Contractor', t.contractor) : '') + '</div>' +
-                    (t.details ? '<div style="white-space:pre-wrap;margin:4px 0 10px;font-size:13px">' + escH(t.details) + '</div>' : '') +
+                    (t.details ? '<div style="white-space:pre-wrap;margin:4px 0 10px;font-size:13px">' + escH(t.details) + '</div>' : '') + banner +
                     '<div class="cw-decision">' + act + '</div><div class="section-header" style="margin-top:12px">History</div><ul style="font-size:12px;margin:0;padding-left:18px">' + hist + '</ul></div>';
                 if (!quiet) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
             },
@@ -4821,8 +4832,10 @@
             setStatus(id, st) {
                 const t = tickets.find(x => x.id === id); if (!t) return;
                 if (st === 'Reopened' && !confirm('Reopen this ticket?')) return;
+                const wasResolved = t.status === 'Resolved', me = this.me();
                 t.status = st; if (st === 'Reopened') { t.escalated = false; t.dueDate = this.addDays(t.dueDays || 3); }
-                this.log(t, st === 'Closed' ? 'Closed' : st); persistAll(); this.render(); DASH.render();
+                if (st === 'Closed') { t.closedBy = me.name + (t.raisedBy !== me.user && ROLE_LABELS[currentRole] && ROLE_LABELS[currentRole] !== me.name ? ' (' + ROLE_LABELS[currentRole] + ')' : '') + (t.raisedBy !== me.user && currentDivision ? ' — ' + currentDivision : ''); t.closedAt = new Date().toISOString(); }
+                this.log(t, st === 'Closed' ? (wasResolved ? 'Closure confirmed' : 'Closed') : st === 'Reopened' && wasResolved ? 'Reopened — not solved' : st); persistAll(); this.render(); DASH.render();
             },
             escalate(id) {
                 const t = tickets.find(x => x.id === id); if (!t) return;
@@ -4844,7 +4857,7 @@
             dashTop() {
                 const live = this.live().slice(0, 3), s = this.stats();
                 const ann = live.length ? '<div class="section-header">Announcements</div>' + live.map(a => this.annCard(a)).join('') + (this.live().length > 3 ? '<p style="font-size:12px"><a href="#announcements" onclick="document.querySelector(\'nav a[href=&quot;#announcements&quot;]\').click();return false;">See all announcements</a></p>' : '') : '';
-                const tk = '<div class="section-header">Tickets &amp; reminders</div>' + DASH.grid([DASH.card(s.myOpen, 'My open tickets', s.myFollow ? s.myFollow + ' follow-up due' : '')].concat(s.handler ? [DASH.card(s.qOpen, this.isHR() ? 'Open tickets (all)' : 'Open in my department'), DASH.card(s.qOver, 'Overdue'), DASH.card(s.qEsc, 'Escalated')] : []));
+                const tk = '<div class="section-header">Tickets &amp; reminders</div>' + DASH.grid([DASH.card(s.myOpen + s.deptOpen, this.isMgr() ? 'Open — raised by me / my department' : 'My open tickets', s.myFollow ? s.myFollow + ' follow-up due' : ''), DASH.card(s.confirm, 'Waiting for my confirmation', 'resolved by the other department')].concat(s.handler ? [DASH.card(s.qOpen, this.isHR() ? 'Open tickets (all)' : 'Open in my department'), DASH.card(s.qOver, 'Overdue'), DASH.card(s.qEsc, 'Escalated')] : []));
                 return ann + this.celebHtml() + tk;
             }
         };
