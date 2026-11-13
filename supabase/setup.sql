@@ -184,10 +184,69 @@ begin
   return jsonb_build_object('ok', true) || cw_user_json(u);
 end $$;
 
+-- ---------------------------------------------------------------------
+-- Announcements and tickets (shared by every role, including workers)
+--   announcements: data {by, title, body, audience: ["all"] | ["contractors"] | [division, ...], status}
+--   tickets:       data {raisedBy, toDept, status, ...}; ticket departments and their handlers are the
+--                  app setting 'ticketDepartments' [{name, handlers: [user_id, ...]}], edited by HR
+-- ---------------------------------------------------------------------
+create or replace function cw_ticket_handler(u app_users, dept text) returns boolean
+language sql stable as $$
+  select u.role in ('hr_admin', 'admin') or exists (
+    select 1 from app_settings s,
+      jsonb_array_elements(case when jsonb_typeof(s.value) = 'array' then s.value else '[]'::jsonb end) dd
+    where s.key = 'ticketDepartments' and dd->>'name' = dept
+      and coalesce(dd->'handlers', '[]'::jsonb) ? u.user_id)
+$$;
+
+create or replace function cw_social_read(u app_users, r records) returns boolean
+language sql stable as $$
+  select case
+    when u.role in ('hr_admin', 'admin') then true
+    when r.collection = 'tickets' then
+      r.data->>'raisedBy' = u.user_id or cw_ticket_handler(u, r.data->>'toDept')
+    when r.collection = 'announcements' then
+      r.data->>'by' = u.user_id
+      or (coalesce(r.data->>'status', 'Published') = 'Published' and (
+            u.role = 'gm_production'
+            or coalesce(r.data->'audience', '["all"]'::jsonb) ? 'all'
+            or (u.role = 'contractor' and coalesce(r.data->'audience', '[]'::jsonb) ? 'contractors')
+            or (u.role <> 'contractor' and exists (
+                  select 1 from jsonb_array_elements_text(coalesce(r.data->'audience', '[]'::jsonb)) a
+                  where cw_in_div(u.division, a)))))
+    else false
+  end
+$$;
+
+create or replace function cw_social_write(u app_users, p_coll text, prev records, d jsonb) returns boolean
+language sql stable as $$
+  select case
+    when u.role in ('hr_admin', 'admin') then true
+    when p_coll = 'announcements' then
+      -- GM and HODs / Managers post their own; a HOD / Manager only to their own division(s)
+      u.role in ('gm_production', 'production_manager')
+      and d->>'by' = u.user_id
+      and (prev.collection is null or prev.data->>'by' = u.user_id)
+      and (u.role = 'gm_production' or not exists (
+            select 1 from jsonb_array_elements_text(coalesce(d->'audience', '[]'::jsonb)) a
+            where not cw_in_div(u.division, a)))
+      and jsonb_array_length(coalesce(d->'audience', '[]'::jsonb)) > 0
+    when p_coll = 'tickets' then
+      case when prev.collection is null
+        then d->>'raisedBy' = u.user_id and coalesce(d->>'status', '') = 'Open'           -- raise your own ticket
+        else d->>'raisedBy' = prev.data->>'raisedBy'                                       -- who raised it never changes
+             and (cw_ticket_handler(u, prev.data->>'toDept')                               -- the department works on it
+                  or (prev.data->>'raisedBy' = u.user_id and d->>'toDept' = prev.data->>'toDept'))   -- the raiser follows up
+      end
+    else false
+  end
+$$;
+
 -- may this person see this row?
 create or replace function cw_can_read(u app_users, r records) returns boolean
 language sql stable as $$
-  select case (case when u.role = 'admin' then 'hr_admin' else u.role end)
+  select case when r.collection in ('announcements', 'tickets') then cw_social_read(u, r) else
+  case (case when u.role = 'admin' then 'hr_admin' else u.role end)
     when 'hr_admin' then true
     when 'gm_production' then r.collection in ('requisitions','candidates','workers',
                                                -- GM dashboard: attendance and attrition across all divisions (no payroll)
@@ -210,7 +269,7 @@ language sql stable as $$
       r.collection in ('workers','requisitions','resignations','exitClearances','attendanceRecords','candidates',
                        'leaveRequests','regularizations','punches')
         and cw_in_div(u.division, r.division)
-  end
+  end end
 $$;
 
 -- may this person write this row? (old = row already stored, or null for a new one)
@@ -284,7 +343,13 @@ begin
     d := x->'d';
     n_con := x->>'contractor'; n_div := x->>'division'; n_emp := coalesce(x->>'empId', d->>'empId');
 
-    if u.role = 'employee' then
+    if x->>'c' in ('announcements', 'tickets') then
+      -- open to every role, workers included, under their own rules (cw_social_write)
+      if not coalesce(cw_social_write(u, x->>'c', prev, d), false) then
+        rejected := rejected || jsonb_build_array(jsonb_build_object('c', x->>'c', 'id', x->>'id')); continue;
+      end if;
+      n_con := coalesce(w_con, u.contractor); n_div := coalesce(w_div, split_part(coalesce(u.division, ''), '|', 1)); n_emp := u.emp_id;
+    elsif u.role = 'employee' then
       -- workers raise and cancel their own requests and record their own check-in / check-out
       if x->>'c' not in ('leaveRequests', 'regularizations', 'profileChanges', 'resignations', 'punches')
          or coalesce(d->>'empId', '') <> u.emp_id
@@ -718,7 +783,8 @@ grant execute on function cw_login_salt(text), cw_login(text, text, text, text),
 
 revoke all on function cw_auth(text, text), cw_load(text, text), cw_save(text, text, jsonb, jsonb, jsonb, jsonb) from public;
 -- only cw_load and cw_save are meant to be called from outside; Supabase grants new functions to its API roles by default
-revoke execute on function cw_auth(text, text), cw_norm(text), cw_in_div(text, text), cw_can_read(app_users, records),
+revoke execute on function cw_auth(text, text), cw_norm(text), cw_in_div(text, text),
+  cw_ticket_handler(app_users, text), cw_social_read(app_users, records), cw_social_write(app_users, text, records, jsonb), cw_can_read(app_users, records),
   cw_can_write(app_users, text, records, text, text) from anon, authenticated;
 grant execute on function cw_load(text, text) to anon, authenticated;
 grant execute on function cw_save(text, text, jsonb, jsonb, jsonb, jsonb) to anon, authenticated;
@@ -753,6 +819,21 @@ insert into app_settings (key, value, updated_by) values ('contractors', '[
   {"name": "Chaitanya Services", "location": "Mumbai", "active": true},
   {"name": "Clearway Facility Services", "location": "Kottayam", "active": true},
   {"name": "M/s. Divya Man Power Resources PVT. LTD,", "location": "Bangalore", "active": true}
+]'::jsonb, 'setup') on conflict (key) do nothing;
+
+-- starting ticket departments and who handles each (HR edits this in Team & Approvals → Tickets; HR sees every ticket)
+insert into app_settings (key, value, updated_by) values ('ticketDepartments', '[
+  {"name": "HR", "handlers": ["joseph", "hr.office"]},
+  {"name": "Admin", "handlers": ["hod.admin", "mgr.admin"]},
+  {"name": "IT", "handlers": []},
+  {"name": "Finance", "handlers": []},
+  {"name": "Production - Aristo Vertical", "handlers": ["gm", "pm.vertical"]},
+  {"name": "Production - Aristo Cabinetry", "handlers": ["hod.cabinetry", "pm.cabinetry"]},
+  {"name": "Production - Art of Lacquering", "handlers": ["hod.cabinetry", "pm.lacquer"]},
+  {"name": "Quality and Service", "handlers": ["hod.quality", "asst.quality"]},
+  {"name": "Stores", "handlers": []},
+  {"name": "Maintenance", "handlers": []},
+  {"name": "Safety and Security", "handlers": []}
 ]'::jsonb, 'setup') on conflict (key) do nothing;
 
 select 'Setup complete' as result, (select count(*) from app_users) as logins;
