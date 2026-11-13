@@ -407,7 +407,11 @@ function renderUsers() {
 function roleFields() {
   const r = document.getElementById('u-role').value;
   document.getElementById('u-con-wrap').style.display = r === 'contractor' ? '' : 'none';
-  document.getElementById('u-div-wrap').style.display = (r === 'production_manager' || r === 'supervisor') ? '' : 'none';
+  document.getElementById('u-div-wrap').style.display = (r === 'production_manager' || r === 'supervisor' || r === 'gm_production') ? '' : 'none';
+  // a GM may also be one division's HOD: the division is optional for GM ("— none —")
+  const uDiv = document.getElementById('u-div'), none = [...uDiv.options].find(o => o.value === '');
+  if (r === 'gm_production' && !none) uDiv.insertBefore(new Option('— none (GM only) —', ''), uDiv.firstChild);
+  if (r !== 'gm_production' && none) { const was = uDiv.value; none.remove(); if (!was) uDiv.value = DIVISIONS[0]; }
 }
 function genPw() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789', b = crypto.getRandomValues(new Uint8Array(14));
@@ -423,7 +427,8 @@ function editUser(id) {
   document.getElementById('u-role').value = editing ? editing.role : 'contractor'; document.getElementById('u-role').disabled = !!(editing && editing.role === 'employee');
   document.getElementById('u-con').innerHTML = contractors().map(c => `<option${c.active === false ? ' disabled' : ''}>${esc(c.name)}</option>`).join('');
   document.getElementById('u-con').value = editing && editing.contractor || (contractors()[0] || {}).name || '';
-  const uDiv = document.getElementById('u-div'), curDiv = editing && editing.division || DIVISIONS[0];
+  roleFields();   // adds the "none" choice for a GM before the value is set
+  const uDiv = document.getElementById('u-div'), curDiv = editing ? (editing.division || (editing.role === 'gm_production' ? '' : DIVISIONS[0])) : DIVISIONS[0];
   if (![...uDiv.options].some(o => o.value === curDiv)) uDiv.add(new Option(divLabel(curDiv), curDiv));
   uDiv.value = curDiv;
   document.getElementById('u-active').value = !editing || editing.active ? '1' : '0';
@@ -436,7 +441,7 @@ async function saveUser(overrides) {
   const v = id => document.getElementById(id).value.trim();
   const body = Object.assign({ user: v('u-id').toLowerCase(), name: v('u-name'), role: v('u-role'), contractor: v('u-con'), division: v('u-div'), active: v('u-active') === '1', password: v('u-pw') }, overrides || {});
   if (body.role !== 'contractor') body.contractor = '';
-  if (body.role !== 'production_manager' && body.role !== 'supervisor') body.division = '';
+  if (body.role !== 'production_manager' && body.role !== 'supervisor' && body.role !== 'gm_production') body.division = '';
   try {
     await api('/api/admin/save-user', body);
     document.getElementById('user-dlg').close();

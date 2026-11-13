@@ -3243,6 +3243,24 @@
             document.getElementById('logout-btn').style.display = 'none';   // no role switching
             document.body.classList.remove('identity-pending');
             if ((me.role === 'production_manager' || me.role === 'supervisor') && String(me.division || '').includes('|')) divisionSwitcher(me.division.split('|').map(s => s.trim()).filter(Boolean));
+            if (me.role === 'gm_production' && me.division) gmHodSwitcher(String(me.division).split('|').map(s => s.trim()).filter(Boolean));
+        }
+        // the GM who is also a division's HOD: one login, a header switch between "GM Production" and "HOD — <division>"
+        function gmHodSwitcher(divs) {
+            const sel = document.createElement('select'); sel.id = 'gm-hod-switch'; sel.title = 'Work as GM or as HOD';
+            sel.style.cssText = 'width:auto;min-height:30px;margin-left:8px;font-size:11px;padding:2px 8px';
+            sel.innerHTML = '<option value="">GM Production</option>' + divs.map(d => '<option value="' + escH(d) + '">HOD — ' + escH(d) + '</option>').join('');
+            const badge = document.getElementById('role-badge'); badge.parentNode.insertBefore(sel, badge.nextSibling);
+            const apply = v => {
+                if (v) { currentRole = 'production_manager'; currentDivision = v; ROLE_LABELS.production_manager = 'HOD'; document.getElementById('division-select').value = v; }
+                else { currentRole = 'gm_production'; currentDivision = ''; }
+                applyRolePermissions();
+                try { TEAM.render(); REQX.fill(); } catch (e) { console.warn(e); }
+                try { localStorage.setItem('aw_gm_mode', v); } catch (e) { }
+            };
+            sel.onchange = () => apply(sel.value);
+            let saved = ''; try { saved = localStorage.getItem('aw_gm_mode') || ''; } catch (e) { }
+            if (saved && divs.includes(saved)) { sel.value = saved; apply(saved); }
         }
         // HOD common to two sections: pick which division the screens show and which division new requisitions are raised for
         function divisionSwitcher(list) {
@@ -3880,13 +3898,13 @@
                 const money = n => n ? '₹ ' + Number(n).toLocaleString('en-IN') + ' / month' : '-';
                 const repl = r.type === 'Replacement'
                     ? f('Employee being replaced', (r.replName ? r.replName + ' · ' : '') + r.replEmpId) + f('Their position', r.replPosition)
-                      + (r.replDetails ? f('Their skill grade', r.replDetails.skill) + f('Their department', [r.replDetails.department, r.replDetails.section].filter(Boolean).join(' · ')) + f('Their contractor', r.replDetails.contractor) + f('Joined', r.replDetails.doj) + f('Last working day', r.replDetails.lwd) + f('Service', r.replDetails.tenure) + f('Exit type', r.replDetails.exitType) + f('Exit reason', r.replDetails.exitReason) : '') + f('Their salary', r.replSalary ? '₹ ' + r.replSalary : '') + f('Exit status', r.replStatus) + f('Reason for replacement', r.replReason)
+                      + (r.replDetails ? f('Their skill grade', r.replDetails.skill) + f('Their department', [r.replDetails.department, r.replDetails.section].filter(Boolean).join(' · ')) + f('Their contractor', r.replDetails.contractor) + f('Joined', r.replDetails.doj) + f('Last working day', r.replDetails.lwd) + f('Service', r.replDetails.tenure) + f('Exit type', r.replDetails.exitType) + f('Exit reason', r.replDetails.exitReason) : '') + (SALX.can() ? f('Their salary', r.replSalary ? '₹ ' + r.replSalary : '') : '') + f('Exit status', r.replStatus) + f('Reason for replacement', r.replReason)
                     : f('Project / site', r.project) + f('Why new manpower is needed', r.whyNew) + f('Management approved?', r.mgmtApproved) + f('Justification', r.justification);
                 const trail = this.trail(r).map(t => '<li><b>' + escH(t.stage) + ' — ' + escH(t.decision) + '</b> · ' + escH(t.by) + (t.at ? ' · ' + escH(t.at) : '') + (t.remarks ? ' · “' + escH(t.remarks) + '”' : '') + '</li>').join('');
                 const cands = candidates.filter(c => c.requisitionId === r.id);
                 return '<div class="cw-detail-grid">' + f('Requisition', r.id) + f('Raised on', r.date) + f('Raised by', r.raisedBy) + f('Division', r.division) +
                     f('Type', r.type === 'New' ? 'New manpower' : r.type) + f('Position / department', r.department ? r.department + ' · ' + r.position : r.position) + f('Number required', r.count) + f('Skill grade', r.skill) +
-                    f('Grade budget', money(r.gradeBudget)) + f('Total monthly budget', r.gradeBudget && r.count ? money(r.gradeBudget * r.count) : '') +
+                    (SALX.can() ? f('Grade budget', money(r.gradeBudget)) + f('Total monthly budget', r.gradeBudget && r.count ? money(r.gradeBudget * r.count) : '') : '') +
                     f('Experience', r.exp) + f('Shift', r.shift) + f('Required by', r.requiredDate) + f('Preferred education', r.education) +
                     f('Driving licence', r.drivingLicense) + f('Training / skill needed', r.trainingSkill) + f('PPE kit', (r.ppeKit || []).join(', ')) +
                     f('Status', r.status) + f('Next step', this.nextStage(r)) +
@@ -4333,7 +4351,7 @@
                     '<div class="cw-detail-grid">' + f('Designation', d.designation) + f('Department / section', [d.department, d.section].filter(Boolean).join(' · ')) + f('Skill grade', d.skill) +
                     f('Contractor', d.contractor) + f('Division', d.division) + f('Location', d.location) + f('Shift', d.shift) +
                     f('Date of joining', d.doj) + f('Resignation date', d.resignDate) + f('Last working day', d.lwd) + f('Length of service', d.tenure) + f('Experience at joining', d.experience) +
-                    f('Gross salary', money(d.gross)) + f('Basic + DA', money(d.basicDa)) + f('Exit type', d.exitType) + f('Exit status', d.exitStatus) +
+                    (SALX.can() ? f('Gross salary', money(d.gross)) + f('Basic + DA', money(d.basicDa)) : '') + f('Exit type', d.exitType) + f('Exit status', d.exitStatus) +
                     f('Exit reason', d.exitReason) + f('Exit remarks', d.exitRemarks) + f('PPE issued on', d.ppeDate) + f('UAN', d.uan) + f('ESIC no.', d.esi) + '</div></div>';
             }
         });
@@ -4454,6 +4472,31 @@
             applyRolePermissionsGm();
             if (GMX.isGM()) { const h = document.querySelector('#master h2'); if (h) h.textContent = 'Employee Master (all divisions)'; }
         };
+
+        /* ---------- Salary budgets are not shown to Supervisors or Contractors ----------
+           Hidden: Grade Salary Budget Master, the budget hint on the requisition form, budget lines in
+           requisition details, and the leaving worker's salary on a replacement. HR, GM, HODs and Managers still see them. */
+        const SALX = {
+            can() { return !['supervisor', 'contractor'].includes(currentRole); },
+            apply() {
+                const show = this.can();
+                const hdr = document.getElementById('grade-budget-header');
+                if (hdr) {
+                    hdr.style.display = show ? '' : 'none';
+                    const note = document.getElementById('grade-budget-hr-note'), tbl = document.getElementById('grade-budget-body');
+                    if (!show && note) note.style.display = 'none';
+                    if (tbl) tbl.closest('.table-wrapper').style.display = show ? '' : 'none';
+                }
+                const bd = document.getElementById('rq-budget-display'); if (bd && !show) bd.textContent = '';
+                const rs = document.getElementById('rq-repl-salary'); if (rs) rs.closest('.form-group').style.display = show ? '' : 'none';
+            }
+        };
+        const updateReqBudgetDisplaySalx = updateReqBudgetDisplay;
+        updateReqBudgetDisplay = function () { updateReqBudgetDisplaySalx(); SALX.apply(); };
+        const applyRolePermissionsSalx = applyRolePermissions;
+        applyRolePermissions = function () { applyRolePermissionsSalx(); SALX.apply(); };
+        const renderGradeBudgetTableSalx = renderGradeBudgetTable;
+        renderGradeBudgetTable = function () { renderGradeBudgetTableSalx(); SALX.apply(); };
 
         /* ---------- install as a phone / desktop app ---------- */
         if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
