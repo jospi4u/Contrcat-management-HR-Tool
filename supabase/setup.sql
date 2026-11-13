@@ -190,6 +190,9 @@ language sql stable as $$
   select case (case when u.role = 'admin' then 'hr_admin' else u.role end)
     when 'hr_admin' then true
     when 'gm_production' then r.collection in ('requisitions','candidates','workers')
+      -- a GM who is also a division's HOD (division set on the login) sees that division like its HOD does
+      or (r.collection in ('resignations','exitClearances','attendanceRecords','leaveRequests','regularizations','punches')
+          and cw_in_div(u.division, r.division))
     when 'contractor' then
       (r.collection in ('workers','pendingSubmissions','candidates','resignations','payrollRuns',
                         'wageRegisters','invoices','attendanceRecords','exitClearances')
@@ -221,7 +224,12 @@ returns boolean language sql stable as $$
         or (p_coll = 'payrollRuns' and prev.collection is not null)      -- confirm / query existing rows only
         or (p_coll = 'invoices' and (prev is null or prev.collection is null))  -- raise new invoices only
       )
-    when 'gm_production' then p_coll = 'requisitions' and prev.collection is not null
+    when 'gm_production' then (p_coll = 'requisitions' and prev.collection is not null)
+      -- GM who is also a division's HOD: the HOD's rights in that division
+      or (p_coll in ('requisitions','exitClearances')
+        and cw_in_div(u.division, new_division)
+        and (prev is null or prev.collection is null or cw_in_div(u.division, prev.division)))
+      or (p_coll = 'candidates' and prev.collection is not null and cw_in_div(u.division, prev.division))
     when 'employee' then false   -- handled in cw_save: own requests only
     else -- production_manager, supervisor
       (p_coll in ('requisitions','exitClearances')
@@ -286,7 +294,7 @@ begin
         rejected := rejected || jsonb_build_array(jsonb_build_object('c', x->>'c', 'id', x->>'id')); continue;
       end if;
       n_con := w_con; n_div := w_div; n_emp := u.emp_id;
-    elsif u.role in ('production_manager', 'supervisor') and x->>'c' in ('leaveRequests', 'regularizations', 'resignations')
+    elsif u.role in ('production_manager', 'supervisor', 'gm_production') and x->>'c' in ('leaveRequests', 'regularizations', 'resignations')
           and prev.collection is not null and coalesce(prev.data->>'status', '') = 'Pending Supervisor' then
       -- the supervisor's step: pass on to HR or reject, for their own division only; the request itself stays as raised
       if not cw_in_div(u.division, prev.division)
@@ -311,7 +319,7 @@ begin
         rejected := rejected || jsonb_build_array(jsonb_build_object('c', x->>'c', 'id', x->>'id')); continue;
       end if;
     end if;
-    if x->>'c' = 'candidates' and u.role in ('production_manager', 'supervisor') then
+    if x->>'c' = 'candidates' and u.role in ('production_manager', 'supervisor', 'gm_production') then
       -- the interview panel records only its decision; candidate details stay as submitted
       if coalesce(prev.data->>'status', '') not in ('Forwarded to Production', 'On Hold')
          or coalesce(d->>'status', '') not in ('Selected', 'Rejected by Production', 'On Hold') then
@@ -422,7 +430,7 @@ begin
   if dd.id is null then raise exception 'not found' using errcode = 'P0002'; end if;
   if not (u.role in ('hr_admin', 'admin')
           or (u.role = 'contractor' and cw_norm(dd.contractor) = cw_norm(u.contractor))
-          or (u.role in ('production_manager', 'supervisor') and cw_in_div(u.division, dd.division))) then
+          or (u.role in ('production_manager', 'supervisor', 'gm_production') and cw_in_div(u.division, dd.division))) then
     raise exception 'not allowed' using errcode = '42501';
   end if;
   return jsonb_build_object('id', dd.id, 'name', dd.name, 'mime', dd.mime, 'kind', dd.kind, 'data', dd.data);
@@ -591,7 +599,7 @@ begin
   if existing.user_id is null and p_fp is null then raise exception 'a new login needs a password' using errcode = '22023'; end if;
   insert into app_users (user_id, fp, salt, role, contractor, division, name, active)
   values (t, p_fp, p_salt, p_role, case when p_role = 'contractor' then nullif(trim(p_contractor), '') end,
-          case when p_role in ('production_manager','supervisor') then nullif(trim(p_division), '') end,
+          case when p_role in ('production_manager','supervisor','gm_production') then nullif(trim(p_division), '') end,
           nullif(trim(p_name), ''), coalesce(p_active, true))
   on conflict (user_id) do update set
     role = excluded.role,
