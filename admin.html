@@ -390,12 +390,15 @@ function roleOptions(sel, withAll) { sel.innerHTML = (withAll ? '<option value="
 roleOptions(document.getElementById('user-role'), true); roleOptions(document.getElementById('u-role'));
 function staffRoles() { const s = document.getElementById('u-role'); [...s.options].forEach(o => { if (o.value === 'employee') o.remove(); }); }
 staffRoles();
-document.getElementById('u-div').innerHTML = DIVISIONS.map(d => `<option>${esc(d)}</option>`).join('');
+// a login can cover two divisions (e.g. the HOD common to Cabinetry and Lacquering): stored as 'A|B'
+const DIVISION_GROUPS = ['Aristo Cabinetry Production|Art of Lacquering'];
+const divLabel = d => String(d || '').split('|').join(' + ');
+document.getElementById('u-div').innerHTML = DIVISIONS.concat(DIVISION_GROUPS).map(d => `<option value="${esc(d)}">${esc(divLabel(d))}</option>`).join('');
 function renderUsers() {
   const q = document.getElementById('user-q').value.toLowerCase(), r = document.getElementById('user-role').value;
   const list = D.users.filter(u => (!r || u.role === r) && (!q || [u.user, u.name, u.contractor, u.division].join(' ').toLowerCase().includes(q)));
   document.getElementById('users-body').innerHTML = list.map(u => `<tr>
-    <td><b>${esc(u.user)}</b></td><td>${esc(u.name || '—')}</td><td>${esc(ROLES[u.role] || u.role)}</td><td>${esc(u.role === 'employee' ? [u.empId, u.division].filter(Boolean).join(' · ') : (u.contractor || u.division || '—'))}${u.mustChange ? ' <span class="badge warn">new password due</span>' : ''}</td>
+    <td><b>${esc(u.user)}</b></td><td>${esc(u.name || '—')}</td><td>${esc(ROLES[u.role] || u.role)}</td><td>${esc(u.role === 'employee' ? [u.empId, u.division].filter(Boolean).join(' · ') : (u.contractor || divLabel(u.division) || '—'))}${u.mustChange ? ' <span class="badge warn">new password due</span>' : ''}</td>
     <td>${u.active ? '<span class="badge ok">Active</span>' : '<span class="badge bad">Off</span>'}</td><td>${u.last_login ? when(u.last_login) + ' <span class="mut">· ' + ago(u.last_login) + '</span>' : '<span class="mut">never</span>'}</td>
     <td style="white-space:nowrap"><button class="ghost sm" onclick="editUser('${esc(u.user)}')">Edit</button> <button class="ghost sm" onclick="resetPw('${esc(u.user)}')">Reset password</button>
       <button class="ghost sm" onclick="toggleUser('${esc(u.user)}')">${u.active ? 'Switch off' : 'Switch on'}</button> <button class="danger sm" onclick="deleteUser('${esc(u.user)}')">Delete</button></td></tr>`).join('')
@@ -420,7 +423,9 @@ function editUser(id) {
   document.getElementById('u-role').value = editing ? editing.role : 'contractor'; document.getElementById('u-role').disabled = !!(editing && editing.role === 'employee');
   document.getElementById('u-con').innerHTML = contractors().map(c => `<option${c.active === false ? ' disabled' : ''}>${esc(c.name)}</option>`).join('');
   document.getElementById('u-con').value = editing && editing.contractor || (contractors()[0] || {}).name || '';
-  document.getElementById('u-div').value = editing && editing.division || DIVISIONS[0];
+  const uDiv = document.getElementById('u-div'), curDiv = editing && editing.division || DIVISIONS[0];
+  if (![...uDiv.options].some(o => o.value === curDiv)) uDiv.add(new Option(divLabel(curDiv), curDiv));
+  uDiv.value = curDiv;
   document.getElementById('u-active').value = !editing || editing.active ? '1' : '0';
   document.getElementById('u-pw').value = ''; if (!editing) genPw();
   document.getElementById('u-pw-hint').textContent = editing ? '— leave empty to keep the current password' : '';
