@@ -62,7 +62,7 @@ alter table app_users add column if not exists emp_id      text;          -- for
 alter table app_users add column if not exists must_change boolean not null default false;  -- change password at next sign-in
 alter table app_users drop constraint if exists app_users_role_check;
 alter table app_users add constraint app_users_role_check
-  check (role in ('admin','hr_admin','gm_production','production_manager','supervisor','contractor','employee'));
+  check (role in ('admin','hr_admin','gm_production','production_manager','supervisor','contractor','employee','store'));
 create unique index if not exists app_users_emp_idx on app_users (emp_id) where emp_id is not null;
 
 -- which worker a record belongs to (leave, attendance, payslips…) so workers see only their own
@@ -119,9 +119,23 @@ begin
   return u;
 end $$;
 
+-- HR Head: final candidate approval and salary fixing. The list is the admin-only setting 'admin_hr_heads'
+-- (never sent to browsers, never writable from the app), so an HR Officer cannot make themselves Head.
+create or replace function cw_is_hr_head(u app_users) returns boolean language sql stable as $$
+  select u.role = 'admin' or (u.role = 'hr_admin' and exists (
+    select 1 from app_settings s where s.key = 'admin_hr_heads' and jsonb_typeof(s.value) = 'array' and s.value ? u.user_id))
+$$;
+-- PPE desks: setting 'ppeDesk' {"admin": [user ids who confirm PPE needs], "store": [user ids who issue]}; the store role is always a store desk
+create or replace function cw_ppe_desk(u app_users, which text) returns boolean language sql stable as $$
+  select (which = 'store' and u.role = 'store') or exists (
+    select 1 from app_settings s where s.key = 'ppeDesk' and jsonb_typeof(s.value) = 'object'
+      and coalesce(s.value->which, '[]'::jsonb) ? u.user_id)
+$$;
+
 create or replace function cw_user_json(u app_users) returns jsonb language sql stable as $$
   select jsonb_build_object('user', u.user_id, 'role', u.role, 'contractor', u.contractor, 'division', u.division, 'name', u.name,
-                            'empId', u.emp_id, 'mustChange', u.must_change)
+                            'empId', u.emp_id, 'mustChange', u.must_change, 'hrHead', cw_is_hr_head(u),
+                            'ppeAdmin', cw_ppe_desk(u, 'admin'), 'ppeStore', cw_ppe_desk(u, 'store'))
 $$;
 
 -- where events are copied to (the admin's Google Sheet); only the sign-in layer and admins receive it
@@ -203,6 +217,11 @@ create or replace function cw_social_read(u app_users, r records) returns boolea
 language sql stable as $$
   select case
     when u.role in ('hr_admin', 'admin') then true
+    -- PPE: the Admin and Store desks see every request and the stock; a division sees its own requests
+    when r.collection in ('ppeRequests', 'ppeStock') then
+      cw_ppe_desk(u, 'admin') or cw_ppe_desk(u, 'store')
+      or (r.collection = 'ppeRequests' and u.role in ('production_manager', 'supervisor', 'gm_production') and cw_in_div(u.division, r.division))
+      or (r.collection = 'ppeRequests' and u.role = 'contractor' and cw_norm(r.contractor) = cw_norm(u.contractor))
     when r.collection = 'tickets' then
       r.data->>'raisedBy' = u.user_id or cw_ticket_handler(u, r.data->>'toDept')
       -- the raising department's HOD / Manager follows up on tickets raised from their division
@@ -224,6 +243,18 @@ create or replace function cw_social_write(u app_users, p_coll text, prev record
 language sql stable as $$
   select case
     when u.role in ('hr_admin', 'admin') then true
+    when p_coll = 'ppeStock' then cw_ppe_desk(u, 'store')
+    when p_coll = 'ppeRequests' then
+      case when prev.collection is null then
+             coalesce(d->>'status', '') = 'Pending Admin' and (
+               -- raised with a requisition by its division, or by the contractor when their worker joins
+               (u.role in ('production_manager', 'supervisor', 'gm_production') and cw_in_div(u.division, d->>'division'))
+               or (u.role = 'contractor' and d->>'type' = 'joining' and cw_norm(d->>'contractor') = cw_norm(u.contractor)))
+           when cw_ppe_desk(u, 'admin') and coalesce(prev.data->>'status', '') = 'Pending Admin' then
+             coalesce(d->>'status', '') in ('Pending Admin', 'Pending Store', 'Not Required')
+           when cw_ppe_desk(u, 'store') and coalesce(prev.data->>'status', '') in ('Pending Store', 'Partly Issued') then
+             coalesce(d->>'status', '') in ('Pending Store', 'Partly Issued', 'Issued')
+           else false end
     when p_coll = 'announcements' then
       -- GM and HODs / Managers post their own; a HOD / Manager only to their own division(s)
       u.role in ('gm_production', 'production_manager')
@@ -249,7 +280,7 @@ $$;
 -- may this person see this row?
 create or replace function cw_can_read(u app_users, r records) returns boolean
 language sql stable as $$
-  select case when r.collection in ('announcements', 'tickets') then cw_social_read(u, r) else
+  select case when r.collection in ('announcements', 'tickets', 'ppeRequests', 'ppeStock') then cw_social_read(u, r) else
   case (case when u.role = 'admin' then 'hr_admin' else u.role end)
     when 'hr_admin' then true
     when 'gm_production' then r.collection in ('requisitions','candidates','workers',
@@ -347,12 +378,15 @@ begin
     d := x->'d';
     n_con := x->>'contractor'; n_div := x->>'division'; n_emp := coalesce(x->>'empId', d->>'empId');
 
-    if x->>'c' in ('announcements', 'tickets') then
+    if x->>'c' in ('announcements', 'tickets', 'ppeRequests', 'ppeStock') then
       -- open to every role, workers included, under their own rules (cw_social_write)
       if not coalesce(cw_social_write(u, x->>'c', prev, d), false) then
         rejected := rejected || jsonb_build_array(jsonb_build_object('c', x->>'c', 'id', x->>'id')); continue;
       end if;
       n_con := coalesce(w_con, u.contractor); n_div := coalesce(w_div, split_part(coalesce(u.division, ''), '|', 1)); n_emp := u.emp_id;
+      if x->>'c' = 'ppeRequests' then   -- a PPE request belongs to the division and contractor it is for
+        n_div := coalesce(nullif(d->>'division', ''), n_div); n_con := coalesce(nullif(d->>'contractor', ''), n_con); n_emp := nullif(d->>'empId', '');
+      end if;
     elsif u.role = 'employee' then
       -- workers raise and cancel their own requests and record their own check-in / check-out
       if x->>'c' not in ('leaveRequests', 'regularizations', 'profileChanges', 'resignations', 'punches')
@@ -384,20 +418,41 @@ begin
       d := prev.data || jsonb_build_object('status', d->'status', 'queryRemarks', coalesce(d->'queryRemarks', prev.data->'queryRemarks', 'null'::jsonb));
     end if;
     if x->>'c' = 'candidates' and u.role = 'contractor' then
-      -- contractors submit or resubmit; they can't move a candidate further along
-      if coalesce(d->>'status', '') <> 'Submitted'
+      if coalesce(prev.data->>'status', '') = 'Approved for Onboarding' and coalesce(d->>'status', '') in ('Joined', 'Not Joined') then
+        -- the contractor confirms the actual joining (or that the candidate did not join); nothing else changes
+        d := prev.data || jsonb_build_object('status', d->'status', 'joining', d->'joining', 'history', d->'history', 'stageAt', d->'stageAt');
+      elsif coalesce(prev.data->>'status', '') = 'HR Interview Scheduled' and coalesce(d->>'status', '') = 'HR Interview Scheduled' then
+        -- the contractor confirms the candidate will attend the scheduled interview
+        d := prev.data || jsonb_build_object('contractorAck', d->'contractorAck', 'history', d->'history');
+      -- otherwise contractors submit or resubmit; they can't move a candidate further along
+      elsif coalesce(d->>'status', '') <> 'Submitted'
          or (prev.collection is not null and coalesce(prev.data->>'status', '') not in ('Submitted', 'Returned to Contractor')) then
         rejected := rejected || jsonb_build_array(jsonb_build_object('c', x->>'c', 'id', x->>'id')); continue;
       end if;
     end if;
     if x->>'c' = 'candidates' and u.role in ('production_manager', 'supervisor', 'gm_production') then
-      -- the interview panel records only its decision; candidate details stay as submitted
-      if coalesce(prev.data->>'status', '') not in ('Forwarded to Production', 'On Hold')
-         or coalesce(d->>'status', '') not in ('Selected', 'Rejected by Production', 'On Hold') then
+      -- each interview panel records only its own step; candidate details stay as submitted
+      if coalesce(prev.data->>'status', '') = 'Supervisor Interview'
+         and coalesce(d->>'status', '') in ('Supervisor Interview', 'PM Review', 'Rejected by Supervisor') then
+        d := prev.data || jsonb_build_object('status', d->'status', 'supInterview', d->'supInterview', 'recommendedGrade', d->'recommendedGrade',
+                                             'history', d->'history', 'stageAt', d->'stageAt');
+      elsif u.role in ('production_manager', 'gm_production') and coalesce(prev.data->>'status', '') = 'PM Review'
+         and coalesce(d->>'status', '') in ('PM Review', 'HR Officer Verification', 'Rejected by PM') then
+        d := prev.data || jsonb_build_object('status', d->'status', 'pmReview', d->'pmReview', 'recommendedGrade', d->'recommendedGrade',
+                                             'history', d->'history', 'stageAt', d->'stageAt');
+      elsif coalesce(prev.data->>'status', '') in ('Forwarded to Production', 'On Hold')   -- candidates from before the staged interviews
+         and coalesce(d->>'status', '') in ('Selected', 'Rejected by Production', 'On Hold') then
+        d := prev.data || jsonb_build_object('status', d->'status', 'interview', d->'interview',
+                                             'decisionBy', d->'decisionBy', 'history', d->'history');
+      else
         rejected := rejected || jsonb_build_array(jsonb_build_object('c', x->>'c', 'id', x->>'id')); continue;
       end if;
-      d := prev.data || jsonb_build_object('status', d->'status', 'interview', d->'interview',
-                                           'decisionBy', d->'decisionBy', 'history', d->'history');
+    end if;
+    if x->>'c' = 'candidates' and u.role in ('hr_admin', 'admin')
+       and coalesce(d->>'status', '') in ('Approved for Onboarding', 'Rejected by HR Head', 'Returned for Clarification')
+       and coalesce(prev.data->>'status', '') is distinct from d->>'status' and not cw_is_hr_head(u) then
+      -- only the HR Head gives the final approval and fixes the salary
+      rejected := rejected || jsonb_build_array(jsonb_build_object('c', x->>'c', 'id', x->>'id')); continue;
     end if;
     insert into records (collection, id, data, contractor, division, emp_id, updated_at, updated_by)
     values (x->>'c', x->>'id', d, n_con, n_div, n_emp, now(), u.user_id)
@@ -656,7 +711,7 @@ declare u app_users; t text := lower(trim(coalesce(p_target, ''))); existing app
 begin
   u := cw_admin(p_user, p_key);
   if t !~ '^[a-z0-9][a-z0-9._-]{1,39}$' then raise exception 'User ID: 2-40 letters, numbers, dot, dash or underscore' using errcode = '22023'; end if;
-  if p_role not in ('admin','hr_admin','gm_production','production_manager','supervisor','contractor','employee') then raise exception 'unknown role' using errcode = '22023'; end if;
+  if p_role not in ('admin','hr_admin','gm_production','production_manager','supervisor','contractor','employee','store') then raise exception 'unknown role' using errcode = '22023'; end if;
   if p_role = 'employee' and not exists (select 1 from app_users where user_id = lower(trim(coalesce(p_target, ''))) and role = 'employee') then
     raise exception 'Worker logins are created from the Employee Master: use Users → Create worker logins' using errcode = '22023';
   end if;
@@ -788,7 +843,7 @@ grant execute on function cw_login_salt(text), cw_login(text, text, text, text),
 revoke all on function cw_auth(text, text), cw_load(text, text), cw_save(text, text, jsonb, jsonb, jsonb, jsonb) from public;
 -- only cw_load and cw_save are meant to be called from outside; Supabase grants new functions to its API roles by default
 revoke execute on function cw_auth(text, text), cw_norm(text), cw_in_div(text, text),
-  cw_ticket_handler(app_users, text), cw_social_read(app_users, records), cw_social_write(app_users, text, records, jsonb), cw_can_read(app_users, records),
+  cw_is_hr_head(app_users), cw_ppe_desk(app_users, text), cw_ticket_handler(app_users, text), cw_social_read(app_users, records), cw_social_write(app_users, text, records, jsonb), cw_can_read(app_users, records),
   cw_can_write(app_users, text, records, text, text) from anon, authenticated;
 grant execute on function cw_load(text, text) to anon, authenticated;
 grant execute on function cw_save(text, text, jsonb, jsonb, jsonb, jsonb) to anon, authenticated;
@@ -839,5 +894,10 @@ insert into app_settings (key, value, updated_by) values ('ticketDepartments', '
   {"name": "Maintenance", "handlers": []},
   {"name": "Safety and Security", "handlers": []}
 ]'::jsonb, 'setup') on conflict (key) do nothing;
+
+-- HR Head (final candidate approval, salary fixing). Admin-only setting: not sent to browsers, not writable from the app.
+insert into app_settings (key, value, updated_by) values ('admin_hr_heads', '["joseph"]'::jsonb, 'setup') on conflict (key) do nothing;
+-- PPE desks: Admin confirms the PPE requirement, Store issues it (the 'store' role is always a store desk). HR edits this list.
+insert into app_settings (key, value, updated_by) values ('ppeDesk', '{"admin": ["hod.admin", "mgr.admin"], "store": ["store"]}'::jsonb, 'setup') on conflict (key) do nothing;
 
 select 'Setup complete' as result, (select count(*) from app_users) as logins;
