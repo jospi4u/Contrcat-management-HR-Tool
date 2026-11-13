@@ -103,6 +103,9 @@ revoke all on app_users, records, app_settings, audit_log, login_events, app_eve
 -- helpers
 -- ---------------------------------------------------------------------
 create or replace function cw_norm(t text) returns text language sql immutable as $$ select lower(trim(coalesce(t, ''))) $$;
+-- a login may cover more than one division, stored as 'Division A|Division B' (e.g. a HOD common to two sections)
+create or replace function cw_in_div(u_div text, d text) returns boolean language sql immutable as $$
+  select d is not null and exists (select 1 from unnest(string_to_array(coalesce(u_div, ''), '|')) s where trim(s) = d) $$;
 
 create or replace function cw_auth(p_user text, p_key text) returns app_users
 language plpgsql stable security definer set search_path = public as $$
@@ -201,7 +204,7 @@ language sql stable as $$
     else -- production_manager, supervisor
       r.collection in ('workers','requisitions','resignations','exitClearances','attendanceRecords','candidates',
                        'leaveRequests','regularizations','punches')
-        and r.division = u.division
+        and cw_in_div(u.division, r.division)
   end
 $$;
 
@@ -222,10 +225,10 @@ returns boolean language sql stable as $$
     when 'employee' then false   -- handled in cw_save: own requests only
     else -- production_manager, supervisor
       (p_coll in ('requisitions','exitClearances')
-        and new_division = u.division
-        and (prev is null or prev.collection is null or prev.division = u.division))
+        and cw_in_div(u.division, new_division)
+        and (prev is null or prev.collection is null or cw_in_div(u.division, prev.division)))
       -- interview decision on a candidate HR forwarded to their division
-      or (p_coll = 'candidates' and prev.collection is not null and prev.division = u.division)
+      or (p_coll = 'candidates' and prev.collection is not null and cw_in_div(u.division, prev.division))
   end
 $$;
 
@@ -286,7 +289,7 @@ begin
     elsif u.role in ('production_manager', 'supervisor') and x->>'c' in ('leaveRequests', 'regularizations', 'resignations')
           and prev.collection is not null and coalesce(prev.data->>'status', '') = 'Pending Supervisor' then
       -- the supervisor's step: pass on to HR or reject, for their own division only; the request itself stays as raised
-      if prev.division is distinct from u.division
+      if not cw_in_div(u.division, prev.division)
          or coalesce(d->>'status', '') not in ('Pending HR', 'Pending HR Review', 'Rejected by Supervisor') then
         rejected := rejected || jsonb_build_array(jsonb_build_object('c', x->>'c', 'id', x->>'id')); continue;
       end if;
@@ -419,7 +422,7 @@ begin
   if dd.id is null then raise exception 'not found' using errcode = 'P0002'; end if;
   if not (u.role in ('hr_admin', 'admin')
           or (u.role = 'contractor' and cw_norm(dd.contractor) = cw_norm(u.contractor))
-          or (u.role in ('production_manager', 'supervisor') and dd.division = u.division)) then
+          or (u.role in ('production_manager', 'supervisor') and cw_in_div(u.division, dd.division))) then
     raise exception 'not allowed' using errcode = '42501';
   end if;
   return jsonb_build_object('id', dd.id, 'name', dd.name, 'mime', dd.mime, 'kind', dd.kind, 'data', dd.data);
@@ -705,7 +708,7 @@ grant execute on function cw_login_salt(text), cw_login(text, text, text, text),
 
 revoke all on function cw_auth(text, text), cw_load(text, text), cw_save(text, text, jsonb, jsonb, jsonb, jsonb) from public;
 -- only cw_load and cw_save are meant to be called from outside; Supabase grants new functions to its API roles by default
-revoke execute on function cw_auth(text, text), cw_norm(text), cw_can_read(app_users, records),
+revoke execute on function cw_auth(text, text), cw_norm(text), cw_in_div(text, text), cw_can_read(app_users, records),
   cw_can_write(app_users, text, records, text, text) from anon, authenticated;
 grant execute on function cw_load(text, text) to anon, authenticated;
 grant execute on function cw_save(text, text, jsonb, jsonb, jsonb, jsonb) to anon, authenticated;
