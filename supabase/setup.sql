@@ -205,6 +205,8 @@ language sql stable as $$
     when u.role in ('hr_admin', 'admin') then true
     when r.collection = 'tickets' then
       r.data->>'raisedBy' = u.user_id or cw_ticket_handler(u, r.data->>'toDept')
+      -- the raising department's HOD / Manager follows up on tickets raised from their division
+      or (u.role in ('production_manager', 'gm_production') and cw_in_div(u.division, r.division))
     when r.collection = 'announcements' then
       r.data->>'by' = u.user_id
       or (coalesce(r.data->>'status', 'Published') = 'Published' and (
@@ -236,7 +238,9 @@ language sql stable as $$
         then d->>'raisedBy' = u.user_id and coalesce(d->>'status', '') = 'Open'           -- raise your own ticket
         else d->>'raisedBy' = prev.data->>'raisedBy'                                       -- who raised it never changes
              and (cw_ticket_handler(u, prev.data->>'toDept')                               -- the department works on it
-                  or (prev.data->>'raisedBy' = u.user_id and d->>'toDept' = prev.data->>'toDept'))   -- the raiser follows up
+                  or ((prev.data->>'raisedBy' = u.user_id                                    -- the raiser follows up,
+                       or (u.role in ('production_manager', 'gm_production') and cw_in_div(u.division, prev.division)))  -- or their HOD / Manager
+                      and d->>'toDept' = prev.data->>'toDept'))
       end
     else false
   end
