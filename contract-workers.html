@@ -5500,7 +5500,7 @@
                 ['aadhar', 'Aadhaar', ['aadhaar', 'aadhar', 'aadhaar no', 'aadhar no', 'aadhar numbar', 'aadhaar number', 'uid']],
                 ['pan', 'PAN', ['pan', 'pan no', 'pan number']],
                 ['uan', 'UAN', ['uan', 'uan no', 'pf uan', 'uan number']],
-                ['esi', 'ESIC no.', ['esic', 'esi', 'esic no', 'esi no', 'esic number', 'ip number']],
+                ['esi', 'ESIC no.', ['esic', 'esi number', 'esic no', 'esi no', 'esic number', 'ip number', 'esi']],
                 ['bankAccount', 'Bank account', ['bank account', 'account no', 'account number', 'bank a/c', 'a/c no']],
                 ['ifsc', 'IFSC', ['ifsc', 'ifsc code']],
                 ['bankName', 'Bank name', ['bank', 'bank name']],
@@ -5516,8 +5516,33 @@
                 ['gross', 'Fixed gross', ['fixed gross', 'gross', 'monthly gross']],
                 ['grossTotal', 'Gross salary (total)', ['gross salary', 'total gross', 'total salary', 'ctc', 'monthly salary']],
                 ['shift', 'Shift', ['shift']],
-                ['status', 'Status', ['status', 'employee status', 'emp status']]
+                ['status', 'Status', ['status', 'employee status', 'emp status']],
+                ['lwd', 'Date of leaving', ['date of leaving', 'dol', 'leaving date', 'last working day', 'lwd', 'relieving date', 'exit date']],
+                ['pfNumber', 'PF number', ['pf number', 'pf no', 'pf account', 'pf a/c no', 'epf number']],
+                ['reportingManager', 'Reporting manager', ['reporting manager', 'reporting to', 'manager', 'supervisor', 'reporting supervisor']],
+                ['productionManager', 'Production manager', ['production manager', 'pm']],
+                ['medicalAllow', 'Medical allowance', ['medical allowance', 'medical allow', 'medical']],
+                ['flexiAllow', 'Flexi allowance', ['flexi allowance', 'flexi allow', 'flexi']],
+                ['relocationAllow', 'Relocation allowance', ['relocation allowance', 'relocation allow', 'relocation']],
+                ['institution', 'Institution', ['institution', 'institution name', 'college', 'school', 'university']],
+                ['passYear', 'Year of passing', ['year of passing', 'passing year', 'year passed']],
+                // monthly pay register (stored as that month's pay history, not as fixed master fields)
+                ['payDays', 'Pay days', ['pay days', 'paid days', 'payable days', 'days paid']],
+                ['derivableTotal', 'Derivable total', ['derivable total', 'deliverable total', 'derived total', 'earnable total']],
+                ['totalEarnings', 'Total earnings', ['total earnings', 'earnings', 'gross earnings', 'total earning']],
+                ['pfDed', 'PF deduction', ['pf', 'pf deduction', 'epf', 'pf ded', 'employee pf']],
+                ['esiDed', 'ESI deduction', ['esi deduction', 'esi ded', 'employee esi', 'esi']],
+                ['ptDed', 'Professional tax', ['professional tax', 'pt', 'p tax', 'prof tax']],
+                ['tds', 'TDS', ['tds', 'income tax']],
+                ['advance', 'Advance', ['advance', 'salary advance', 'advance recovery']],
+                ['otherDed', 'Other deductions', ['other deductions', 'other deduction', 'other ded']],
+                ['insuranceDed', 'Insurance deduction', ['insurance deduction', 'insurance', 'insurance ded']],
+                ['plop', 'PLOP', ['plop', 'lop', 'loss of pay', 'pay loss']],
+                ['totalDed', 'Total deductions', ['total deductions', 'total deduction', 'deductions']],
+                ['netAmount', 'Net amount', ['net amount', 'net pay', 'net salary', 'take home', 'net']]
             ],
+            PAY: ['payDays', 'derivableTotal', 'totalEarnings', 'pfDed', 'esiDed', 'ptDed', 'tds', 'advance', 'otherDed', 'insuranceDed', 'plop', 'totalDed', 'netAmount'],
+            WANT: [['doj', 'joining date'], ['designation', 'designation'], ['department', 'department'], ['uan', 'UAN'], ['esi', 'ESIC no.'], ['pan', 'PAN'], ['bankAccount', 'bank account'], ['ifsc', 'IFSC'], ['mobile', 'mobile']],
             LEFT: [
                 ['empId', 'Emp ID', ['emp id', 'empid', 'employee id', 'emp code', 'emp.code', 'employee code', 'emp no', 'code']],
                 ['name', 'Name', ['name', 'names', 'employee name', 'emp name']],
@@ -5526,7 +5551,7 @@
                 ['reason', 'Reason', ['reason', 'reason for leaving', 'exit reason', 'remarks', 'remark']]
             ],
             EXIT_STATUSES: ['Left', 'Resigned', 'Absconded', 'Terminated'],
-            kind: null, book: null, sheet: '', rows: [], headRow: 0, map: {}, opts: { update: 'fill', newStatus: 'Active', defaultExit: 'Left' },
+            kind: null, book: null, sheet: '', rows: [], headRow: 0, map: {}, opts: { update: 'fill', newStatus: 'Active', defaultExit: 'Left', payMonth: new Date().toISOString().slice(0, 7) },
             norm: s => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9+&/]+/g, ' ').trim(),
             fields() { return this.kind === 'left' ? this.LEFT : this.MASTER; },
 
@@ -5637,7 +5662,12 @@
             // ---- master: what would change ----
             masterRecord(r) {
                 const o = {}; this.MASTER.forEach(([k]) => { if (this.map[k] == null) return; const v = this.cell(r, k);
-                    o[k] = ['doj', 'dob'].includes(k) ? this.date(v) : ['basicDa', 'hra', 'gross', 'expYr', 'expMo'].includes(k) ? this.num(v) : this.text(v); });
+                    o[k] = ['doj', 'dob', 'lwd'].includes(k) ? this.date(v) : ['basicDa', 'hra', 'gross', 'expYr', 'expMo', 'medicalAllow', 'flexiAllow', 'relocationAllow'].concat(this.PAY).includes(k) ? this.num(v) : this.text(v); });
+                ['medicalAllow', 'flexiAllow', 'relocationAllow'].forEach(k => { if (o[k] !== '' && o[k] != null) o[k] = Math.round(+o[k]); });
+                if (o.pfNumber) o.pfNumber = String(o.pfNumber).trim().toUpperCase();
+                if (o.pan) o.pan = String(o.pan).trim().toUpperCase();
+                if (o.ifsc) o.ifsc = String(o.ifsc).trim().toUpperCase();
+                if (o.bankAccount) o.bankAccount = String(o.bankAccount).replace(/\s/g, '');
                 if (o.contractor) { const raw = o.contractor; o.contractor = this.conMap[raw] || this.contractorOf(raw); if (!o.contractorCode && raw !== o.contractor) o.contractorCode = raw; }
                 if (o.division) o.division = this.divisionOf(o.division);
                 else if (o.department) { const dv = this.deptMap[o.department]; if (dv) o.division = dv; }   // "Aristo Vertical" in Department → its division (HR confirms in the preview)
@@ -5665,9 +5695,17 @@
                     if (o.empId) seen.add(o.empId);
                     if (!o.empId && !o.contractor) probs.push('no Emp ID and no contractor (needed to make an ID)');
                     const w = o.empId ? byId.get(o.empId) : null;
+                    if (o.pan && !/^[A-Z]{5}\d{4}[A-Z]$/.test(o.pan)) probs.push('PAN "' + o.pan + '" is not in the ABCDE1234F format');
+                    if (o.ifsc && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(o.ifsc)) probs.push('IFSC "' + o.ifsc + '" is not valid');
+                    if (o.doj && o.lwd && o.lwd < o.doj) probs.push('date of leaving is before the date of joining');
+                    // this month's pay register values go to pay history, not to the master fields
+                    const pay = {}; this.PAY.forEach(k => { if (o[k] !== '' && o[k] != null) pay[k] = o[k]; delete o[k]; });
+                    const hasPay = Object.keys(pay).length > 0, oldPay = w && (w.payHistory || []).find(p => p.month === this.opts.payMonth);
+                    const payChanged = hasPay && (!oldPay || this.PAY.some(k => pay[k] != null && String(pay[k]) !== String(oldPay[k] == null ? '' : oldPay[k])));
                     let changes = [];
                     if (w) changes = Object.keys(o).filter(k => o[k] !== '' && o[k] != null && String(o[k]) !== String(w[k] == null ? '' : w[k]) && (this.opts.update === 'overwrite' || w[k] == null || w[k] === ''));
-                    plan.push({ line, o, w, probs, changes, action: probs.length ? 'problem' : !w ? 'new' : changes.length ? 'update' : 'same' });
+                    const missing = this.WANT.filter(([k]) => !(o[k] || (w && w[k]))).map(x => x[1]);
+                    plan.push({ line, o, w, probs, changes, pay: hasPay ? pay : null, payChanged, missing, action: probs.length ? 'problem' : !w ? 'new' : changes.length || payChanged ? 'update' : 'same' });
                 });
                 return plan;
             },
@@ -5704,16 +5742,18 @@
                     if (depts.length) h += '<details' + (depts.some(d => !this.deptMap[d]) ? ' open' : '') + '><summary style="cursor:pointer;font-size:12px;color:var(--aw-gold)">Departments in the file (' + depts.length + ') — which division each belongs to</summary><div class="table-wrapper" style="margin-top:6px"><table><thead><tr><th>Department</th><th>Employees</th><th>Division in the app</th></tr></thead><tbody>' +
                         depts.map(d => '<tr><td class="text-left"><b>' + escH(d) + '</b></td><td>' + this.dataRows().filter(r => String(r[this.map.department] || '').trim() === d).length + '</td><td><select onchange="XIMP.setDept(' + escH(JSON.stringify(d)) + ', this.value)"><option value="">— no division —</option>' + DIVISIONS.map(v => '<option' + (this.deptMap[d] === v ? ' selected' : '') + '>' + escH(v) + '</option>').join('') + '</select></td></tr>').join('') + '</tbody></table></div><p class="cw-hint">The Department value is kept as it is; this only fills the Division, which decides which HOD, Manager and Supervisor see the employee.</p></details>'; }
                 if (isM) h += '<div class="cw-decision"><div class="form-group"><label>Existing employees</label><select onchange="XIMP.opts.update=this.value;XIMP.render()"><option value="fill"' + (this.opts.update === 'fill' ? ' selected' : '') + '>Fill only empty fields</option><option value="overwrite"' + (this.opts.update === 'overwrite' ? ' selected' : '') + '>Overwrite with the Excel values</option></select></div>' +
-                    '<div class="form-group"><label>Status for new employees (if no Status column)</label><select onchange="XIMP.opts.newStatus=this.value;XIMP.render()">' + ['Active', 'Onboarding'].map(s => '<option' + (this.opts.newStatus === s ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></div></div>' +
-                    DASH.grid([DASH.card(n('new'), 'New employees'), DASH.card(n('update'), 'Existing — will be updated'), DASH.card(n('same'), 'Existing — no change'), DASH.card(n('problem'), 'Rows with problems', 'skipped')]);
+                    '<div class="form-group"><label>Status for new employees (if no Status column)</label><select onchange="XIMP.opts.newStatus=this.value;XIMP.render()">' + ['Active', 'Onboarding'].map(s => '<option' + (this.opts.newStatus === s ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></div>' +
+                    (this.PAY.some(k => this.map[k] != null) ? '<div class="form-group"><label>Pay columns are for the month</label><input type="month" value="' + escH(this.opts.payMonth) + '" onchange="XIMP.opts.payMonth=this.value;XIMP.render()"></div>' : '') + '</div>' +
+                    (this.PAY.some(k => this.map[k] != null) ? '<p class="cw-hint">Pay days, earnings, deductions and net amount are saved as each employee\'s <b>pay history for ' + escH(this.monthLabel(this.opts.payMonth)) + '</b> — earlier months are kept.</p>' : '') +
+                    DASH.grid([DASH.card(n('new'), 'New employees'), DASH.card(n('update'), 'Existing — will be updated'), DASH.card(n('same'), 'Existing — no change'), DASH.card(n('problem'), 'Rows with problems', 'skipped'), DASH.card(plan.filter(p => p.action !== 'problem' && p.missing.length).length, 'Imported with missing info', 'see the error report')]);
                 else h += '<div class="cw-decision"><div class="form-group"><label>Exit status when the file has none</label><select onchange="XIMP.opts.defaultExit=this.value;XIMP.render()">' + this.EXIT_STATUSES.map(s => '<option' + (this.opts.defaultExit === s ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></div></div>' +
                     DASH.grid([DASH.card(n('mark'), 'Will be marked as left'), DASH.card(n('same'), 'Already marked'), DASH.card(n('problem'), 'Not matched / problems', 'skipped')]);
                 const show = plan.filter(p => p.action !== 'same').slice(0, 200);
-                h += isM ? DASH.table(['Row', 'Action', 'Emp ID', 'Name', 'Contractor', 'Division', 'DOJ', 'What changes / problem'], show.map(p => [p.line, p.action === 'new' ? '<span class="badge badge-active">New</span>' : p.action === 'update' ? '<span class="badge badge-pending">Update</span>' : '<span class="badge badge-danger">Skip</span>', escH(p.o.empId || '(new ID)'), escH(p.o.name), escH(p.o.contractor || (p.w || {}).contractor || ''), escH(p.o.division || (p.w || {}).division || ''), escH(p.o.doj || ''), escH(p.probs.join('; ') || (p.action === 'update' ? p.changes.map(k => (this.MASTER.find(f => f[0] === k) || [k, k])[1]).join(', ') : 'all fields'))]), 'Nothing to change — everything in the file is already in the master.')
+                h += isM ? DASH.table(['Row', 'Action', 'Emp ID', 'Name', 'Contractor', 'Division', 'DOJ', 'What changes / problem', 'Missing'], show.map(p => [p.line, p.action === 'new' ? '<span class="badge badge-active">New</span>' : p.action === 'update' ? '<span class="badge badge-pending">Update</span>' : '<span class="badge badge-danger">Skip</span>', escH(p.o.empId || '(new ID)'), escH(p.o.name), escH(p.o.contractor || (p.w || {}).contractor || ''), escH(p.o.division || (p.w || {}).division || ''), escH(p.o.doj || ''), escH(p.probs.join('; ') || (p.action === 'update' ? p.changes.map(k => (this.MASTER.find(f => f[0] === k) || [k, k])[1]).concat(p.payChanged ? ['pay for ' + this.monthLabel(this.opts.payMonth)] : []).join(', ') : 'all fields')), '<span style="font-size:11px;color:var(--aw-muted)">' + escH(p.missing.join(', ')) + '</span>']), 'Nothing to change — everything in the file is already in the master.')
                     : DASH.table(['Row', 'Action', 'Emp ID', 'Name', 'Current status', 'Mark as', 'Last working day', 'Reason / problem'], show.map(p => [p.line, p.action === 'mark' ? '<span class="badge badge-pending">Mark ' + escH(p.status) + '</span>' : '<span class="badge badge-danger">Skip</span>', escH(p.w ? p.w.empId : p.id), escH(p.w ? p.w.name : p.name), p.w ? statusBadge(p.w.status || 'Active') : '-', escH(p.status), escH(p.lwd ? SOC.nice(p.lwd) : ''), escH(p.probs.join('; ') || p.reason || (p.how === 'name' ? 'matched by name' : ''))]), 'Everyone in the file is already marked.');
                 if (plan.length > 200) h += '<p class="cw-hint">Showing the first 200 rows that change.</p>';
                 const go = isM ? n('new') + n('update') : n('mark');
-                h += '<div class="cw-decision">' + (go ? '<button type="button" onclick="XIMP.apply()">' + (isM ? 'Import ' + go + ' employee(s)' : 'Mark ' + go + ' employee(s) as left') + '</button>' : '') + '<button type="button" class="cw-btn-ghost" onclick="XIMP.cancel()">Cancel</button></div></div>';
+                h += '<div class="cw-decision">' + (go ? '<button type="button" onclick="XIMP.apply()">' + (isM ? 'Import ' + go + ' employee(s)' : 'Mark ' + go + ' employee(s) as left') + '</button>' : '') + '<button type="button" class="cw-btn-ghost" onclick="XIMP.errorReport()">Download error report</button><button type="button" class="cw-btn-ghost" onclick="XIMP.cancel()">Cancel</button></div></div>';
                 box.innerHTML = h;
             },
             cancel() { this.book = null; this.rows = []; this.conMap = {}; this.deptMap = {}; document.getElementById('imp-preview').innerHTML = ''; },
@@ -5725,14 +5765,18 @@
                     if (!confirm('Import ' + plan.filter(p => p.action === 'new').length + ' new and update ' + plan.filter(p => p.action === 'update').length + ' existing employee(s)?')) return;
                     // move the automatic ID counters past any imported IDs (e.g. HR050) so new IDs never clash
                     workers.map(w => w.empId).concat(plan.map(p => p.o.empId)).forEach(id => { const m = /^([A-Z]{2})(\d+)$/.exec(String(id || '').toUpperCase()); if (m) empIdCounters[m[1]] = Math.max(+empIdCounters[m[1]] || 1, +m[2] + 1); });
+                    const month = this.opts.payMonth, putPay = (w, pay) => { if (!pay) return; const rec = Object.assign({ month, period: this.monthLabel(month), source: this.fileName, at: new Date().toISOString() }, pay); w.payHistory = (w.payHistory || []).filter(x => x.month !== month).concat([rec]).sort((a, b) => a.month.localeCompare(b.month)); };
+                    // a date of leaving with no status column: in the past → Left, in the future → Notice Period; an exit record is kept for attrition
+                    const exitFor = w => { if (!w.lwd || this.map.status != null) return; if (isSeparated(w.status)) return; w.status = w.lwd <= today ? 'Left' : 'Notice Period'; w.separation = Object.assign({ lwd: w.lwd, relievingDate: w.lwd, reason: w.exitReason || '' }, w.separation); HRM.syncExit(w); };
                     plan.forEach(p => {
                         if (p.action === 'new') {
                             const empId = p.o.empId || generateEmployeeId(p.o.contractor);
                             const w = Object.assign({ empId, name: '', contractor: '', division: '', location: '', doj: '', designation: '', department: '', section: '', skill: '', expYr: '', expMo: '', mobile: '', emergency: '', dob: '', age: '', state: '', permAddr: '', presAddr: '', aadhar: '', pan: '', uan: '', esi: '', ppeDate: '', basicDa: '', hra: '', gross: '', shift: '' },
                                 Object.fromEntries(Object.entries(p.o).filter(([, v]) => v !== '' && v != null)), { empId, status: p.o.status || this.opts.newStatus, importedFrom: this.fileName, importedOn: today });
                             if (w.contractor) knownContractors.add(w.contractor);
+                            putPay(w, p.pay); exitFor(w);
                             workers.push(w); added++;
-                        } else if (p.action === 'update') { p.changes.forEach(k => { p.w[k] = p.o[k]; }); p.w.updatedFrom = this.fileName; updated++; }
+                        } else if (p.action === 'update') { p.changes.forEach(k => { p.w[k] = p.o[k]; }); putPay(p.w, p.pay); if (p.changes.includes('lwd')) exitFor(p.w); p.w.updatedFrom = this.fileName; if (p.changes.length) HRM.log(p.w, 'Import', 'Updated from ' + this.fileName + ': ' + p.changes.join(', ')); updated++; }
                     });
                     addAudit('HR imported the employee master from ' + this.fileName + ': ' + added + ' added, ' + updated + ' updated');
                 } else {
@@ -5749,6 +5793,16 @@
                 persistAll(); this.cancel();
                 renderWorkersTable(); try { renderDivisionWorkers(); renderResignations(); DASH.render(); } catch (e) { console.warn(e); }
                 document.getElementById('imp-preview').innerHTML = '<div class="access-note">' + (isM ? 'Done: ' + added + ' employee(s) added, ' + updated + ' updated.' : 'Done: ' + marked + ' employee(s) marked as left.') + ' The Workers List below is updated.</div>';
+            },
+            monthLabel(ym) { if (!/^\d{4}-\d{2}$/.test(ym || '')) return ym || ''; return MONTHS[+ym.slice(5) - 1] + ' ' + ym.slice(0, 4); },
+            // every row with a problem (skipped) or missing information (imported, but incomplete)
+            errorReport() {
+                const isM = this.kind === 'master', plan = isM ? this.masterPlan() : this.leftPlan();
+                const rows = plan.filter(p => p.probs.length || (isM && p.missing.length)).map(p => isM
+                    ? [p.line, p.o.empId || '', p.o.name || '', p.probs.length ? 'Skipped' : 'Imported', p.probs.join('; '), p.missing.join(', ')]
+                    : [p.line, p.w ? p.w.empId : p.id, p.w ? p.w.name : p.name, 'Skipped', p.probs.join('; '), '']);
+                if (!rows.length) { alert('No errors or missing information in this file.'); return; }
+                this.csv((isM ? 'Employee master' : 'Left employees') + ' - error report ' + DASH.iso(new Date()) + '.csv', ['Excel row', 'Emp ID', 'Name', 'Result', 'Problem', 'Missing information'], rows);
             },
             csv(name, head, rows) {
                 const cell = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
@@ -5778,9 +5832,9 @@
            Access: HR everything; GM and HOD / Manager view without salary, bank, Aadhaar, PAN; contractors their own employees (statutory masked).
            ===================================================================== */
         function isWorking(s) { return ['Active', 'Notice Period', 'Rejoined', 'Transferred'].includes(s || 'Active'); }
-        function isSeparated(s) { return ['Resigned', 'Relieved', 'Terminated', 'Absconded', 'Left'].includes(s || ''); }
+        function isSeparated(s) { return ['Resigned', 'Relieved', 'Terminated', 'Absconded', 'Left', 'Contract Completed'].includes(s || ''); }
         var HRM = {
-            STATUSES: ['Active', 'Notice Period', 'Resigned', 'Relieved', 'Terminated', 'Absconded', 'On Hold', 'Transferred', 'Rejoined'],
+            STATUSES: ['Active', 'Notice Period', 'Resigned', 'Relieved', 'Terminated', 'Absconded', 'Contract Completed', 'On Hold', 'Transferred', 'Rejoined'],
             DOC_KINDS: [['aadhaar', 'Aadhaar'], ['pan', 'PAN'], ['photo', 'Photograph'], ['education', 'Education certificate'], ['bank', 'Bank passbook / cheque'], ['address', 'Address proof'], ['experience', 'Experience letter'], ['relieving', 'Relieving letter'], ['other', 'Other']],
             REQUIRED_DOCS: ['aadhaar', 'pan', 'photo', 'bank'],
             f: { q: '', status: '', contractor: '', department: '', division: '', location: '' }, open: null, tab: 'overview', editing: '', photos: {},
@@ -5799,7 +5853,9 @@
             inr(n) { return n === '' || n == null || isNaN(+n) ? '-' : '₹' + Math.round(+n).toLocaleString('en-IN'); },
             mask(v, keep) { const d = String(v || '').replace(/\s/g, ''); return d.length > 4 ? 'XXXX' + d.slice(-(keep || 4)) : (v || ''); },
             log(w, type, text, changes) { w.log = (w.log || []).concat([{ at: this.now(), by: this.me(), type, text, changes: changes || null }]).slice(-300); addAudit(this.me() + ' — ' + w.empId + ': ' + text); },
-            gross(w) { return ['basicDa', 'hra', 'conveyance', 'specialAllow', 'otherAllow'].reduce((s, k) => s + (+w[k] || 0), 0) || +w.gross || 0; },
+            COMP: ['basicDa', 'hra', 'conveyance', 'medicalAllow', 'flexiAllow', 'relocationAllow', 'specialAllow', 'otherAllow'],
+            COMP_LABEL: { basicDa: 'Basic + DA', hra: 'HRA', conveyance: 'Conveyance', medicalAllow: 'Medical allowance', flexiAllow: 'Flexi allowance', relocationAllow: 'Relocation allowance', specialAllow: 'Special allowance', otherAllow: 'Other allowance' },
+            gross(w) { return this.COMP.reduce((s, k) => s + (+w[k] || 0), 0) || +w.gross || 0; },
             docOf(w, kind) { return (w.docs || []).find(d => d.kind === kind); },
             docStatus(w) { return this.REQUIRED_DOCS.filter(k => !this.docOf(w, k) && !(k === 'aadhaar' && /\d{4}$/.test(w.aadhar || '') && false)); },
             filtered() {
@@ -5849,7 +5905,7 @@
             go(empId) { const a = document.querySelector('nav a[href="#hrm"]'); if (a) a.click(); this.show(empId); },
 
             /* ---------------- profile ---------------- */
-            tabs() { const a = this.acc(); return [['overview', 'Overview']].concat(a.personal ? [['personal', 'Personal']] : [], [['employment', 'Employment']], a.salary ? [['salary', 'Salary']] : [], a.statutory ? [['statutory', 'Statutory']] : [], a.statutory || this.isHR() ? [['documents', 'Documents']] : [], this.isHR() ? [['actions', 'HR Actions']] : [], [['history', 'History & Audit']]); },
+            tabs() { const a = this.acc(), r = currentRole; return [['overview', 'Overview']].concat(a.personal ? [['personal', 'Personal']] : [], [['employment', 'Employment'], ['contractor', 'Contractor']], a.salary ? [['salary', 'Salary & Wages']] : [], [['attendance', 'Attendance']], a.statutory ? [['statutory', 'Statutory']] : [], a.personal ? [['educational', 'Educational']] : [], a.statutory || this.isHR() ? [['documents', 'Documents']] : [], this.isHR() ? [['actions', 'HR Actions']] : [], [['separation', 'Separation & Exit']], [['history', 'History & Audit']]); },
             renderProfile() {
                 const w = workers.find(x => x.empId === this.open), el = document.getElementById('hrm-body'); if (!w) { this.open = null; return this.render(); }
                 if (!this.scope().includes(w)) { this.open = null; return this.render(); }
@@ -5881,9 +5937,9 @@
                 personal: [['name', 'Name'], ['dob', 'Date of birth', 'date'], ['gender', 'Gender', 0, ['Male', 'Female', 'Transgender']], ['maritalStatus', 'Marital status', 0, ['Single', 'Married', 'Widowed', 'Separated']], ['bloodGroup', 'Blood group', 0, ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']],
                     ['mobile', 'Mobile'], ['email', 'Personal email', 'email'], ['emergencyName', 'Emergency contact person'], ['emergency', 'Emergency contact number'], ['state', 'State'], ['education', 'Educational qualification'], ['prevExperience', 'Previous work experience'],
                     ['presAddr', 'Current address', 'area'], ['permAddr', 'Permanent address', 'area'], ['nominee', 'Nominee details', 'area']],
-                employment: [['doj', 'Date of joining', 'date'], ['oldDoj', 'Original date of joining', 'date'], ['oldEmpId', 'Old Emp ID'], ['designation', 'Designation'], ['skill', 'Skill grade'], ['section', 'Section'], ['shift', 'Shift'],
+                employment: [['doj', 'Date of joining', 'date'], ['oldDoj', 'Original date of joining', 'date'], ['oldEmpId', 'Old Emp ID'], ['designation', 'Designation'], ['reportingManager', 'Reporting supervisor'], ['productionManager', 'Production manager'], ['skill', 'Skill grade'], ['section', 'Section'], ['shift', 'Shift'],
                     ['category', 'Employment category', 0, ['Contract labour', 'Apprentice', 'Trainee', 'Fixed-term']], ['confirmationStatus', 'Confirmation / employment status', 0, ['Probation', 'Confirmed', 'Not applicable']], ['expYr', 'Experience (years)', 'number'], ['expMo', 'Experience (months)', 'number']],
-                statutory: [['uan', 'UAN'], ['esi', 'ESIC no.'], ['pan', 'PAN'], ['aadhar', 'Aadhaar (stored as last 4 digits)'], ['bankAccount', 'Bank account'], ['ifsc', 'IFSC'], ['bankName', 'Bank name'], ['pfStatus', 'PF', 0, ['Covered', 'Not covered', 'Exempt']], ['esiStatus', 'ESI', 0, ['Covered', 'Not covered (above limit)', 'Exempt']]]
+                statutory: [['uan', 'UAN'], ['pfNumber', 'PF number'], ['esi', 'ESIC no.'], ['pan', 'PAN'], ['aadhar', 'Aadhaar (stored as last 4 digits)'], ['bankAccount', 'Bank account'], ['ifsc', 'IFSC'], ['bankName', 'Bank name'], ['pfStatus', 'PF', 0, ['Covered', 'Not covered', 'Exempt']], ['esiStatus', 'ESI', 0, ['Covered', 'Not covered (above limit)', 'Exempt']]]
             },
             saveEdit(empId, sect) {
                 const w = workers.find(x => x.empId === empId); if (!w || !this.isHR()) return;
@@ -5898,7 +5954,7 @@
             t_overview(w) {
                 const a = this.acc(), sep = w.separation || {}, last = (w.salaryHistory || []).slice(-1)[0];
                 return this.grid([['Employee ID', w.empId], ['Old Emp ID', w.oldEmpId], ['Name', w.name], ['Designation', w.designation], ['Division', w.division], ['Department', w.department], ['Section', w.section], ['Contractor', w.contractor], ['Branch / location', w.location],
-                    ['Reporting manager', w.reportingManager], ['Skill grade', w.skill], ['Date of joining', this.nice(w.doj)], ['Status', w.status || 'Active'], ['Status since', this.nice((w.statusHistory || []).slice(-1)[0] && (w.statusHistory || []).slice(-1)[0].date)],
+                    ['Reporting supervisor', w.reportingManager], ['Skill grade', w.skill], ['Date of joining', this.nice(w.doj)], ['Status', w.status || 'Active'], ['Status since', this.nice((w.statusHistory || []).slice(-1)[0] && (w.statusHistory || []).slice(-1)[0].date)],
                     sep.lwd ? ['Last working day', this.nice(sep.lwd)] : null, sep.relievingDate ? ['Relieving date', this.nice(sep.relievingDate)] : null, sep.shortNoticeDays ? ['Short notice', sep.shortNoticeDays + ' day(s) short'] : null, a.salary ? ['Fixed gross', this.inr(this.gross(w))] : null, a.salary && last ? ['Last revision', this.nice(last.effective) + ' · ' + this.inr(last.toGross)] : null]) +
                     (a.statutory ? '<div class="section-header">Documents</div>' + this.REQUIRED_DOCS.map(k => '<span class="badge ' + (this.docOf(w, k) ? 'badge-active' : 'badge-pending') + '" style="margin-right:6px">' + escH(this.DOC_KINDS.find(d => d[0] === k)[1]) + (this.docOf(w, k) ? ' ✓' : ' missing') + '</span>').join('') : '');
             },
@@ -5911,7 +5967,7 @@
             t_employment(w) {
                 if (this.editing === 'employment') return this.editForm(w, 'employment', this.EDIT.employment);
                 const mv = (w.movements || []).slice().reverse();
-                return this.editBtn('employment') + this.grid([['Date of joining', this.nice(w.doj)], ['Original joining date', this.nice(w.oldDoj)], ['Designation', w.designation], ['Division', w.division], ['Department', w.department], ['Section', w.section], ['Reporting manager', w.reportingManager],
+                return this.editBtn('employment') + this.grid([['Date of joining', this.nice(w.doj)], ['Original joining date', this.nice(w.oldDoj)], ['Designation', w.designation], ['Division', w.division], ['Department', w.department], ['Section', w.section], ['Reporting supervisor', w.reportingManager], ['Production manager', w.productionManager],
                     ['Contractor', w.contractor], ['Branch / location', w.location], ['Shift', w.shift], ['Skill grade', w.skill], ['Employment category', w.category || 'Contract labour'], ['Confirmation status', w.confirmationStatus], ['Experience at joining', (w.expYr || 0) + ' yr ' + (w.expMo || 0) + ' mo'],
                     ['Candidate ID', w.candidateId], ['Requisition', w.requisitionId], ['Imported from', w.importedFrom]]) +
                     '<div class="section-header">Employment history — transfers and changes</div>' + DASH.table(['Effective', 'Change', 'From', 'To', 'Reason', 'Approved by'], mv.flatMap(m => Object.entries(m.changes || {}).map(([k, c]) => [this.nice(m.effective), escH(this.label(k)), escH(c.from || '-'), escH(c.to || '-'), escH(m.reason || ''), escH([m.approvedBy, m.approvedOn ? this.nice(m.approvedOn) : ''].filter(Boolean).join(' · '))])), 'No transfers or changes recorded.') +
@@ -5920,16 +5976,18 @@
             label(k) { return ({ department: 'Department', designation: 'Designation', reportingManager: 'Reporting manager', location: 'Branch / location', contractor: 'Contractor', division: 'Division', section: 'Section', skill: 'Skill grade' })[k] || k; },
             t_salary(w) {
                 const pr = payrollRuns.filter(p => p.empId === w.empId).sort((a, b) => new Date('1 ' + b.period) - new Date('1 ' + a.period)), last = pr[0], hist = (w.salaryHistory || []).slice().reverse(), pend = w.pendingRevision;
-                const earn = [['Basic + DA', w.basicDa], ['HRA', w.hra], ['Conveyance', w.conveyance], ['Special allowance', w.specialAllow], ['Other allowance', w.otherAllow]];
+                const earn = this.COMP.filter(k => k === 'basicDa' || k === 'hra' || +w[k]).map(k => [this.COMP_LABEL[k], w[k]]);
                 return '<div class="section-header" style="margin-top:0">Current fixed salary</div>' + DASH.table(['Component', 'Per month'], earn.map(([l, v]) => [l, this.inr(v)]).concat([['<b>Fixed gross</b>', '<b>' + this.inr(this.gross(w)) + '</b>']])) +
                     (last ? '<div class="section-header">Latest payroll — ' + escH(last.period) + '</div>' + DASH.table(['Days', 'Gross earned', 'PF', 'ESI', 'PT', 'Net pay', 'Status'], [[last.presentDays, this.inr(last.gross), this.inr(last.pf), this.inr(last.esi), this.inr(last.pt), '<b>' + this.inr(last.net) + '</b>', escH(last.status || '')]]) : '<p class="cw-hint">No payroll processed for this employee yet.</p>') +
                     (pend && this.isHR() ? '<div class="access-note">Pending revision to ' + this.inr(pend.toGross) + ' from ' + this.nice(pend.effective) + ' (recorded by ' + escH(pend.by) + ')' + (PIPE.isHead() ? ' — <a href="#" onclick="HRM.tab=\'actions\';HRM.renderProfile();return false;">review in HR Actions</a>' : ' — waiting for the HR Head') + '</div>' : '') +
+                    ((w.payHistory || []).length ? '<div class="section-header">Pay history (from the pay register)</div>' + DASH.table(['Month', 'Pay days', 'Total earnings', 'PF', 'ESI', 'PT', 'TDS', 'Advance', 'Insurance', 'PLOP', 'Other', 'Total deductions', 'Net amount'],
+                        w.payHistory.slice().reverse().map(p => [escH(p.period || p.month), p.payDays == null ? '-' : p.payDays, this.inr(p.totalEarnings), this.inr(p.pfDed), this.inr(p.esiDed), this.inr(p.ptDed), this.inr(p.tds), this.inr(p.advance), this.inr(p.insuranceDed), this.inr(p.plop), this.inr(p.otherDed), this.inr(p.totalDed), '<b>' + this.inr(p.netAmount) + '</b>'])) : '') +
                     '<div class="section-header">Salary revision history</div>' + DASH.table(['Effective', 'Previous gross', 'Revised gross', 'Increment', '%', 'Reason', 'Approved by', 'Remarks'], hist.map(h => [this.nice(h.effective), this.inr(h.fromGross), this.inr(h.toGross), this.inr(h.incAmt), (h.incPct || 0) + '%', escH(h.reason || ''), escH([h.approvedBy, h.approvedOn ? this.nice(h.approvedOn) : ''].filter(Boolean).join(' · ')), escH(h.remarks || '')]), 'No revisions recorded.');
             },
             t_statutory(w) {
                 if (this.editing === 'statutory') return this.editForm(w, 'statutory', this.EDIT.statutory);
                 const m = this.acc().masked;
-                return this.editBtn('statutory') + this.grid([['UAN (PF)', w.uan], ['PF', w.pfStatus], ['ESIC no.', w.esi], ['ESI', w.esiStatus], ['PAN', m ? this.mask(w.pan) : w.pan], ['Aadhaar', w.aadhar], ['Bank account', m ? this.mask(w.bankAccount) : w.bankAccount], ['IFSC', w.ifsc], ['Bank', w.bankName],
+                return this.editBtn('statutory') + this.grid([['UAN (PF)', w.uan], ['PF number', m ? this.mask(w.pfNumber) : w.pfNumber], ['PF', w.pfStatus], ['ESIC no.', w.esi], ['ESI', w.esiStatus], ['PAN', m ? this.mask(w.pan) : w.pan], ['Aadhaar', w.aadhar], ['Bank account', m ? this.mask(w.bankAccount) : w.bankAccount], ['IFSC', w.ifsc], ['Bank', w.bankName],
                     ['Aadhaar document', this.docOf(w, 'aadhaar') ? 'Received' : 'Not received'], ['PAN document', this.docOf(w, 'pan') ? 'Received' : 'Not received'], ['Bank proof', this.docOf(w, 'bank') ? 'Received' : 'Not received']]);
             },
             t_documents(w) {
@@ -5979,7 +6037,7 @@
                         sel('hs-status', 'Set status to', ['Notice Period', 'Resigned', 'Relieved', 'Terminated', 'Absconded'], w.status && ['Notice Period', 'Resigned', 'Relieved', 'Terminated', 'Absconded'].includes(w.status) ? w.status : 'Notice Period') + '</div><div class="cw-decision"><button type="button" onclick="HRM.saveSeparation(\'' + escH(w.empId) + '\')">Save exit details</button></div>' +
                         '<p class="cw-hint">The employee\'s details stay in the master after separation. Use "Relieved" once clearance is done and the relieving date is set.</p>') +
                     box('Salary revision / increment', '<p class="cw-hint">Current fixed gross: <b>' + this.inr(g) + '</b>. ' + (PIPE.isHead() ? 'As HR Head your revision is approved and applied straight away.' : 'Your revision goes to the HR Head for approval.') + '</p><div class="mini-form" style="grid-template-columns:repeat(5,1fr)">' +
-                        ['basicDa', 'hra', 'conveyance', 'specialAllow', 'otherAllow'].map(k => inp('hr-' + k, { basicDa: 'Basic + DA', hra: 'HRA', conveyance: 'Conveyance', specialAllow: 'Special allowance', otherAllow: 'Other allowance' }[k], w[k] || 0, 'number')).join('') + '</div>' +
+                        this.COMP.map(k => inp('hr-' + k, this.COMP_LABEL[k], w[k] || 0, 'number')).join('') + '</div>' +
                         '<div id="hr-calc" class="cw-hint"></div><div class="mini-form" style="grid-template-columns:repeat(4,1fr)">' + inp('hr-effective', 'Effective date', this.day(), 'date') + sel('hr-reason', 'Reason', ['Annual increment', 'Promotion', 'Grade change', 'Minimum wage revision', 'Market correction', 'Other'], 'Annual increment') + inp('hr-approvedBy', 'Approved by', PIPE.isHead() ? this.me() : '') + inp('hr-approvedOn', 'Approval date', PIPE.isHead() ? this.day() : '', 'date') +
                         '<div class="form-group full-width"><label>Remarks</label><input type="text" id="hr-remarks"></div></div><div class="cw-decision"><button type="button" onclick="HRM.calcRevision(\'' + escH(w.empId) + '\')" class="cw-btn-ghost">Calculate</button><button type="button" onclick="HRM.saveRevision(\'' + escH(w.empId) + '\')">' + (PIPE.isHead() ? 'Save and apply revision' : 'Send for approval') + '</button></div>') +
                     box('Transfer, designation or department change', '<p class="cw-hint">Fill only what changes. Previous values are kept in the employment history.</p><div class="mini-form" style="grid-template-columns:repeat(4,1fr)">' +
@@ -6053,10 +6111,10 @@
             },
             calcRevision(empId) {
                 const w = workers.find(x => x.empId === empId); if (!w) return null;
-                const comp = {}; ['basicDa', 'hra', 'conveyance', 'specialAllow', 'otherAllow'].forEach(k => { comp[k] = Math.round(+document.getElementById('hr-' + k).value || 0); });
+                const comp = {}; this.COMP.forEach(k => { const e = document.getElementById('hr-' + k); comp[k] = Math.round(+(e && e.value) || 0); });
                 const fromGross = this.gross(w), toGross = Object.values(comp).reduce((s, x) => s + x, 0), incAmt = toGross - fromGross, incPct = fromGross ? Math.round(incAmt * 10000 / fromGross) / 100 : 0;
                 document.getElementById('hr-calc').innerHTML = 'Existing gross <b>' + this.inr(fromGross) + '</b> → revised gross <b>' + this.inr(toGross) + '</b> · increment <b>' + this.inr(incAmt) + '</b> (' + incPct + '%)';
-                return { comp, fromGross, toGross, incAmt, incPct, from: { basicDa: w.basicDa, hra: w.hra, conveyance: w.conveyance, specialAllow: w.specialAllow, otherAllow: w.otherAllow } };
+                return { comp, fromGross, toGross, incAmt, incPct, from: Object.fromEntries(this.COMP.map(k => [k, w[k]])) };
             },
             saveRevision(empId) {
                 const w = workers.find(x => x.empId === empId); if (!w) return; const c = this.calcRevision(empId); if (!c) return;
@@ -6116,8 +6174,8 @@
                 if (!(this.isHR() || currentRole === 'gm_production')) return;
                 await RECRUIT.loadScript(XIMP.LIB);
                 const full = this.isHR(), list = onlyFiltered ? this.filtered() : this.scope();
-                const SENS = ['aadhar', 'pan', 'uan', 'esi', 'bankAccount', 'ifsc', 'bankName', 'basicDa', 'hra', 'conveyance', 'specialAllow', 'otherAllow', 'gross', 'grossTotal'];
-                const base = XIMP.MASTER.filter(([k]) => full || !SENS.includes(k)).map(([k, l]) => [k, l]);
+                const SENS = ['aadhar', 'pan', 'uan', 'esi', 'pfNumber', 'bankAccount', 'ifsc', 'bankName', 'basicDa', 'hra', 'conveyance', 'medicalAllow', 'flexiAllow', 'relocationAllow', 'specialAllow', 'otherAllow', 'gross', 'grossTotal'];
+                const base = XIMP.MASTER.filter(([k]) => !XIMP.PAY.includes(k) && (full || !SENS.includes(k))).map(([k, l]) => [k, l]);
                 const extra = [['reportingManager', 'Reporting manager'], ['category', 'Employment category'], ['confirmationStatus', 'Confirmation status'], ['pfStatus', 'PF'], ['esiStatus', 'ESI']].filter(([k]) => full || !['pfStatus', 'esiStatus'].includes(k));
                 const head = base.map(x => x[1]).concat(extra.map(x => x[1]), ['Status', 'Status since', 'Resignation date', 'Last working day', 'Notice (days)', 'Short notice (days)', 'Notice served', 'Exit interview', 'F&F settlement', 'Clearance', 'Relieving date', 'Exit reason', 'Rejoined on'],
                     full ? ['Last revision effective', 'Revised gross', 'Increment %', 'Aadhaar doc', 'PAN doc', 'Photo', 'Bank proof'] : [], ['Candidate ID', 'Source']);
@@ -6130,6 +6188,7 @@
                 add('Transfers & Changes', ['Emp ID', 'Name', 'Effective', 'Type', 'Field', 'From', 'To', 'Reason', 'Approved by', 'Approval date', 'Recorded by'], list.flatMap(w => (w.movements || []).flatMap(m => Object.entries(m.changes || {}).map(([k, c]) => [w.empId, w.name, m.effective, m.type, this.label(k), c.from, c.to, m.reason, m.approvedBy, m.approvedOn, m.by]))));
                 add('Status & Exits', ['Emp ID', 'Name', 'Date', 'From', 'To', 'Remarks', 'By'], list.flatMap(w => (w.statusHistory || []).map(s => [w.empId, w.name, s.date, s.from, s.to, s.remarks, s.by])).concat(list.flatMap(w => (w.pastSeparations || []).map(p => [w.empId, w.name, p.lwd, '', p.status, 'Earlier exit: ' + (p.reason || ''), p.by || '']))));
                 add('Rejoining', ['Emp ID', 'Name', 'Rejoined on', 'Previous exit', 'Remarks', 'By'], list.flatMap(w => (w.rejoins || []).map(r => [w.empId, w.name, r.date, r.prevExit, r.remarks, r.by])));
+                if (full) add('Pay History', ['Emp ID', 'Name', 'Month'].concat(XIMP.PAY.map(k => XIMP.MASTER.find(f => f[0] === k)[1]), ['Source']), list.flatMap(w => (w.payHistory || []).map(p => [w.empId, w.name, p.period || p.month].concat(XIMP.PAY.map(k => p[k] == null ? '' : p[k]), [p.source || '']))));
                 if (full) add('Documents', ['Emp ID', 'Name', 'Type', 'File', 'Uploaded on', 'By'], list.flatMap(w => (w.docs || []).map(d => [w.empId, w.name, d.kind, d.name, (d.at || '').slice(0, 10), d.by || ''])));
                 XLSX.writeFile(wb, 'Employee Master ' + (onlyFiltered ? '(filtered) ' : '') + this.day() + '.xlsx');
                 addAudit(this.me() + ' exported the employee master (' + list.length + ' employees' + (full ? '' : ', without salary and statutory details') + ')');
@@ -6140,10 +6199,209 @@
                     '<p style="font-size:12px"><a href="#hrm" onclick="document.querySelector(\'nav a[href=&quot;#hrm&quot;]\').click();return false;">Open Employee Management</a></p>';
             }
         };
+        /* ---------- more profile tabs · contractor registration · contractor-initiated separation ---------- */
+        Object.assign(HRM, {
+            SEP_CATS: [['Resignation', 30, 'Default 30 days'], ['Termination', 0, 'As decided by management; zero notice may apply'], ['Absconding', 0, 'No notice period; immediate exit process'],
+                ['Contract Completion / Expiry', 0, 'Based on contract expiry'], ['Mutual Separation', 0, 'As mutually agreed'], ['Medical / Health Grounds', 0, 'As approved by management'],
+                ['Death in Service', 0, 'Immediate administrative closure'], ['Transfer to Another Contractor', 0, 'From the transfer date'], ['Other', 30, 'Specify the reason']],
+            // the status a separation category leads to (Notice Period while the notice is still running)
+            sepStatus(cat, lwd) { const future = lwd && lwd > this.day(); return { 'Resignation': future ? 'Notice Period' : 'Resigned', 'Termination': 'Terminated', 'Absconding': 'Absconded', 'Contract Completion / Expiry': future ? 'Notice Period' : 'Contract Completed', 'Mutual Separation': future ? 'Notice Period' : 'Resigned', 'Medical / Health Grounds': future ? 'Notice Period' : 'Relieved', 'Death in Service': 'Relieved', 'Transfer to Another Contractor': 'Transferred', 'Other': future ? 'Notice Period' : 'Resigned' }[cat] || 'Resigned'; },
+            openReq(w) { return resignations.find(r => r.empId === w.empId && /^Pending/.test(r.status || '') && !r.closedByRejoin); },
+
+            t_contractor(w) {
+                const k = CONTRACTORS.find(c => c.name === w.contractor), mv = (w.movements || []).filter(m => m.changes && m.changes.contractor);
+                return this.grid([['Contractor', w.contractor], ['Code in the master file', w.contractorCode], ['Contractor location', k && k.location], ['Branch / work location', w.location], ['Registered through', w.candidateId ? 'Recruitment (candidate ' + w.candidateId + ')' : w.registrationId ? 'Contractor registration ' + w.registrationId : w.importedFrom ? 'Master import (' + w.importedFrom + ')' : 'Entered by HR'],
+                    ['Registered on', this.nice(w.registeredOn || w.importedOn)], ['Approved by HR', w.approvedBy]]) +
+                    '<div class="section-header">Contractor changes</div>' + DASH.table(['Effective', 'From', 'To', 'Reason', 'Approved by'], mv.map(m => [this.nice(m.effective), escH(m.changes.contractor.from || '-'), escH(m.changes.contractor.to || '-'), escH(m.reason || ''), escH(m.approvedBy || '')]), 'Always with the same contractor.');
+            },
+            t_attendance(w) {
+                const ym = this.day().slice(0, 7), months = attendanceRecords.filter(a => a.empId === w.empId).sort((a, b) => new Date('1 ' + b.period) - new Date('1 ' + a.period));
+                const pun = punches.filter(p => p.empId === w.empId && String(p.date).startsWith(ym)).sort((a, b) => b.date.localeCompare(a.date)), lv = leaveRequests.filter(l => l.empId === w.empId).slice(-10).reverse();
+                return '<div class="section-header" style="margin-top:0">Monthly attendance</div>' + DASH.table(['Month', 'Present days', 'OT hours', 'Paid days (payroll)'], months.map(a => { const p = payrollRuns.find(x => x.empId === w.empId && x.period === a.period); return [escH(a.period), a.presentDays, a.otHrs || 0, p ? p.presentDays : '-']; }), 'No monthly attendance yet — it comes from the eSSL import.') +
+                    '<div class="section-header">Check-ins this month</div>' + DASH.table(['Date', 'In', 'Out', 'Source'], pun.map(p => [this.nice(p.date), escH(p.in || '-'), escH(p.out || '-'), escH(p.source || 'web')]), 'No web check-ins this month.') +
+                    '<div class="section-header">Leave</div>' + DASH.table(['Type', 'From', 'To', 'Days', 'Status'], lv.map(l => [escH(l.type), this.nice(l.from), this.nice(l.to), l.days, statusBadge(l.status)]), 'No leave requests.');
+            },
+            t_educational(w) {
+                if (this.editing === 'educational') return this.editForm(w, 'educational', this.EDIT.educational);
+                const docs = (w.docs || []).filter(d => d.kind === 'education');
+                return this.editBtn('educational') + this.grid([['Highest qualification', w.education], ['Institution', w.institution], ['Board / university', w.board], ['Year of passing', w.passYear], ['Previous work experience', w.prevExperience], ['Experience at joining', (w.expYr || 0) + ' yr ' + (w.expMo || 0) + ' mo']]) +
+                    '<div class="section-header">Certificates</div>' + DASH.table(['File', 'Uploaded', ''], docs.map(d => [escH(d.name), this.nice(d.at), '<button type="button" class="action-btn cw-doc-btn" onclick="RECRUIT.openDoc(\'' + escH(d.id) + '\')">Open</button>']), 'No certificates uploaded.');
+            },
+            t_separation(w) {
+                const sep = w.separation || {}, req = this.openReq(w), all = resignations.filter(r => r.empId === w.empId).slice().reverse(), cl = exitClearances.filter(c => c.empId === w.empId);
+                let h = '';
+                if (req) h += '<div class="cw-panel" style="border-color:var(--aw-gold-line)"><b style="color:var(--aw-gold)">Separation request — ' + escH(req.category || req.type) + '</b> ' + statusBadge(req.status) +
+                    this.grid([['Raised by', req.requestedBy || req.contractor], ['Submitted on', this.nice(req.resignDate)], ['Notice period', req.noticeDays != null ? req.noticeDays + ' days' : ''], ['Proposed last working day', this.nice(req.lwd)], ['Reason', req.reason], ['Contractor remarks', req.remarks], req.transferTo ? ['Transfer to', req.transferTo] : null]) +
+                    ((req.docs || []).length ? '<div class="cw-docs">' + req.docs.map(d => '<button type="button" class="action-btn cw-doc-btn" onclick="RECRUIT.openDoc(\'' + escH(d.id) + '\')">' + escH(d.name) + '</button>').join(' ') + '</div>' : '') +
+                    (this.isHR() ? '<div class="cw-decision"><div class="form-group"><label>Set status to</label><select id="sx-status">' + this.STATUSES.map(s => '<option' + (s === this.sepStatus(req.category || 'Resignation', req.lwd) ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></div>' +
+                        '<div class="form-group"><label>Last working day</label><input type="date" id="sx-lwd" value="' + escH(req.lwd || '') + '"></div><div class="form-group" style="flex:1;min-width:200px"><label>HR remarks</label><input type="text" id="sx-rem"></div>' +
+                        '<button type="button" onclick="HRM.acceptSep(\'' + escH(req.id) + '\')">Accept</button><button type="button" class="cw-btn-danger" onclick="HRM.rejectSep(\'' + escH(req.id) + '\')">Reject</button></div>' : '<p class="cw-hint">Waiting for HR.</p>') + '</div>';
+                if (currentRole === 'contractor' && !req && (isWorking(w.status) || w.status === 'On Hold')) h += this.sepForm(w);
+                h += '<div class="section-header">Current exit details</div>' + (Object.keys(sep).length ? this.grid([['Category', sep.category], ['Resignation / request date', this.nice(sep.resignDate)], ['Notice period', sep.noticeDays != null && sep.noticeDays !== '' ? sep.noticeDays + ' days' : ''], ['Short notice', sep.shortNoticeDays ? sep.shortNoticeDays + ' days' : ''], ['Last working day', this.nice(sep.lwd)], ['Relieving date', this.nice(sep.relievingDate)],
+                        ['Notice served', sep.noticeServed], ['Exit interview', sep.exitInterview], ['F&F settlement', sep.fnf], ['Clearance', sep.clearance], ['Reason', sep.reason], ['Remarks', sep.remarks]]) : '<p class="cw-hint">No separation recorded.' + (this.isHR() ? ' HR records exit details under HR Actions.' : '') + '</p>') +
+                    (cl.length ? '<div class="section-header">Department clearance</div>' + DASH.table(['Division', 'Last working day', 'Status', 'Remarks'], cl.map(c => [escH(c.division), this.nice(c.lwd), statusBadge(c.status), escH(c.remarks || '')])) : '') +
+                    '<div class="section-header">All separation requests</div>' + DASH.table(['Category', 'Submitted', 'Last working day', 'Status', 'Outcome', 'By'], all.map(r => [escH(r.category || r.type || ''), this.nice(r.resignDate), this.nice(r.lwd), statusBadge(r.status), escH(r.finalStatus || r.hrRemarks || ''), escH(r.requestedBy || r.contractor || r.source || '')]), 'None.') +
+                    ((w.pastSeparations || []).length ? '<div class="section-header">Earlier exits (before rejoining)</div>' + DASH.table(['Status', 'Last working day', 'Reason'], w.pastSeparations.map(p => [escH(p.status || ''), this.nice(p.lwd), escH(p.reason || '')])) : '');
+                return h;
+            },
+            sepForm(w) {
+                const opts = this.SEP_CATS.map(([c, n, rule]) => '<option value="' + escH(c) + '" data-n="' + n + '">' + escH(c) + '</option>').join('');
+                return '<div class="cw-panel"><b style="color:var(--aw-gold)">Initiate employee separation</b><p class="cw-hint">' + escH(w.name) + ' · ' + escH(w.empId) + ' · ' + escH(w.department || '') + ' · ' + escH(w.designation || '') + (w.reportingManager ? ' · reports to ' + escH(w.reportingManager) : '') + '</p>' +
+                    '<div class="mini-form" style="grid-template-columns:repeat(4,1fr)"><div class="form-group"><label>Separation category *</label><select id="sp-cat" onchange="HRM.sepFormCalc(true)">' + opts + '</select></div>' +
+                    '<div class="form-group"><label>Request date</label><input type="date" id="sp-date" value="' + this.day() + '" oninput="HRM.sepFormCalc()"></div><div class="form-group"><label>Notice period (days)</label><input type="number" min="0" id="sp-notice" value="30" oninput="HRM.sepFormCalc()"></div>' +
+                    '<div class="form-group"><label>Proposed last working day</label><input type="date" id="sp-lwd" value="' + this.plusDays(this.day(), 30) + '" oninput="this.dataset.manual=1;HRM.sepFormCalc()"></div>' +
+                    '<div class="form-group full-width" id="sp-rule" style="font-size:12px;color:var(--aw-muted)">Rule: Default 30 days</div>' +
+                    '<div class="form-group full-width" id="sp-transfer-wrap" style="display:none"><label>Transfer to contractor</label><select id="sp-transfer"><option value="">-- Select --</option>' + XIMP.knownCons().filter(c => c !== w.contractor).map(c => '<option>' + escH(c) + '</option>').join('') + '</select></div>' +
+                    '<div class="form-group full-width"><label>Reason for separation *</label><input type="text" id="sp-reason"></div><div class="form-group full-width"><label>Contractor remarks</label><input type="text" id="sp-remarks"></div></div>' +
+                    '<div class="cw-decision"><label class="cw-pick-btn" style="display:inline-flex">📎 Supporting documents<input type="file" multiple accept="image/*,application/pdf" onchange="HRM.sepDocs(this)"></label><span id="sp-docs" class="cw-hint"></span></div>' +
+                    '<div id="sp-info"></div><div class="cw-decision"><button type="button" onclick="HRM.submitSep(\'' + escH(w.empId) + '\')">Submit to HR</button></div></div>';
+            },
+            sepDocList: [],
+            sepFormCalc(catChanged) {
+                const c = document.getElementById('sp-cat'), cat = this.SEP_CATS.find(x => x[0] === c.value) || this.SEP_CATS[0], n = document.getElementById('sp-notice'), lwd = document.getElementById('sp-lwd'), d = document.getElementById('sp-date').value;
+                if (catChanged) { n.value = cat[1]; delete lwd.dataset.manual; }
+                if (!lwd.dataset.manual && d) lwd.value = this.plusDays(d, +n.value || 0);
+                document.getElementById('sp-rule').textContent = 'Rule for ' + cat[0] + ': ' + cat[2];
+                document.getElementById('sp-transfer-wrap').style.display = cat[0] === 'Transfer to Another Contractor' ? '' : 'none';
+                const off = this.offDay(lwd.value), short = d && lwd.value ? (+n.value || 0) - this.daysBetween(d, lwd.value) : 0;
+                document.getElementById('sp-info').innerHTML = (short > 0 ? '<span class="badge badge-danger">Short notice: ' + short + ' day(s)</span> ' : '') + (off ? '<span class="badge badge-pending">Last working day is a ' + escH(off) + '</span>' : '');
+            },
+            async sepDocs(input) {
+                const files = Array.from(input.files || []); input.value = ''; const st = document.getElementById('sp-docs');
+                for (const file of files) {
+                    try { st.textContent = 'Uploading ' + file.name + '…'; const entry = { file, name: file.name, mime: file.type || 'application/octet-stream' }, data = await RECRUIT.toBase64(entry), id = uid('DOC');
+                        const r = await fetch('/api/doc', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, candidate: this.open || '', kind: 'other', name: entry.name, mime: entry.mime, data, contractor: currentContractorName, division: '' }) });
+                        if (!r.ok) throw new Error('upload failed'); this.sepDocList.push({ id, name: entry.name, mime: entry.mime }); } catch (e) { alert(file.name + ': ' + (e.message || 'upload failed')); }
+                }
+                st.textContent = this.sepDocList.map(d => d.name).join(', ');
+            },
+            submitSep(empId) {
+                const w = workers.find(x => x.empId === empId); if (!w || currentRole !== 'contractor') return;
+                const v = id => document.getElementById(id).value.trim(), cat = v('sp-cat'), reason = v('sp-reason'), lwd = v('sp-lwd'), date = v('sp-date');
+                if (!reason) { alert('Enter the reason for separation.'); return; }
+                if (!lwd) { alert('Enter the proposed last working day.'); return; }
+                if (cat === 'Transfer to Another Contractor' && !v('sp-transfer')) { alert('Choose the contractor the employee is transferring to.'); return; }
+                const id = 'RS' + (nextResId++);
+                resignations.push({ id, empId: w.empId, name: w.name, contractor: w.contractor, division: w.division, department: w.department || '', designation: w.designation || '', reportingManager: w.reportingManager || '',
+                    type: cat === 'Absconding' || cat === 'Death in Service' ? 'Immediate' : 'Normal', category: cat, resignDate: date, noticeDays: +v('sp-notice') || 0, lwd, reason, remarks: v('sp-remarks'), transferTo: v('sp-transfer') || '',
+                    docs: this.sepDocList.slice(), status: 'Pending HR Review', finalStatus: '', source: 'contractor', requestedBy: currentContractorName, requestedAt: this.now() });
+                this.sepDocList = []; addAudit(currentContractorName + ' initiated separation (' + cat + ') for ' + w.name + ' (' + w.empId + ')'); persistAll(); this.renderProfile();
+                alert('Sent to HR: ' + cat + ' for ' + w.name + '.');
+            },
+            acceptSep(rid) {
+                const r = resignations.find(x => x.id === rid), w = r && workers.find(x => x.empId === r.empId); if (!r || !w || !this.isHR()) return;
+                const to = document.getElementById('sx-status').value, lwd = document.getElementById('sx-lwd').value || r.lwd, rem = document.getElementById('sx-rem').value.trim();
+                w.separation = Object.assign({}, w.separation, { category: r.category || r.type, resignDate: r.resignDate, noticeDays: r.noticeDays, lwd, relievingDate: (w.separation || {}).relievingDate || lwd, reason: r.reason, remarks: [r.remarks, rem].filter(Boolean).join(' · '), source: 'contractor', requestId: r.id,
+                    shortNoticeDays: r.noticeDays ? Math.max(0, r.noticeDays - this.daysBetween(r.resignDate, lwd)) : 0, noticeServed: 'Serving', exitInterview: 'Pending', fnf: 'Pending', clearance: 'Pending' });
+                w.lwd = lwd; w.exitReason = r.reason;
+                if (r.category === 'Transfer to Another Contractor' && r.transferTo) { const ch = { contractor: { from: w.contractor, to: r.transferTo } }; w.movements = (w.movements || []).concat([{ effective: lwd, changes: ch, reason: 'Transfer to another contractor — ' + r.reason, approvedBy: this.me(), approvedOn: this.day(), by: this.me(), at: this.now(), type: 'Transfer' }]); w.contractor = r.transferTo; knownContractors.add(r.transferTo); delete w.separation; }
+                const from = w.status || 'Active'; w.status = to; w.statusHistory = (w.statusHistory || []).concat([{ from, to, date: this.day(), remarks: (r.category || '') + (rem ? ' — ' + rem : ''), by: this.me(), at: this.now() }]);
+                r.status = 'Accepted'; r.finalStatus = to; r.lwd = lwd; r.hrRemarks = rem; r.acceptedBy = this.me(); r.acceptedAt = this.now();
+                if (r.category !== 'Transfer to Another Contractor' && !exitClearances.some(c => c.empId === w.empId && c.lwd === lwd)) exitClearances.push({ id: 'EC' + (nextClearId++), empId: w.empId, name: w.name, division: w.division, lwd, status: 'Pending Department Clearance', remarks: '' });
+                this.log(w, 'Exit', 'HR accepted ' + (r.category || 'separation') + ' — status ' + to + ', last working day ' + this.nice(lwd)); persistAll(); this.renderProfile(); renderWorkersTable(); try { renderResignations(); renderExitClearance(); } catch (e) { }
+            },
+            rejectSep(rid) {
+                const r = resignations.find(x => x.id === rid); if (!r || !this.isHR()) return; const rem = document.getElementById('sx-rem').value.trim(); if (!rem) { alert('Enter the reason in HR remarks.'); return; }
+                r.status = 'Rejected by HR'; r.hrRemarks = rem; const w = workers.find(x => x.empId === r.empId); if (w) this.log(w, 'Exit', 'HR rejected the ' + (r.category || 'separation') + ' request — ' + rem); persistAll(); this.renderProfile(); try { renderResignations(); } catch (e) { }
+            },
+
+            /* ---- contractor registration of a new employee (→ HR verification → Employee ID) ---- */
+            reg: null, regDocs: [],
+            REG_FIELDS: [
+                ['Personal information', [['name', 'Employee name *'], ['dob', 'Date of birth', 'date'], ['gender', 'Gender', ['Male', 'Female', 'Transgender']], ['maritalStatus', 'Marital status', ['Single', 'Married', 'Widowed', 'Separated']], ['mobile', 'Mobile number *', 'tel'], ['email', 'Personal email', 'email'],
+                    ['emergencyName', 'Emergency contact person'], ['emergency', 'Emergency contact number', 'tel'], ['bloodGroup', 'Blood group', ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']], ['state', 'State'], ['presAddr', 'Current address', 'area'], ['permAddr', 'Permanent address', 'area']]],
+                ['Employment information', [['doj', 'Date of joining', 'date'], ['division', 'Division', 'div'], ['department', 'Department'], ['designation', 'Designation *'], ['reportingManager', 'Reporting supervisor'], ['productionManager', 'Production manager'], ['location', 'Branch / work location'],
+                    ['category', 'Employment category', ['Contract labour', 'Apprentice', 'Trainee', 'Fixed-term']], ['skill', 'Skill grade', 'grade'], ['prevExperience', 'Previous work experience'], ['expYr', 'Experience (years)', 'number'], ['expMo', 'Experience (months)', 'number']]],
+                ['Statutory and banking', [['aadhar', 'Aadhaar number (only the last 4 digits are kept)'], ['pan', 'PAN'], ['pfNumber', 'PF number'], ['esi', 'ESI number'], ['uan', 'UAN'], ['bankName', 'Bank name'], ['bankAccount', 'Bank account number'], ['ifsc', 'IFSC code'], ['nominee', 'Nominee details', 'area']]],
+                ['Education', [['education', 'Highest qualification', ['Below SSLC', 'SSLC', 'PUC (+2)', 'ITI', 'Diploma', "Bachelor's Degree", "Master's Degree"]], ['institution', 'Institution name'], ['passYear', 'Year of passing']]]
+            ],
+            regForm() {
+                const p = this.reg || {}, field = ([k, l, t]) => {
+                    const v = escH(p[k] == null ? '' : p[k]), id = 'rg-' + k;
+                    const ctl = Array.isArray(t) ? '<select id="' + id + '"><option value="">--</option>' + t.map(o => '<option' + (p[k] === o ? ' selected' : '') + '>' + escH(o) + '</option>').join('') + '</select>'
+                        : t === 'div' ? '<select id="' + id + '"><option value="">--</option>' + DIVISIONS.map(o => '<option' + (p[k] === o ? ' selected' : '') + '>' + escH(o) + '</option>').join('') + '</select>'
+                        : t === 'grade' ? '<select id="' + id + '"><option value="">--</option>' + PIPE.grades().map(o => '<option' + (p[k] === o ? ' selected' : '') + '>' + escH(o) + '</option>').join('') + '</select>'
+                        : t === 'area' ? '<textarea id="' + id + '" rows="2">' + v + '</textarea>' : '<input type="' + (t || 'text') + '" id="' + id + '" value="' + v + '">';
+                    return '<div class="form-group' + (t === 'area' ? ' full-width' : '') + '"><label>' + escH(l) + '</label>' + ctl + '</div>'; };
+                const docKinds = [['photo', 'Employee photograph'], ['aadhaar', 'Aadhaar card'], ['pan', 'PAN card'], ['education', 'Educational certificates'], ['experience', 'Previous employment documents'], ['bank', 'Bank proof'], ['other', 'Other documents']];
+                return '<div class="cw-decision" style="margin-top:0"><button type="button" class="cw-btn-ghost" onclick="HRM.reg=null;HRM.render()">← Back</button></div><div class="cw-panel"><div class="section-header" style="margin-top:0">' + (p.id && p.status ? 'Correct and resubmit — ' + escH(p.name || '') : 'Register a new employee') + '</div>' +
+                    (p.hrRemarks ? '<div class="access-note">HR asked: ' + escH(p.hrRemarks) + '</div>' : '') + '<p class="cw-hint">Goes to HR for verification. HR approves it and gives the Employee ID. On a phone, 📷 opens the camera.</p>' +
+                    this.REG_FIELDS.map(([title, fs]) => '<div class="section-header">' + title + '</div><div class="mini-form" style="grid-template-columns:repeat(3,1fr)">' + fs.map(field).join('') + '</div>').join('') +
+                    '<div class="section-header">Documents</div><div class="mini-form" style="grid-template-columns:repeat(2,1fr)">' + docKinds.map(([k, l]) => '<div class="cw-drop"><span class="cw-drop-title">' + l + '</span><div class="cw-pick"><label class="cw-pick-btn cw-camera">📷 Take photo<input type="file" accept="image/*" capture="environment" onchange="HRM.regUpload(\'' + k + '\', this)"></label><label class="cw-pick-btn">Upload file<input type="file" accept="image/*,application/pdf" multiple onchange="HRM.regUpload(\'' + k + '\', this)"></label></div><span class="cw-drop-list" id="rg-docs-' + k + '">' + escH(this.regDocs.filter(d => d.kind === k).map(d => d.name).join(', ')) + '</span></div>').join('') + '</div>' +
+                    '<div class="cw-decision"><button type="button" onclick="HRM.submitReg()">Submit to HR for verification</button></div></div>';
+            },
+            startReg(id) { const p = id ? pendingSubmissions.find(x => x.id === id) : null; this.reg = p ? Object.assign({}, p) : { regId: 'PS' + Date.now() }; this.regDocs = p && p.docs ? p.docs.slice() : []; this.render(); },
+            async regUpload(kind, input) {
+                const files = Array.from(input.files || []); input.value = ''; const box = document.getElementById('rg-docs-' + kind);
+                for (const file of files) {
+                    try { box.textContent = 'Uploading ' + file.name + '…'; const entry = { file, name: file.name, mime: file.type || 'application/octet-stream' }, data = await RECRUIT.toBase64(entry), id = uid('DOC');
+                        const r = await fetch('/api/doc', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, candidate: (this.reg && (this.reg.id || this.reg.regId)) || '', kind: kind === 'aadhaar' || kind === 'education' ? kind : 'other', name: entry.name, mime: entry.mime, data, contractor: currentContractorName, division: (document.getElementById('rg-division') || {}).value || '' }) });
+                        if (!r.ok) throw new Error('upload failed (' + r.status + ')');
+                        if (kind === 'photo') this.regDocs = this.regDocs.filter(d => d.kind !== 'photo');
+                        this.regDocs.push({ id, kind, name: entry.name, mime: entry.mime, at: this.now(), by: currentContractorName }); } catch (e) { alert(file.name + ': ' + (e.message || 'upload failed')); }
+                }
+                box.textContent = this.regDocs.filter(d => d.kind === kind).map(d => d.name).join(', ');
+            },
+            submitReg() {
+                if (currentRole !== 'contractor') return;
+                const rec = {}; this.REG_FIELDS.forEach(([, fs]) => fs.forEach(([k]) => { const e = document.getElementById('rg-' + k); if (e) rec[k] = e.value.trim(); }));
+                if (!rec.name || !rec.designation || !/^\d{10}$/.test(rec.mobile.replace(/\D/g, '').slice(-10))) { alert('Please enter the employee name, designation and a 10-digit mobile number.'); return; }
+                if (rec.pan && !/^[A-Z]{5}\d{4}[A-Z]$/i.test(rec.pan)) { alert('PAN should look like ABCDE1234F.'); return; }
+                if (rec.ifsc && !/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(rec.ifsc)) { alert('The IFSC code is not valid.'); return; }
+                rec.mobile = rec.mobile.replace(/\D/g, '').slice(-10); rec.aadhar = RECRUIT.maskAadhaar(rec.aadhar); rec.pan = rec.pan.toUpperCase(); rec.ifsc = rec.ifsc.toUpperCase();
+                if (rec.dob) { const a = new Date().getFullYear() - +rec.dob.slice(0, 4); if (a > 14 && a < 80) rec.age = a; }
+                const photo = this.regDocs.find(d => d.kind === 'photo');
+                Object.assign(rec, { contractor: currentContractorName, docs: this.regDocs.slice(), photoDocId: photo ? photo.id : '', status: 'Pending HR Verification', hrRemarks: '', registeredOn: this.day(), source: 'contractor registration' });
+                const prev = this.reg && this.reg.id ? pendingSubmissions.find(x => x.id === this.reg.id) : null;
+                if (prev) { Object.assign(prev, rec); addAudit(currentContractorName + ' resubmitted ' + rec.name + ' for HR verification'); }
+                else { rec.id = this.reg.regId; pendingSubmissions.push(rec); addAudit(currentContractorName + ' registered ' + rec.name + ' for HR verification'); }
+                persistAll(); this.reg = null; this.regDocs = []; this.render(); try { renderPendingApprovals(); } catch (e) { }
+                alert(rec.name + ' has been sent to HR for verification.');
+            },
+            regList() {
+                const mine = currentRole === 'contractor', list = pendingSubmissions.filter(p => !mine || cw_normJs(p.contractor) === cw_normJs(currentContractorName)).filter(p => mine || /Pending HR Verification/.test(p.status || ''));
+                if (!list.length && !mine) return '';
+                return '<div class="section-header">' + (mine ? 'My registrations' : 'Registrations waiting for HR verification (' + list.length + ')') + '</div>' +
+                    DASH.table(['Name', 'Contractor', 'Designation', 'Mobile', 'Documents', 'Submitted', 'Status', ''], list.map(p => [escH(p.name), escH(p.contractor), escH(p.designation || '-'), escH(p.mobile || '-'), (p.docs || []).length + ' file(s)', this.nice(p.registeredOn), statusBadge(p.status || ''),
+                        mine ? (/Returned/.test(p.status || '') ? '<button type="button" class="action-btn edit" onclick="HRM.startReg(\'' + escH(p.id) + '\')">Correct &amp; resubmit</button>' : '') + (p.hrRemarks ? '<div style="font-size:11px;color:var(--aw-muted)">' + escH(p.hrRemarks) + '</div>' : '')
+                            : '<button type="button" class="action-btn edit" onclick="HRM.viewReg(\'' + escH(p.id) + '\')">Verify</button>']), mine ? 'You have not registered anyone yet.' : '');
+            },
+            viewReg(id) {
+                const p = pendingSubmissions.find(x => x.id === id), el = document.getElementById('hrm-body'); if (!p || !el || !this.isHR()) return;
+                const rows = this.REG_FIELDS.flatMap(([t, fs]) => fs.map(([k, l]) => [l.replace(' *', '').replace(/ \(only.*\)/, ''), p[k]]));
+                el.innerHTML = '<div class="cw-decision" style="margin-top:0"><button type="button" class="cw-btn-ghost" onclick="HRM.render()">← Back</button></div><div class="cw-panel"><div class="section-header" style="margin-top:0">Verify registration — ' + escH(p.name) + ' · ' + escH(p.contractor) + '</div>' + this.grid(rows) +
+                    '<div class="section-header">Documents</div><div class="cw-docs">' + ((p.docs || []).map(d => '<button type="button" class="action-btn cw-doc-btn" onclick="RECRUIT.openDoc(\'' + escH(d.id) + '\')">' + escH((this.DOC_KINDS.find(x => x[0] === d.kind) || ['', d.kind])[1] + ': ' + d.name) + '</button>').join(' ') || 'No documents.') + '</div>' +
+                    '<div class="cw-decision"><div class="form-group"><label>Employee ID</label><input type="text" id="rv-empid" placeholder="leave empty to generate"></div><button type="button" onclick="HRM.approveReg(\'' + escH(p.id) + '\')">Approve — activate profile</button><button type="button" class="cw-btn-ghost" onclick="returnForCorrection(\'' + escH(p.id) + '\');HRM.render()">Return for correction</button><button type="button" class="cw-btn-danger" onclick="rejectSubmission(\'' + escH(p.id) + '\');HRM.render()">Reject</button></div></div>';
+            },
+            approveReg(id) {
+                const idx = pendingSubmissions.findIndex(x => x.id === id); if (idx < 0 || !this.isHR()) return; const p = pendingSubmissions[idx];
+                let empId = (document.getElementById('rv-empid').value || '').trim().toUpperCase();
+                if (empId && workers.some(w => String(w.empId).toUpperCase() === empId)) { alert('Employee ID ' + empId + ' is already in use.'); return; }
+                if (!empId) empId = generateEmployeeId(p.contractor);
+                const w = Object.assign({}, p, { empId, status: 'Active', registrationId: p.id, approvedBy: this.me(), approvedOn: this.day() }); delete w.id; delete w.hrRemarks;
+                workers.push(w); pendingSubmissions.splice(idx, 1); this.log(w, 'Onboarding', 'Registered by ' + p.contractor + ', verified and activated by HR — Employee ID ' + empId);
+                persistAll(); renderWorkersTable(); try { renderPendingApprovals(); } catch (e) { } this.show(empId);
+            }
+        });
+        HRM.EDIT.educational = [['education', 'Highest qualification'], ['institution', 'Institution'], ['board', 'Board / university'], ['passYear', 'Year of passing'], ['prevExperience', 'Previous work experience', 'area']];
+        (function () {   // list view: contractors register employees; HR verifies registrations
+            const base = HRM.render.bind(HRM);
+            HRM.render = function () {
+                const el = document.getElementById('hrm-body'); if (!el || !currentRole) return;
+                if (this.reg && currentRole === 'contractor') { document.getElementById('hrm-title').textContent = 'Register employee'; el.innerHTML = this.regForm(); return; }
+                base(); if (this.open) return;
+                const top = (currentRole === 'contractor' ? '<div class="cw-decision" style="margin-top:0"><button type="button" onclick="HRM.startReg()">+ Register new employee</button></div>' : '') + (currentRole === 'contractor' || this.isHR() ? this.regList() : '');
+                if (top) el.insertAdjacentHTML('afterbegin', top);
+            };
+        })();
+
         (function () {
             const st = switchTab; switchTab = function (id) { st(id); if (id === 'hrm') HRM.render(); };
             const rr = SYNC.rerender.bind(SYNC);
-            SYNC.rerender = function () { rr(); const a = document.activeElement, typing = a && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && a.closest('#hrm'), open = document.querySelector('#hrm details[open]'); if (!typing && !open) { try { HRM.render(); } catch (e) { console.warn(e); } } };
+            SYNC.rerender = function () { rr(); const a = document.activeElement, typing = a && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && a.closest('#hrm'), open = document.querySelector('#hrm details[open]'); if (!typing && !open && !HRM.reg && !HRM.dirty) { try { HRM.render(); } catch (e) { console.warn(e); } } };
+            // a form someone has started filling in on this tab is never redrawn by the 30-second refresh
+            document.addEventListener('input', e => { if (e.target && e.target.closest && e.target.closest('#hrm-body')) HRM.dirty = true; });
+            ['render', 'renderProfile'].forEach(fn => { const f0 = HRM[fn].bind(HRM); HRM[fn] = function () { HRM.dirty = false; return f0.apply(HRM, arguments); }; });
             XIMP.exportMaster = function () { HRM.exportXlsx(false); };
             const dr = DASH.render.bind(DASH);
             DASH.render = function () { dr(); if (currentRole !== 'hr_admin') return; const body = document.getElementById('dash-body'), foot = body && body.lastElementChild; try { const h = HRM.dashHtml(); if (foot && foot.tagName === 'P') foot.insertAdjacentHTML('beforebegin', h); else if (body) body.insertAdjacentHTML('beforeend', h); } catch (e) { console.warn(e); } };
