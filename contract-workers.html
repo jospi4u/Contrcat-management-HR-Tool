@@ -797,6 +797,26 @@
             <!-- 1. WORKERS MASTER DATA -->
             <div id="master" class="tab-content active">
                 <h2>Workers Master Data Entry</h2>
+                <!-- HR only: bulk import from Excel — the existing employee master, and the list of employees who have left -->
+                <div id="imp-panel" style="display:none;">
+                    <div class="section-header" style="margin-top:0">Import from Excel</div>
+                    <div class="mini-form" style="grid-template-columns: repeat(2, 1fr);">
+                        <div class="cw-panel" style="margin:0">
+                            <b style="color:var(--aw-gold)">1 · Employee master</b>
+                            <p class="cw-hint" style="margin:6px 0">Your existing employee master (.xlsx, .xls or .csv). New Emp IDs are added; existing ones are updated. You see a preview first.</p>
+                            <label class="cw-pick-btn" style="display:inline-flex">Choose master file<input type="file" accept=".xlsx,.xls,.csv" onchange="XIMP.pick('master', this)"></label>
+                            <button type="button" class="cw-btn-ghost" onclick="XIMP.template('master')">Download template</button>
+                            <button type="button" class="cw-btn-ghost" onclick="XIMP.exportMaster()">Download current master</button>
+                        </div>
+                        <div class="cw-panel" style="margin:0">
+                            <b style="color:var(--aw-gold)">2 · Left employees</b>
+                            <p class="cw-hint" style="margin:6px 0">A list of employees who have left (Emp ID, last working day, reason). They are matched to the master and marked Left / Resigned / Absconded / Terminated.</p>
+                            <label class="cw-pick-btn" style="display:inline-flex">Choose left-employees file<input type="file" accept=".xlsx,.xls,.csv" onchange="XIMP.pick('left', this)"></label>
+                            <button type="button" class="cw-btn-ghost" onclick="XIMP.template('left')">Download template</button>
+                        </div>
+                    </div>
+                    <div id="imp-preview"></div>
+                </div>
                 <div class="access-note" id="master-contractor-note" style="display:none;">
                     You are viewing this in read-only mode. Contractors can view worker details but cannot edit them. Contact HR to request a change.
                 </div>
@@ -5433,6 +5453,247 @@
                 if ([ST.REJ_PM, ST.REJ_HEAD, ST.NOTJ].includes(s)) return '<span class="badge badge-danger">' + s + '</span>';
                 return sb(s);
             };
+        })();
+
+        /* =====================================================================
+           EXCEL IMPORT (HR only) — 1) the existing employee master, 2) the employees who have left.
+           The file is read in the browser (SheetJS). Columns are matched by their headings and can be
+           re-mapped; HR sees a preview (new / updated / unchanged / problems) before anything is saved.
+           Left employees are matched by Emp ID (or by a unique name) and marked with their exit status,
+           last working day and reason; an exit record is added so dashboards count the attrition.
+           ===================================================================== */
+        var XIMP = {
+            LIB: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+            MASTER: [
+                ['empId', 'Emp ID', ['emp id', 'empid', 'employee id', 'emp code', 'emp.code', 'employee code', 'emp no', 'employee no', 'id no', 'code']],
+                ['name', 'Name', ['name', 'names', 'employee name', 'emp name', 'worker name', 'full name']],
+                ['contractor', 'Contractor', ['contractor', 'contractor name', 'agency', 'vendor', 'contractor / agency']],
+                ['division', 'Division', ['division', 'vertical', 'business unit', 'unit']],
+                ['location', 'Location', ['location', 'place', 'site', 'branch']],
+                ['designation', 'Designation', ['designation', 'position', 'role', 'job title']],
+                ['department', 'Department', ['department', 'dept', 'dept.']],
+                ['section', 'Section', ['section', 'line', 'shop']],
+                ['skill', 'Skill grade', ['skill', 'skill level', 'skill grade', 'grade', 'category']],
+                ['doj', 'Date of joining', ['doj', 'date of joining', 'joining date', 'join date', 'd.o.j']],
+                ['dob', 'Date of birth', ['dob', 'date of birth', 'birth date', 'd.o.b']],
+                ['gender', 'Gender', ['gender', 'sex']],
+                ['mobile', 'Mobile', ['mobile', 'mobile no', 'mobile number', 'phone', 'contact no', 'contact number']],
+                ['emergency', 'Emergency contact', ['emergency', 'emergency contact', 'emergency no', 'alternate number']],
+                ['state', 'State', ['state', 'native state', 'home state']],
+                ['permAddr', 'Permanent address', ['perm address', 'permanent address', 'native address', 'address']],
+                ['presAddr', 'Present address', ['pres address', 'present address', 'current address', 'local address']],
+                ['aadhar', 'Aadhaar', ['aadhaar', 'aadhar', 'aadhaar no', 'aadhar no', 'uid']],
+                ['pan', 'PAN', ['pan', 'pan no', 'pan number']],
+                ['uan', 'UAN', ['uan', 'uan no', 'pf uan', 'uan number']],
+                ['esi', 'ESIC no.', ['esic', 'esi', 'esic no', 'esi no', 'esic number', 'ip number']],
+                ['bankAccount', 'Bank account', ['bank account', 'account no', 'account number', 'bank a/c', 'a/c no']],
+                ['ifsc', 'IFSC', ['ifsc', 'ifsc code']],
+                ['bankName', 'Bank name', ['bank', 'bank name']],
+                ['expYr', 'Experience (years)', ['exp yr', 'exp years', 'experience years', 'experience (years)', 'exp']],
+                ['expMo', 'Experience (months)', ['exp mo', 'exp months', 'experience months']],
+                ['basicDa', 'Basic + DA', ['basic+da', 'basic + da', 'basic da', 'basic', 'basic & da']],
+                ['hra', 'HRA', ['hra', 'house rent allowance']],
+                ['gross', 'Fixed gross', ['gross', 'fixed gross', 'gross salary', 'salary', 'monthly gross', 'total gross']],
+                ['shift', 'Shift', ['shift']],
+                ['status', 'Status', ['status', 'employee status', 'emp status']]
+            ],
+            LEFT: [
+                ['empId', 'Emp ID', ['emp id', 'empid', 'employee id', 'emp code', 'emp.code', 'employee code', 'emp no', 'code']],
+                ['name', 'Name', ['name', 'names', 'employee name', 'emp name']],
+                ['lwd', 'Last working day', ['lwd', 'last working day', 'last working date', 'date of leaving', 'dol', 'leaving date', 'exit date', 'relieving date', 'resigned on', 'left on']],
+                ['status', 'Exit status', ['status', 'exit status', 'exit type', 'type', 'mode of exit']],
+                ['reason', 'Reason', ['reason', 'reason for leaving', 'exit reason', 'remarks', 'remark']]
+            ],
+            EXIT_STATUSES: ['Left', 'Resigned', 'Absconded', 'Terminated'],
+            kind: null, book: null, sheet: '', rows: [], headRow: 0, map: {}, opts: { update: 'fill', newStatus: 'Active', defaultExit: 'Left' },
+            norm: s => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9+&/]+/g, ' ').trim(),
+            fields() { return this.kind === 'left' ? this.LEFT : this.MASTER; },
+
+            async pick(kind, input) {
+                const file = input.files && input.files[0]; input.value = ''; if (!file || currentRole !== 'hr_admin') return;
+                const box = document.getElementById('imp-preview'); box.innerHTML = '<p class="cw-hint">Reading ' + escH(file.name) + '…</p>';
+                try {
+                    await RECRUIT.loadScript(this.LIB);
+                    const buf = await file.arrayBuffer();
+                    // CSV: keep cells as typed so 12-08-2026 stays day-first (Indian), not read as US month-first
+                    this.book = XLSX.read(buf, { type: 'array', cellDates: true, raw: /\.csv$/i.test(file.name) });
+                    this.kind = kind; this.fileName = file.name;
+                    this.useSheet(this.bestSheet());
+                } catch (e) { console.warn(e); box.innerHTML = '<div class="access-note">Could not read this file: ' + escH(e.message) + '. Save it as .xlsx or .csv and try again.</div>'; }
+            },
+            bestSheet() {   // the sheet whose headings match the most fields
+                let best = this.book.SheetNames[0], score = -1;
+                this.book.SheetNames.forEach(n => { const rows = XLSX.utils.sheet_to_json(this.book.Sheets[n], { header: 1, raw: true, defval: '' }); const s = this.findHeader(rows).score; if (s > score) { score = s; best = n; } });
+                return best;
+            },
+            findHeader(rows) {
+                let best = { row: 0, score: -1 };
+                for (let r = 0; r < Math.min(15, rows.length); r++) { const m = this.autoMap(rows[r] || []); const s = Object.keys(m).length; if (s > best.score) best = { row: r, score: s }; }
+                return best;
+            },
+            autoMap(header) {
+                const map = {}, used = new Set();
+                // exact synonym matches first, then "heading contains synonym"
+                [true, false].forEach(exact => this.fields().forEach(([k, , syn0]) => {
+                    if (map[k] != null) return;
+                    const syn = syn0.map(s => this.norm(s));   // "D.O.J" and "d.o.j" compare the same
+                    header.forEach((h, i) => { if (map[k] != null || used.has(i)) return; const n = this.norm(h); if (!n) return;
+                        if (exact ? syn.includes(n) : syn.some(s => s.length > 3 && (n.includes(s) || s.includes(n) && n.length > 3))) { map[k] = i; used.add(i); } });
+                }));
+                return map;
+            },
+            useSheet(name) {
+                this.sheet = name;
+                const rows = XLSX.utils.sheet_to_json(this.book.Sheets[name], { header: 1, raw: true, defval: '' });
+                const h = this.findHeader(rows); this.headRow = h.row; this.rows = rows; this.map = this.autoMap(rows[h.row] || []);
+                this.render();
+            },
+            header() { return (this.rows[this.headRow] || []).map(h => String(h).trim()); },
+            dataRows() { return this.rows.slice(this.headRow + 1).filter(r => r.some(c => String(c).trim() !== '')); },
+            setMap(k, v) { if (v === '') delete this.map[k]; else this.map[k] = +v; this.render(); },
+
+            // ---- value clean-up ----
+            date(v) {
+                if (v == null || v === '') return '';
+                if (v instanceof Date && !isNaN(v)) return DASH.iso(new Date(v.getTime() + 12 * 3600e3));   // SheetJS dates are local midnight
+                if (typeof v === 'number' && v > 20000 && v < 80000) { const d = new Date(Math.round((v - 25569) * 864e5)); return d.toISOString().slice(0, 10); }
+                const s = String(v).trim(); let m;
+                if ((m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/))) return m[1] + '-' + m[2].padStart(2, '0') + '-' + m[3].padStart(2, '0');
+                if ((m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/))) { const y = m[3].length === 2 ? '20' + m[3] : m[3]; return y + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0'); }   // dd-mm-yyyy (Indian)
+                if ((m = s.match(/^(\d{1,2})[-\s/.]([A-Za-z]{3,9})[-\s/.,]*(\d{2,4})$/))) { const mo = 'janfebmaraprmayjunjulaugsepoctnovdec'.indexOf(m[2].slice(0, 3).toLowerCase()) / 3 + 1; if (mo > 0) { const y = m[3].length === 2 ? '20' + m[3] : m[3]; return y + '-' + String(mo).padStart(2, '0') + '-' + m[1].padStart(2, '0'); } }
+                const d = new Date(s); return isNaN(d) ? '' : DASH.iso(d);
+            },
+            num(v) { if (v === '' || v == null) return ''; const n = parseFloat(String(v).replace(/[₹,\s]/g, '')); return isNaN(n) ? '' : n; },
+            text(v) { return v instanceof Date ? DASH.iso(v) : String(v == null ? '' : v).trim(); },
+            contractorOf(s) {
+                const n = cw_normJs(s).replace(/^m\s*\/\s*s\.?\s*/, ''); if (!n) return '';
+                const all = CONTRACTORS.map(c => c.name).concat(Array.from(knownContractors || []));
+                const hit = all.find(c => cw_normJs(c) === cw_normJs(s)) || all.find(c => { const k = cw_normJs(c).replace(/^m\s*\/\s*s\.?\s*/, ''); return k.startsWith(n.slice(0, 6)) || n.startsWith(k.slice(0, 6)); });
+                return hit || String(s).trim();
+            },
+            divisionOf(s) { const n = cw_normJs(s); if (!n) return ''; return DIVISIONS.find(d => cw_normJs(d) === n) || DIVISIONS.find(d => cw_normJs(d).includes(n) || n.includes(cw_normJs(d).replace(/^aristo /, ''))) || String(s).trim(); },
+            exitStatusOf(s) { const n = cw_normJs(s); return this.EXIT_STATUSES.find(x => n.startsWith(x.toLowerCase().slice(0, 5))) || (n.includes('abscond') ? 'Absconded' : n.includes('terminat') || n.includes('dismiss') ? 'Terminated' : n.includes('resign') ? 'Resigned' : n ? 'Left' : ''); },
+            cell(r, k) { return this.map[k] == null ? '' : r[this.map[k]]; },
+
+            // ---- master: what would change ----
+            masterRecord(r) {
+                const o = {}; this.MASTER.forEach(([k]) => { if (this.map[k] == null) return; const v = this.cell(r, k);
+                    o[k] = ['doj', 'dob'].includes(k) ? this.date(v) : ['basicDa', 'hra', 'gross', 'expYr', 'expMo'].includes(k) ? this.num(v) : this.text(v); });
+                if (o.contractor) o.contractor = this.contractorOf(o.contractor);
+                if (o.division) o.division = this.divisionOf(o.division);
+                if (o.aadhar) o.aadhar = RECRUIT.maskAadhaar(o.aadhar);
+                if (o.mobile) o.mobile = String(o.mobile).replace(/\D/g, '').slice(-10);
+                if (o.empId) o.empId = String(o.empId).trim().toUpperCase();
+                if (o.gross === '' && (o.basicDa !== '' || o.hra !== '') && this.map.gross == null && (+o.basicDa || +o.hra)) o.gross = (+o.basicDa || 0) + (+o.hra || 0);
+                if (o.dob && !o.age) { const a = new Date().getFullYear() - +o.dob.slice(0, 4); if (a > 14 && a < 80) o.age = a; }
+                if (o.status) { const s = cw_normJs(o.status); o.status = s.startsWith('activ') || s === 'working' || s === 'present' ? 'Active' : s.startsWith('onboard') ? 'Onboarding' : this.exitStatusOf(o.status) || 'Active'; }
+                return o;
+            },
+            masterPlan() {
+                const byId = new Map(workers.map(w => [String(w.empId).toUpperCase(), w])), seen = new Set(), plan = [];
+                this.dataRows().forEach((r, i) => {
+                    const o = this.masterRecord(r), line = this.headRow + i + 2, probs = [];
+                    if (!o.name) probs.push('no name');
+                    if (o.empId && seen.has(o.empId)) probs.push('Emp ID repeated in the file');
+                    if (o.empId) seen.add(o.empId);
+                    if (!o.empId && !o.contractor) probs.push('no Emp ID and no contractor (needed to make an ID)');
+                    const w = o.empId ? byId.get(o.empId) : null;
+                    let changes = [];
+                    if (w) changes = Object.keys(o).filter(k => o[k] !== '' && o[k] != null && String(o[k]) !== String(w[k] == null ? '' : w[k]) && (this.opts.update === 'overwrite' || w[k] == null || w[k] === ''));
+                    plan.push({ line, o, w, probs, changes, action: probs.length ? 'problem' : !w ? 'new' : changes.length ? 'update' : 'same' });
+                });
+                return plan;
+            },
+            // ---- left: who would be marked ----
+            leftPlan() {
+                const byId = new Map(workers.map(w => [String(w.empId).toUpperCase(), w])), plan = [];
+                this.dataRows().forEach((r, i) => {
+                    const id = this.text(this.cell(r, 'empId')).toUpperCase(), name = this.text(this.cell(r, 'name')), line = this.headRow + i + 2;
+                    let w = id ? byId.get(id) : null, how = 'Emp ID';
+                    if (!w && name) { const m = workers.filter(x => cw_normJs(x.name) === cw_normJs(name)); if (m.length === 1) { w = m[0]; how = 'name'; } else if (m.length > 1) how = 'name matches ' + m.length + ' employees'; }
+                    const lwd = this.date(this.cell(r, 'lwd')), status = this.exitStatusOf(this.cell(r, 'status')) || this.opts.defaultExit, reason = this.text(this.cell(r, 'reason'));
+                    const probs = []; if (!w) probs.push(id || name ? 'not found in the master' + (how.startsWith('name matches') ? ' (' + how + ')' : '') : 'no Emp ID or name'); if (!lwd) probs.push('no last working day');
+                    const already = w && DASH.LEFT(w.status) && (w.lwd || '') === lwd;
+                    plan.push({ line, id, name, w, how, lwd, status, reason, probs, action: probs.length ? 'problem' : already ? 'same' : 'mark' });
+                });
+                return plan;
+            },
+
+            render() {
+                const box = document.getElementById('imp-preview'); if (!box) return;
+                const hdr = this.header(), fields = this.fields(), isM = this.kind === 'master';
+                const sel = k => '<select onchange="XIMP.setMap(\'' + k + '\', this.value)" style="min-width:150px"><option value="">— not in file —</option>' + hdr.map((h, i) => h ? '<option value="' + i + '"' + (this.map[k] === i ? ' selected' : '') + '>' + escH(h) + '</option>' : '').join('') + '</select>';
+                const plan = isM ? this.masterPlan() : this.leftPlan(), n = a => plan.filter(p => p.action === a).length;
+                const mapped = fields.filter(([k]) => this.map[k] != null).length;
+                let h = '<div class="cw-panel" style="margin-top:12px"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center"><b style="color:var(--aw-gold)">' + (isM ? 'Employee master' : 'Left employees') + ' — ' + escH(this.fileName) + '</b>' +
+                    (this.book.SheetNames.length > 1 ? '<span>Sheet <select onchange="XIMP.useSheet(this.value)">' + this.book.SheetNames.map(s => '<option' + (s === this.sheet ? ' selected' : '') + '>' + escH(s) + '</option>').join('') + '</select></span>' : '') + '</div>' +
+                    '<p class="cw-hint">Headings found on row ' + (this.headRow + 1) + ' · ' + this.dataRows().length + ' data rows · ' + mapped + ' of ' + fields.length + ' columns matched. Check the matching below and change any that are wrong.</p>' +
+                    '<details' + (mapped < 3 ? ' open' : '') + '><summary style="cursor:pointer;font-size:12px;color:var(--aw-gold)">Column matching</summary><div class="mini-form" style="grid-template-columns:repeat(4,1fr);margin-top:8px">' + fields.map(([k, l]) => '<div class="form-group"><label>' + escH(l) + '</label>' + sel(k) + '</div>').join('') + '</div></details>';
+                if (isM) h += '<div class="cw-decision"><div class="form-group"><label>Existing employees</label><select onchange="XIMP.opts.update=this.value;XIMP.render()"><option value="fill"' + (this.opts.update === 'fill' ? ' selected' : '') + '>Fill only empty fields</option><option value="overwrite"' + (this.opts.update === 'overwrite' ? ' selected' : '') + '>Overwrite with the Excel values</option></select></div>' +
+                    '<div class="form-group"><label>Status for new employees (if no Status column)</label><select onchange="XIMP.opts.newStatus=this.value;XIMP.render()">' + ['Active', 'Onboarding'].map(s => '<option' + (this.opts.newStatus === s ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></div></div>' +
+                    DASH.grid([DASH.card(n('new'), 'New employees'), DASH.card(n('update'), 'Existing — will be updated'), DASH.card(n('same'), 'Existing — no change'), DASH.card(n('problem'), 'Rows with problems', 'skipped')]);
+                else h += '<div class="cw-decision"><div class="form-group"><label>Exit status when the file has none</label><select onchange="XIMP.opts.defaultExit=this.value;XIMP.render()">' + this.EXIT_STATUSES.map(s => '<option' + (this.opts.defaultExit === s ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></div></div>' +
+                    DASH.grid([DASH.card(n('mark'), 'Will be marked as left'), DASH.card(n('same'), 'Already marked'), DASH.card(n('problem'), 'Not matched / problems', 'skipped')]);
+                const show = plan.filter(p => p.action !== 'same').slice(0, 200);
+                h += isM ? DASH.table(['Row', 'Action', 'Emp ID', 'Name', 'Contractor', 'Division', 'DOJ', 'What changes / problem'], show.map(p => [p.line, p.action === 'new' ? '<span class="badge badge-active">New</span>' : p.action === 'update' ? '<span class="badge badge-pending">Update</span>' : '<span class="badge badge-danger">Skip</span>', escH(p.o.empId || '(new ID)'), escH(p.o.name), escH(p.o.contractor || (p.w || {}).contractor || ''), escH(p.o.division || (p.w || {}).division || ''), escH(p.o.doj || ''), escH(p.probs.join('; ') || (p.action === 'update' ? p.changes.map(k => (this.MASTER.find(f => f[0] === k) || [k, k])[1]).join(', ') : 'all fields'))]), 'Nothing to change — everything in the file is already in the master.')
+                    : DASH.table(['Row', 'Action', 'Emp ID', 'Name', 'Current status', 'Mark as', 'Last working day', 'Reason / problem'], show.map(p => [p.line, p.action === 'mark' ? '<span class="badge badge-pending">Mark ' + escH(p.status) + '</span>' : '<span class="badge badge-danger">Skip</span>', escH(p.w ? p.w.empId : p.id), escH(p.w ? p.w.name : p.name), p.w ? statusBadge(p.w.status || 'Active') : '-', escH(p.status), escH(p.lwd ? SOC.nice(p.lwd) : ''), escH(p.probs.join('; ') || p.reason || (p.how === 'name' ? 'matched by name' : ''))]), 'Everyone in the file is already marked.');
+                if (plan.length > 200) h += '<p class="cw-hint">Showing the first 200 rows that change.</p>';
+                const go = isM ? n('new') + n('update') : n('mark');
+                h += '<div class="cw-decision">' + (go ? '<button type="button" onclick="XIMP.apply()">' + (isM ? 'Import ' + go + ' employee(s)' : 'Mark ' + go + ' employee(s) as left') + '</button>' : '') + '<button type="button" class="cw-btn-ghost" onclick="XIMP.cancel()">Cancel</button></div></div>';
+                box.innerHTML = h;
+            },
+            cancel() { this.book = null; this.rows = []; document.getElementById('imp-preview').innerHTML = ''; },
+            apply() {
+                if (currentRole !== 'hr_admin') return;
+                const isM = this.kind === 'master', plan = isM ? this.masterPlan() : this.leftPlan(), today = DASH.iso(new Date());
+                let added = 0, updated = 0, marked = 0;
+                if (isM) {
+                    if (!confirm('Import ' + plan.filter(p => p.action === 'new').length + ' new and update ' + plan.filter(p => p.action === 'update').length + ' existing employee(s)?')) return;
+                    // move the automatic ID counters past any imported IDs (e.g. HR050) so new IDs never clash
+                    workers.map(w => w.empId).concat(plan.map(p => p.o.empId)).forEach(id => { const m = /^([A-Z]{2})(\d+)$/.exec(String(id || '').toUpperCase()); if (m) empIdCounters[m[1]] = Math.max(+empIdCounters[m[1]] || 1, +m[2] + 1); });
+                    plan.forEach(p => {
+                        if (p.action === 'new') {
+                            const empId = p.o.empId || generateEmployeeId(p.o.contractor);
+                            const w = Object.assign({ empId, name: '', contractor: '', division: '', location: '', doj: '', designation: '', department: '', section: '', skill: '', expYr: '', expMo: '', mobile: '', emergency: '', dob: '', age: '', state: '', permAddr: '', presAddr: '', aadhar: '', pan: '', uan: '', esi: '', ppeDate: '', basicDa: '', hra: '', gross: '', shift: '' },
+                                Object.fromEntries(Object.entries(p.o).filter(([, v]) => v !== '' && v != null)), { empId, status: p.o.status || this.opts.newStatus, importedFrom: this.fileName, importedOn: today });
+                            if (w.contractor) knownContractors.add(w.contractor);
+                            workers.push(w); added++;
+                        } else if (p.action === 'update') { p.changes.forEach(k => { p.w[k] = p.o[k]; }); p.w.updatedFrom = this.fileName; updated++; }
+                    });
+                    addAudit('HR imported the employee master from ' + this.fileName + ': ' + added + ' added, ' + updated + ' updated');
+                } else {
+                    if (!confirm('Mark ' + plan.filter(p => p.action === 'mark').length + ' employee(s) as left? Their status changes in the master and an exit record is added.')) return;
+                    plan.filter(p => p.action === 'mark').forEach(p => {
+                        const w = p.w; w.status = p.status; w.lwd = p.lwd; w.exitReason = p.reason; w.exitImportedFrom = this.fileName;
+                        const id = 'RS-IMP-' + w.empId, ex = resignations.find(r => r.id === id) || resignations.find(r => r.empId === w.empId && /Accepted/.test(r.status || ''));
+                        if (ex) Object.assign(ex, { lwd: p.lwd, finalStatus: p.status, reason: p.reason || ex.reason });
+                        else resignations.push({ id, empId: w.empId, name: w.name, contractor: w.contractor, division: w.division, type: 'Imported', resignDate: p.lwd, lwd: p.lwd, reason: p.reason, remarks: 'Imported from ' + this.fileName, status: 'Accepted', finalStatus: p.status, source: 'import' });
+                        marked++;
+                    });
+                    addAudit('HR marked ' + marked + ' employee(s) as left from ' + this.fileName);
+                }
+                persistAll(); this.cancel();
+                renderWorkersTable(); try { renderDivisionWorkers(); renderResignations(); DASH.render(); } catch (e) { console.warn(e); }
+                document.getElementById('imp-preview').innerHTML = '<div class="access-note">' + (isM ? 'Done: ' + added + ' employee(s) added, ' + updated + ' updated.' : 'Done: ' + marked + ' employee(s) marked as left.') + ' The Workers List below is updated.</div>';
+            },
+            csv(name, head, rows) {
+                const cell = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+                const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + [head].concat(rows).map(r => r.map(cell).join(',')).join('\r\n')], { type: 'text/csv' }));
+                a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+            },
+            template(kind) {
+                if (kind === 'left') return this.csv('Left employees - template.csv', this.LEFT.map(f => f[1]), [['HR001', 'Ramesh Kumar', '31-10-2026', 'Resigned', 'Moving to native place']]);
+                this.csv('Employee master - template.csv', this.MASTER.map(f => f[1]), [['HR001', 'Ramesh Kumar', 'M/s. HRD Integrated Manpower Solution', 'Aristo Vertical Production', 'Bangalore', 'Operator', 'Assembly', 'Line 1', 'Skilled Grade I', '01-01-2024', '15-05-1995', 'Male', '9876543210', '', 'Karnataka', '', '', '', '', '', '', '', '', '', 2, 6, 15000, 3000, 18000, 'General Shift (8:30 AM - 5:00 PM)', 'Active']]);
+            },
+            exportMaster() {
+                if (currentRole !== 'hr_admin') return;
+                const f = this.MASTER.concat([['lwd', 'Last working day'], ['exitReason', 'Exit reason']]);
+                this.csv('Employee master ' + DASH.iso(new Date()) + '.csv', f.map(x => x[1]), workers.map(w => f.map(([k]) => w[k] == null ? '' : w[k])));
+            }
+        };
+        (function () {
+            const arp = applyRolePermissions;
+            applyRolePermissions = function () { arp(); const p = document.getElementById('imp-panel'); if (p) p.style.display = currentRole === 'hr_admin' ? '' : 'none'; };
         })();
 
         /* ---------- install as a phone / desktop app ---------- */
