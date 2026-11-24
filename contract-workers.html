@@ -5863,6 +5863,7 @@
                     '<div class="cw-filter">' + tabs.map(([k, l]) => '<button type="button" class="' + (this.tab === k ? 'on' : '') + '" onclick="HRM.tab=\'' + k + '\';HRM.editing=\'\';HRM.renderProfile()">' + l + '</button>').join('') + '</div>' +
                     '<div id="hrm-tab">' + this['t_' + this.tab](w) + '</div>';
                 if (w.photoDocId) this.loadPhoto(w.photoDocId);
+                if (this.tab === 'actions') { const sp = w.separation || {}; if (sp.lwd && document.getElementById('hs-lwd')) document.getElementById('hs-lwd').dataset.manual = '1'; if (sp.relievingDate && document.getElementById('hs-relievingDate')) document.getElementById('hs-relievingDate').dataset.manual = '1'; this.sepCalc(''); }
             },
             async loadPhoto(id) {
                 const img = document.getElementById('hrm-photo'); if (!img) return;
@@ -5898,7 +5899,7 @@
                 const a = this.acc(), sep = w.separation || {}, last = (w.salaryHistory || []).slice(-1)[0];
                 return this.grid([['Employee ID', w.empId], ['Old Emp ID', w.oldEmpId], ['Name', w.name], ['Designation', w.designation], ['Division', w.division], ['Department', w.department], ['Section', w.section], ['Contractor', w.contractor], ['Branch / location', w.location],
                     ['Reporting manager', w.reportingManager], ['Skill grade', w.skill], ['Date of joining', this.nice(w.doj)], ['Status', w.status || 'Active'], ['Status since', this.nice((w.statusHistory || []).slice(-1)[0] && (w.statusHistory || []).slice(-1)[0].date)],
-                    sep.lwd ? ['Last working day', this.nice(sep.lwd)] : null, a.salary ? ['Fixed gross', this.inr(this.gross(w))] : null, a.salary && last ? ['Last revision', this.nice(last.effective) + ' · ' + this.inr(last.toGross)] : null]) +
+                    sep.lwd ? ['Last working day', this.nice(sep.lwd)] : null, sep.relievingDate ? ['Relieving date', this.nice(sep.relievingDate)] : null, sep.shortNoticeDays ? ['Short notice', sep.shortNoticeDays + ' day(s) short'] : null, a.salary ? ['Fixed gross', this.inr(this.gross(w))] : null, a.salary && last ? ['Last revision', this.nice(last.effective) + ' · ' + this.inr(last.toGross)] : null]) +
                     (a.statutory ? '<div class="section-header">Documents</div>' + this.REQUIRED_DOCS.map(k => '<span class="badge ' + (this.docOf(w, k) ? 'badge-active' : 'badge-pending') + '" style="margin-right:6px">' + escH(this.DOC_KINDS.find(d => d[0] === k)[1]) + (this.docOf(w, k) ? ' ✓' : ' missing') + '</span>').join('') : '');
             },
             t_personal(w) {
@@ -5969,8 +5970,11 @@
                 return (pend ? '<div class="cw-panel" style="border-color:var(--aw-gold-line)"><b style="color:var(--aw-gold)">Salary revision waiting for approval</b><div style="font-size:13px;margin:6px 0">' + this.inr(pend.fromGross) + ' → <b>' + this.inr(pend.toGross) + '</b> (+' + this.inr(pend.incAmt) + ', ' + pend.incPct + '%) from ' + this.nice(pend.effective) + ' · ' + escH(pend.reason || '') + ' · recorded by ' + escH(pend.by) + '</div>' +
                         (PIPE.isHead() ? '<div class="cw-decision"><button type="button" onclick="HRM.approveRevision(\'' + escH(w.empId) + '\', true)">Approve and apply</button><button type="button" class="cw-btn-danger" onclick="HRM.approveRevision(\'' + escH(w.empId) + '\', false)">Reject</button></div>' : '<p class="cw-hint">Only the HR Head can approve.</p>') + '</div>' : '') +
                     box('Change employment status', '<div class="cw-decision">' + sel('ha-status', 'New status', this.STATUSES, w.status || 'Active') + inp('ha-sdate', 'Effective date', this.day(), 'date') + '<div class="form-group" style="flex:1;min-width:220px"><label>Remarks</label><input type="text" id="ha-sremarks"></div><button type="button" onclick="HRM.setStatus(\'' + escH(w.empId) + '\')">Update status</button></div>') +
-                    box('Resignation, exit and relieving', '<div class="mini-form" style="grid-template-columns:repeat(4,1fr)">' + inp('hs-resignDate', 'Resignation submitted on', sep.resignDate, 'date') + inp('hs-lwd', 'Last working day', sep.lwd, 'date') + inp('hs-noticeDays', 'Notice period (days)', sep.noticeDays != null ? sep.noticeDays : 30, 'number') + sel('hs-noticeServed', 'Notice period', ['Serving', 'Served', 'Waived', 'Partly served'], sep.noticeServed || 'Serving') +
-                        sel('hs-exitInterview', 'Exit interview', ['Pending', 'Completed', 'Not applicable'], sep.exitInterview || 'Pending') + sel('hs-fnf', 'Full and final settlement', ['Pending', 'Processed', 'Paid'], sep.fnf || 'Pending') + sel('hs-clearance', 'Clearance', ['Pending', 'In progress', 'Cleared'], sep.clearance || 'Pending') + inp('hs-relievingDate', 'Relieving date', sep.relievingDate, 'date') +
+                    box('Resignation, exit and relieving', (() => { const sd = this.sepDefaults(sep), on = (id, src) => id.replace('<input ', '<input oninput="HRM.sepCalc(\'' + src + '\')" ');
+                        return '<p class="cw-hint">Dates fill in for you: resignation date = today, notice = 30 days, last working day and relieving date = resignation date + notice. Change any of them if needed.</p><div class="mini-form" style="grid-template-columns:repeat(4,1fr)">' +
+                        on(inp('hs-resignDate', 'Resignation submitted on', sd.resignDate, 'date'), 'resign') + on(inp('hs-noticeDays', 'Notice period (days)', sd.noticeDays, 'number'), 'notice') + on(inp('hs-lwd', 'Last working day', sd.lwd, 'date'), 'lwd') + on(inp('hs-relievingDate', 'Relieving date', sd.relievingDate, 'date'), 'relieve') +
+                        '<div class="full-width" id="hs-info" style="grid-column:1/-1"></div>' + sel('hs-noticeServed', 'Notice period', ['Serving', 'Served', 'Waived', 'Partly served'], sep.noticeServed || 'Serving') +
+                        sel('hs-exitInterview', 'Exit interview', ['Pending', 'Completed', 'Not applicable'], sep.exitInterview || 'Pending') + sel('hs-fnf', 'Full and final settlement', ['Pending', 'Processed', 'Paid'], sep.fnf || 'Pending') + sel('hs-clearance', 'Clearance', ['Pending', 'In progress', 'Cleared'], sep.clearance || 'Pending'); })() +
                         '<div class="form-group full-width"><label>Reason for resignation</label><input type="text" id="hs-reason" value="' + escH(sep.reason || '') + '"></div><div class="form-group full-width"><label>Remarks</label><input type="text" id="hs-remarks" value="' + escH(sep.remarks || '') + '"></div>' +
                         sel('hs-status', 'Set status to', ['Notice Period', 'Resigned', 'Relieved', 'Terminated', 'Absconded'], w.status && ['Notice Period', 'Resigned', 'Relieved', 'Terminated', 'Absconded'].includes(w.status) ? w.status : 'Notice Period') + '</div><div class="cw-decision"><button type="button" onclick="HRM.saveSeparation(\'' + escH(w.empId) + '\')">Save exit details</button></div>' +
                         '<p class="cw-hint">The employee\'s details stay in the master after separation. Use "Relieved" once clearance is done and the relieving date is set.</p>') +
@@ -5993,10 +5997,44 @@
                 this.syncExit(w);
                 this.log(w, 'Status', 'Status ' + from + ' → ' + to + ' from ' + this.nice(date) + (rem ? ' — ' + rem : '')); persistAll(); this.renderProfile(); renderWorkersTable();
             },
+            // ---- exit dates: defaults, short notice, Sundays / holidays ----
+            plusDays(iso, n) { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + (+n || 0)); return DASH.iso(d); },
+            daysBetween(a, b) { return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 864e5); },
+            offDay(iso) { if (!iso) return ''; const d = new Date(iso + 'T00:00:00'), h = (holidaysList || []).find(x => x.date === iso); return d.getDay() === 0 ? 'Sunday' : h ? h.name + ' (holiday)' : ''; },
+            workingDay(iso, step) { let d = iso, n = 0; while (this.offDay(d) && n++ < 15) d = this.plusDays(d, step); return d; },
+            sepDefaults(sep) {
+                const resignDate = sep.resignDate || this.day(), noticeDays = sep.noticeDays !== '' && sep.noticeDays != null ? +sep.noticeDays : 30, lwd = sep.lwd || this.plusDays(resignDate, noticeDays);
+                return { resignDate, noticeDays, lwd, relievingDate: sep.relievingDate || lwd };
+            },
+            sepCalc(src) {
+                const g = id => document.getElementById('hs-' + id); if (!g('resignDate')) return;
+                const box = g('info'), rd = g('resignDate').value, nd = Math.max(0, parseInt(g('noticeDays').value || '0', 10));
+                if (src === 'lwd') g('lwd').dataset.manual = '1';
+                if (src === 'relieve') g('relievingDate').dataset.manual = '1';
+                if ((src === 'resign' || src === 'notice') && rd) {   // follow the resignation date + notice unless HR typed a date
+                    if (!g('lwd').dataset.manual) g('lwd').value = this.plusDays(rd, nd);
+                    if (!g('relievingDate').dataset.manual) g('relievingDate').value = g('lwd').value;
+                }
+                if (src === 'lwd' && !g('relievingDate').dataset.manual) g('relievingDate').value = g('lwd').value;
+                const lwd = g('lwd').value, rel = g('relievingDate').value, msgs = [];
+                if (rd && lwd) {
+                    const served = this.daysBetween(rd, lwd), short = nd - served;
+                    if (served < 0) msgs.push('<span class="badge badge-danger">Last working day is before the resignation date</span>');
+                    else if (short > 0) { msgs.push('<span class="badge badge-danger">Short notice: ' + short + ' day' + (short > 1 ? 's' : '') + ' short</span> serving ' + served + ' of ' + nd + ' days'); const ns = g('noticeServed') || document.getElementById('hs-noticeServed'); if (ns && ns.value === 'Served') ns.value = 'Partly served'; }
+                    else msgs.push('<span class="badge badge-active">Full notice</span> ' + served + ' days' + (short < 0 ? ' (' + (-short) + ' more than required)' : ''));
+                }
+                [['Last working day', lwd, 'lwd'], ['Relieving date', rel, 'relievingDate']].forEach(([l, d, id]) => { const off = this.offDay(d); if (off) { const prev = this.workingDay(d, -1), next = this.workingDay(d, 1);
+                    msgs.push('<span class="badge badge-pending">' + l + ' ' + SOC.nice(d) + ' is a ' + escH(off) + '</span> <button type="button" class="cw-btn-ghost" style="min-height:24px;padding:2px 8px" onclick="HRM.moveDate(\'' + id + '\',\'' + prev + '\')">Move to ' + SOC.nice(prev) + '</button><button type="button" class="cw-btn-ghost" style="min-height:24px;padding:2px 8px" onclick="HRM.moveDate(\'' + id + '\',\'' + next + '\')">Move to ' + SOC.nice(next) + '</button>'); } });
+                if (rel && lwd && rel < lwd) msgs.push('<span class="badge badge-pending">Relieving date is before the last working day</span>');
+                if (box) box.innerHTML = msgs.map(m => '<div style="margin:4px 0;font-size:12px">' + m + '</div>').join('');
+            },
+            moveDate(id, iso) { const e = document.getElementById('hs-' + id); if (!e) return; e.value = iso; e.dataset.manual = '1'; if (id === 'lwd') this.sepCalc('lwd'); else this.sepCalc('relieve'); },
             saveSeparation(empId) {
                 const w = workers.find(x => x.empId === empId); if (!w) return;
                 const v = k => document.getElementById('hs-' + k).value.trim(), s = { resignDate: v('resignDate'), lwd: v('lwd'), noticeDays: v('noticeDays') === '' ? '' : +v('noticeDays'), noticeServed: v('noticeServed'), exitInterview: v('exitInterview'), fnf: v('fnf'), clearance: v('clearance'), relievingDate: v('relievingDate'), reason: v('reason'), remarks: v('remarks') };
                 if (!s.lwd) { alert('Enter the last working day.'); return; }
+                if (s.resignDate && s.lwd < s.resignDate) { alert('The last working day is before the resignation date.'); return; }
+                s.shortNoticeDays = s.resignDate && s.noticeDays !== '' ? Math.max(0, s.noticeDays - this.daysBetween(s.resignDate, s.lwd)) : 0;
                 const to = v('status');
                 if (to === 'Relieved' && (!s.relievingDate || s.clearance !== 'Cleared')) { if (!confirm('Relieved is usually set after clearance is Cleared and a relieving date is entered. Continue?')) return; }
                 const changes = {}; Object.keys(s).forEach(k => { const p = (w.separation || {})[k]; if (String(p == null ? '' : p) !== String(s[k])) changes[k] = { from: p == null ? '' : p, to: s[k] }; });
@@ -6081,10 +6119,10 @@
                 const SENS = ['aadhar', 'pan', 'uan', 'esi', 'bankAccount', 'ifsc', 'bankName', 'basicDa', 'hra', 'conveyance', 'specialAllow', 'otherAllow', 'gross', 'grossTotal'];
                 const base = XIMP.MASTER.filter(([k]) => full || !SENS.includes(k)).map(([k, l]) => [k, l]);
                 const extra = [['reportingManager', 'Reporting manager'], ['category', 'Employment category'], ['confirmationStatus', 'Confirmation status'], ['pfStatus', 'PF'], ['esiStatus', 'ESI']].filter(([k]) => full || !['pfStatus', 'esiStatus'].includes(k));
-                const head = base.map(x => x[1]).concat(extra.map(x => x[1]), ['Status', 'Status since', 'Resignation date', 'Last working day', 'Notice (days)', 'Notice served', 'Exit interview', 'F&F settlement', 'Clearance', 'Relieving date', 'Exit reason', 'Rejoined on'],
+                const head = base.map(x => x[1]).concat(extra.map(x => x[1]), ['Status', 'Status since', 'Resignation date', 'Last working day', 'Notice (days)', 'Short notice (days)', 'Notice served', 'Exit interview', 'F&F settlement', 'Clearance', 'Relieving date', 'Exit reason', 'Rejoined on'],
                     full ? ['Last revision effective', 'Revised gross', 'Increment %', 'Aadhaar doc', 'PAN doc', 'Photo', 'Bank proof'] : [], ['Candidate ID', 'Source']);
                 const rows = list.map(w => { const s = w.separation || {}, sh = (w.statusHistory || []).slice(-1)[0], rv = (w.salaryHistory || []).slice(-1)[0], yn = k => this.docOf(w, k) ? 'Received' : 'Missing';
-                    return base.map(([k]) => w[k] == null ? '' : w[k]).concat(extra.map(([k]) => w[k] || ''), [w.status || 'Active', sh ? sh.date : '', s.resignDate || '', s.lwd || w.lwd || '', s.noticeDays != null ? s.noticeDays : '', s.noticeServed || '', s.exitInterview || '', s.fnf || '', s.clearance || '', s.relievingDate || '', s.reason || w.exitReason || '', w.rejoinedOn || ''],
+                    return base.map(([k]) => w[k] == null ? '' : w[k]).concat(extra.map(([k]) => w[k] || ''), [w.status || 'Active', sh ? sh.date : '', s.resignDate || '', s.lwd || w.lwd || '', s.noticeDays != null ? s.noticeDays : '', s.shortNoticeDays || '', s.noticeServed || '', s.exitInterview || '', s.fnf || '', s.clearance || '', s.relievingDate || '', s.reason || w.exitReason || '', w.rejoinedOn || ''],
                         full ? [rv ? rv.effective : '', rv ? rv.toGross : '', rv ? rv.incPct : '', yn('aadhaar'), yn('pan'), yn('photo'), yn('bank')] : [], [w.candidateId || '', w.candidateId ? 'Recruitment' : w.importedFrom ? 'Import: ' + w.importedFrom : 'Entered']); });
                 const wb = XLSX.utils.book_new(), add = (name, h, r) => { const ws = XLSX.utils.aoa_to_sheet([h].concat(r)); ws['!cols'] = h.map(x => ({ wch: Math.min(40, Math.max(10, String(x).length + 2)) })); XLSX.utils.book_append_sheet(wb, ws, name); };
                 add('Employee Master', head, rows);
