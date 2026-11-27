@@ -6736,6 +6736,191 @@
             const st = switchTab; switchTab = function (id) { st.apply(this, arguments); try { PANELS.mark(); } catch (e) { } };
         })();
 
+        /* =====================================================================
+           EMPLOYEE HISTORY — nothing about an employee changes without a record.
+           1) Every change to a worker record (any screen, any user) is diffed and logged: who, when, old → new.
+           2) HR Actions add Promotion and Disciplinary action.
+           3) One combined history per employee gathers the employee's own record (log, status, salary, transfers,
+              promotions, discipline, rejoining, documents) and what other areas did for them (requests, clearances,
+              leave, PPE, induction, recruitment) — shown as a timeline diagram with a career & salary chart.
+           ===================================================================== */
+        var EHIST = {
+            SKIP: new Set(['log', 'statusHistory', 'salaryHistory', 'movements', 'docs', 'payHistory', 'separation', 'induction', 'rejoins', 'pastSeparations', 'disciplinary', 'pendingRevision', 'age', 'updatedFrom', 'verifiedAt']),
+            snap: new Map(), covered: new Map(),
+            flat(w) { const o = {}; Object.keys(w).forEach(k => { const v = w[k]; if (!this.SKIP.has(k) && (v == null || typeof v !== 'object')) o[k] = v == null ? '' : String(v); }); return o; },
+            take() { this.snap = new Map(workers.map(w => [String(w.empId), this.flat(w)])); this.covered = new Map(); },
+            who() { const n = (signedInUser && signedInUser.name) || ''; const r = ROLE_LABELS[currentRole] || currentRole || ''; return n && n !== r ? n + ' (' + r + ')' : (n || r); },
+            // called just before saving: anything changed that no HR action has already recorded gets an automatic entry
+            capture() {
+                if (!this.snap.size && workers.length) { this.take(); return; }
+                workers.forEach(w => {
+                    const id = String(w.empId), before = this.snap.get(id), now = this.flat(w), cov = this.covered.get(id);
+                    if (!before) { if (!(w.log || []).length) w.log = [{ at: new Date().toISOString(), by: this.who(), type: 'Created', text: 'Employee record created' + (w.importedFrom ? ' from ' + w.importedFrom : w.registrationId ? ' from contractor registration' : w.candidateId ? ' from recruitment' : ''), changes: null }]; return; }
+                    if (cov === 'all') return;
+                    const changes = {}; new Set(Object.keys(before).concat(Object.keys(now))).forEach(k => { if ((before[k] || '') !== (now[k] || '') && !(cov && cov.has(k))) changes[k] = { from: before[k] || '', to: now[k] || '' }; });
+                    if (Object.keys(changes).length) w.log = (w.log || []).concat([{ at: new Date().toISOString(), by: this.who(), type: 'Update', text: 'Updated: ' + Object.keys(changes).map(k => this.label(k)).join(', '), changes }]).slice(-300);
+                });
+                this.take();
+            },
+            label(k) { return ({ basicDa: 'Basic + DA', hra: 'HRA', gross: 'Fixed gross', doj: 'Date of joining', dob: 'Date of birth', uan: 'UAN', esi: 'ESIC no.', pan: 'PAN', aadhar: 'Aadhaar', ifsc: 'IFSC', reportingManager: 'Reporting supervisor', productionManager: 'Production manager', presAddr: 'Present address', permAddr: 'Permanent address', expYr: 'Experience (years)', expMo: 'Experience (months)', empId: 'Emp ID', oldEmpId: 'Old Emp ID' })[k] || k.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()); },
+
+            /* ---------------- combined history ---------------- */
+            CAT: { Joining: ['🟢', '#3fb950'], Promotion: ['⬆', '#d2a8ff'], Salary: ['₹', '#d4a64a'], Transfer: ['⇄', '#58a6ff'], Status: ['●', '#e3b341'], Disciplinary: ['⚠', '#f85149'], Exit: ['⏏', '#ff7b72'], Rejoin: ['↺', '#3fb950'], Requests: ['✉', '#39c5cf'], Leave: ['🗓', '#39c5cf'], PPE: ['⛑', '#8b949e'], Induction: ['✓', '#56d364'], Documents: ['📄', '#8b949e'], Updates: ['✎', '#8b949e'] },
+            events(w) {
+                const a = HRM.acc(), ev = [], add = (at, cat, title, detail, by) => { if (at) ev.push({ at: String(at), cat, title, detail: detail || '', by: by || '' }); };
+                const inr = n => HRM.inr(n);
+                add(w.doj, 'Joining', 'Joined as ' + (w.designation || 'employee'), [w.contractor, w.division, w.skill].filter(Boolean).join(' · '), w.approvedBy || '');
+                if (w.oldDoj && w.oldDoj !== w.doj) add(w.oldDoj, 'Joining', 'First joined (earlier service)', w.oldEmpId ? 'old ID ' + w.oldEmpId : '');
+                (w.statusHistory || []).forEach(s => add(s.date || s.at, isSeparated(s.to) ? 'Exit' : s.to === 'Rejoined' ? 'Rejoin' : 'Status', 'Status: ' + (s.from || '-') + ' → ' + s.to, s.remarks, s.by));
+                if (a.salary) (w.salaryHistory || []).forEach(h => add(h.effective, /promot/i.test(h.reason || '') ? 'Promotion' : 'Salary', (/promot/i.test(h.reason || '') ? 'Promotion pay: ' : 'Increment: ') + inr(h.fromGross) + ' → ' + inr(h.toGross) + ' (' + (h.incPct >= 0 ? '+' : '') + h.incPct + '%)', [h.reason, h.remarks, h.approvedBy ? 'approved by ' + h.approvedBy : ''].filter(Boolean).join(' · '), h.by));
+                (w.movements || []).forEach(m => add(m.effective, m.type === 'Promotion' ? 'Promotion' : m.type === 'Transfer' ? 'Transfer' : 'Transfer', (m.type || 'Change') + ': ' + Object.entries(m.changes || {}).map(([k, c]) => EHIST.label(k) + ' ' + (c.from || '-') + ' → ' + (c.to || '-')).join('; '), [m.reason, m.approvedBy ? 'approved by ' + m.approvedBy : ''].filter(Boolean).join(' · '), m.by));
+                if (HRM.isHR()) (w.disciplinary || []).forEach(d => add(d.actionDate || d.incidentDate, 'Disciplinary', d.type + (d.status === 'Closed' ? ' (closed)' : ''), [d.incident, d.action, d.issuedBy ? 'issued by ' + d.issuedBy : ''].filter(Boolean).join(' · '), d.by));
+                (w.rejoins || []).forEach(r => add(r.date, 'Rejoin', 'Rejoined', [r.prevExit ? 'after ' + r.prevExit : '', r.remarks].filter(Boolean).join(' · '), r.by));
+                const sep = w.separation; if (sep && sep.lwd) add(sep.lwd, 'Exit', 'Last working day', [sep.category, sep.reason].filter(Boolean).join(' · '));
+                if (sep && sep.relievingDate && sep.relievingDate !== sep.lwd) add(sep.relievingDate, 'Exit', 'Relieved', sep.fnf ? 'F&F ' + sep.fnf : '');
+                if (w.induction && w.induction.completedAt) add(w.induction.completedAt, 'Induction', 'Induction completed', '');
+                // what other areas did for this employee
+                resignations.filter(r => r.empId === w.empId).forEach(r => { add(r.resignDate || r.requestedAt, 'Requests', (r.category || r.type || 'Separation') + ' request', 'raised by ' + (r.requestedBy || r.contractor || r.source || '') + ' · now ' + r.status);
+                    (r.history || []).forEach(h => add(h.iso || h.at, 'Requests', h.what, h.remarks, h.by)); });
+                leaveRequests.filter(l => l.empId === w.empId && /Approved/.test(l.status || '')).forEach(l => add(l.from, 'Leave', l.type + ' · ' + l.days + ' day(s)', SOC.nice(l.from) + (l.to !== l.from ? ' – ' + SOC.nice(l.to) : '')));
+                regularizations.filter(r => r.empId === w.empId && /Approved/.test(r.status || '')).forEach(r => add(r.date, 'Requests', 'Attendance correction approved', r.reason));
+                profileChanges.filter(p => p.empId === w.empId && /Approved/.test(p.status || '')).forEach(p => add(p.decidedOn || p.appliedOn, 'Requests', 'Profile change: ' + (p.fieldLabel || p.field), (p.from || '-') + ' → ' + p.to));
+                ppeRequests.filter(p => p.empId === w.empId).forEach(p => (p.issues || []).forEach(i => add(i.date, 'PPE', 'PPE issued: ' + i.item + ' ×' + i.qty, '', i.by)));
+                const cand = w.candidateId && candidates.find(c => c.id === w.candidateId); if (cand) (cand.history || []).forEach(h => add(h.iso || h.at, 'Joining', 'Recruitment: ' + h.what, h.remarks, h.by));
+                // the employee record's own change log (HR edits, imports, documents, automatic updates)
+                (w.log || []).forEach(l => {
+                    if (['Status', 'Transfer', 'Change', 'Rejoin', 'Promotion', 'Disciplinary'].includes(l.type)) return;   // shown from their own records above
+                    if (l.type === 'Salary' && /Salary revised/.test(l.text)) return;
+                    if (l.type === 'Salary' && !a.salary) return;
+                    const ch = l.changes && a.edit ? Object.entries(l.changes).filter(([k]) => a.salary || !HRM.COMP.concat(['gross']).includes(k)).map(([k, c]) => EHIST.label(k) + ': ' + (c.from === '' ? '∅' : c.from) + ' → ' + (c.to === '' ? '∅' : c.to)).join('; ') : '';
+                    add(l.at, l.type === 'Document' ? 'Documents' : l.type === 'Exit' ? 'Exit' : l.type === 'Salary' ? 'Salary' : l.type === 'Onboarding' || l.type === 'Created' ? 'Joining' : 'Updates', l.text, ch, l.by);
+                });
+                return ev.map(e => Object.assign(e, { day: e.at.slice(0, 10) })).sort((x, y) => y.at.localeCompare(x.at));
+            },
+            filt: '', view: 'timeline',
+            chart(w, evs) {
+                const a = HRM.acc(); if (!a.salary) return '';
+                const sh = (w.salaryHistory || []).slice().sort((x, y) => String(x.effective).localeCompare(String(y.effective)));
+                const start = (w.oldDoj && w.oldDoj < (w.doj || '9')) ? w.oldDoj : (w.doj || (sh[0] && sh[0].effective) || HRM.day()), end = HRM.day();
+                const pts = [[start, sh.length ? +sh[0].fromGross || HRM.gross(w) : HRM.gross(w)]].concat(sh.map(h => [h.effective, +h.toGross || 0]));
+                const t0 = new Date(start).getTime(), t1 = Math.max(new Date(end).getTime(), t0 + 864e5 * 30), W = 760, H = 210, L = 64, R = 16, T = 18, B = 34;
+                const ys = pts.map(p => p[1]).filter(Boolean), ymax = Math.max(...ys, 1) * 1.12, ymin = Math.max(0, Math.min(...ys) * 0.85);
+                const X = d => L + (new Date(d).getTime() - t0) / (t1 - t0) * (W - L - R), Y = v => T + (1 - (v - ymin) / ((ymax - ymin) || 1)) * (H - T - B);
+                let path = 'M' + X(pts[0][0]) + ' ' + Y(pts[0][1]); for (let i = 1; i < pts.length; i++) path += ' H' + X(pts[i][0]) + ' V' + Y(pts[i][1]); path += ' H' + X(end);
+                const marks = evs.filter(e => ['Promotion', 'Transfer', 'Disciplinary', 'Exit', 'Rejoin'].includes(e.cat) && e.day >= start).map(e => { const c = this.CAT[e.cat][1], x = X(e.day);
+                    return '<g><line x1="' + x + '" x2="' + x + '" y1="' + T + '" y2="' + (H - B) + '" stroke="' + c + '" stroke-dasharray="3 3" opacity=".7"/><circle cx="' + x + '" cy="' + (T + 6) + '" r="6" fill="' + c + '"><title>' + escH(SOC.nice(e.day) + ' — ' + e.title) + '</title></circle></g>'; }).join('');
+                const dots = pts.slice(1).map(p => '<circle cx="' + X(p[0]) + '" cy="' + Y(p[1]) + '" r="4" fill="#d4a64a"><title>' + escH(SOC.nice(p[0]) + ' — ' + HRM.inr(p[1])) + '</title></circle>').join('');
+                const years = []; for (let y = +start.slice(0, 4) + 1; y <= +end.slice(0, 4); y++) years.push(y);
+                return '<div class="section-header">Career &amp; salary</div><div class="cw-panel" style="padding:8px;overflow-x:auto"><svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;min-width:520px;height:auto" role="img" aria-label="Salary over time with career events">' +
+                    '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + (H - B) + '" y2="' + (H - B) + '" stroke="var(--aw-line,#444)"/>' +
+                    years.map(y => '<g><line x1="' + X(y + '-01-01') + '" x2="' + X(y + '-01-01') + '" y1="' + (H - B) + '" y2="' + (H - B + 5) + '" stroke="var(--aw-muted,#888)"/><text x="' + X(y + '-01-01') + '" y="' + (H - B + 18) + '" fill="var(--aw-muted,#888)" font-size="11" text-anchor="middle">' + y + '</text></g>').join('') +
+                    [ymin, (ymin + ymax) / 2, ymax].map(v => '<text x="' + (L - 6) + '" y="' + (Y(v) + 4) + '" fill="var(--aw-muted,#888)" font-size="10" text-anchor="end">' + escH(HRM.inr(v)) + '</text>').join('') +
+                    '<path d="' + path + '" fill="none" stroke="#d4a64a" stroke-width="2.5"/>' + dots + marks +
+                    '<text x="' + X(start) + '" y="' + (H - 4) + '" fill="var(--aw-muted,#888)" font-size="10">joined ' + escH(SOC.nice(start)) + '</text><text x="' + (W - R) + '" y="' + (H - 4) + '" fill="var(--aw-muted,#888)" font-size="10" text-anchor="end">today</text></svg>' +
+                    '<div style="font-size:11px;color:var(--aw-muted);display:flex;gap:12px;flex-wrap:wrap;padding:2px 6px"><span><b style="color:#d4a64a">━</b> fixed gross</span>' + ['Promotion', 'Transfer', 'Disciplinary', 'Exit', 'Rejoin'].map(c => '<span><b style="color:' + this.CAT[c][1] + '">●</b> ' + c + '</span>').join('') + '</div></div>';
+            },
+            render(w) {
+                const all = this.events(w), cats = Object.keys(this.CAT).filter(c => all.some(e => e.cat === c)), list = all.filter(e => !this.filt || e.cat === this.filt);
+                const chip = (k, l, n) => '<button type="button" class="' + (this.filt === k ? 'on' : '') + '" onclick="EHIST.filt=\'' + k + '\';HRM.renderProfile()">' + l + (n != null ? ' (' + n + ')' : '') + '</button>';
+                const head = '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center"><div class="cw-filter" style="margin:0">' + chip('', 'All', all.length) + cats.map(c => chip(c, this.CAT[c][0] + ' ' + c, all.filter(e => e.cat === c).length)).join('') + '</div>' +
+                    '<div class="cw-filter" style="margin:0"><button type="button" class="' + (this.view === 'timeline' ? 'on' : '') + '" onclick="EHIST.view=\'timeline\';HRM.renderProfile()">Timeline</button><button type="button" class="' + (this.view === 'table' ? 'on' : '') + '" onclick="EHIST.view=\'table\';HRM.renderProfile()">Table</button>' + (HRM.isHR() ? '<button type="button" onclick="EHIST.exportOne(\'' + escH(w.empId) + '\')">Download history</button>' : '') + '</div></div>';
+                if (!list.length) return this.chart(w, all) + head + '<p class="cw-hint">Nothing recorded yet. Every change from now on appears here.</p>';
+                const body = this.view === 'table'
+                    ? DASH.table(['Date', 'Type', 'What happened', 'Details', 'By'], list.map(e => [SOC.nice(e.day), escH(e.cat), escH(e.title), escH(e.detail), escH(e.by)]))
+                    : '<div style="position:relative;margin:10px 0 0 10px;padding-left:22px;border-left:2px solid var(--aw-line,#333)">' + list.map(e => { const [ic, col] = this.CAT[e.cat] || ['•', '#888'];
+                        return '<div style="position:relative;margin:0 0 14px"><span style="position:absolute;left:-34px;top:0;width:22px;height:22px;border-radius:50%;background:' + col + ';color:#111;font-size:12px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 3px var(--aw-black,#111)">' + ic + '</span>' +
+                            '<div style="font-size:11px;color:var(--aw-muted)">' + escH(SOC.nice(e.day)) + ' · <span style="color:' + col + '">' + escH(e.cat) + '</span>' + (e.by ? ' · ' + escH(e.by) : '') + '</div><div style="font-size:13px;font-weight:600">' + escH(e.title) + '</div>' + (e.detail ? '<div style="font-size:12px;color:var(--aw-muted);white-space:pre-wrap">' + escH(e.detail) + '</div>' : '') + '</div>'; }).join('') + '</div>';
+                return this.chart(w, all) + '<div class="section-header">Employee history</div>' + head + body;
+            },
+            exportOne(empId) {
+                const w = workers.find(x => x.empId === empId); if (!w) return;
+                XIMP.csv('History ' + w.empId + ' ' + w.name + '.csv', ['Date', 'Type', 'What happened', 'Details', 'By'], this.events(w).map(e => [e.day, e.cat, e.title, e.detail, e.by]));
+            },
+            // HR: latest changes across all employees
+            recent() {
+                if (!HRM.isHR()) return '';
+                const ev = []; workers.forEach(w => (w.log || []).slice(-5).forEach(l => ev.push({ w, l })));
+                const list = ev.sort((a, b) => String(b.l.at).localeCompare(String(a.l.at))).slice(0, 25);
+                if (!list.length) return '';
+                return '<details class="cw-panel" style="margin:12px 0"><summary style="cursor:pointer;color:var(--aw-gold);font-weight:600">Recent changes across employees (' + list.length + ')</summary>' +
+                    DASH.table(['When', 'Employee', 'Type', 'What changed', 'By'], list.map(({ w, l }) => [new Date(l.at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }), '<a href="#" onclick="HRM.show(\'' + escH(w.empId) + '\');HRM.tab=\'history\';HRM.renderProfile();return false;">' + escH(w.name) + '</a> <span style="color:var(--aw-muted);font-size:11px">' + escH(w.empId) + '</span>', escH(l.type), escH(l.text), escH(l.by || '')])) + '</details>';
+            }
+        };
+        (function () {
+            // 1) automatic change capture on every save
+            const pa = persistAll; persistAll = function () { try { EHIST.capture(); } catch (e) { console.warn(e); } return pa.apply(this, arguments); };
+            const ap = SYNC.apply.bind(SYNC); SYNC.apply = function (s) { const r = ap(s); try { EHIST.take(); } catch (e) { } return r; };
+            // an HR action that writes its own history entry covers those fields, so they are not logged twice
+            const lg = HRM.log.bind(HRM); HRM.log = function (w, type, text, changes) { lg(w, type, text, changes); const id = String(w.empId), cur = EHIST.covered.get(id); if (!changes || cur === 'all') EHIST.covered.set(id, 'all'); else EHIST.covered.set(id, new Set([...(cur || []), ...Object.keys(changes)])); };
+            // 3) the History tab becomes the combined history with the diagram
+            HRM.t_history = function (w) { return EHIST.render(w); };
+            // HR: recent changes feed on the employee list
+            const rd = HRM.render.bind(HRM); HRM.render = function () { rd.apply(this, arguments); if (!this.open && !this.reg && this.isHR()) { const el = document.getElementById('hrm-list'); if (el) el.insertAdjacentHTML('beforebegin', EHIST.recent()); } };
+            // 2) Promotion and Disciplinary action in HR Actions
+            const ta = HRM.t_actions.bind(HRM);
+            HRM.t_actions = function (w) {
+                const inp = (id, l, v, t) => '<div class="form-group"><label>' + l + '</label><input type="' + (t || 'text') + '" id="' + id + '" value="' + escH(v == null ? '' : v) + '"></div>';
+                const box = (title, body) => '<details class="cw-panel" style="margin:8px 0"><summary style="cursor:pointer;color:var(--aw-gold);font-weight:600">' + title + '</summary>' + body + '</details>';
+                const disc = (w.disciplinary || []).slice().reverse();
+                return ta(w) +
+                    box('Promotion', '<p class="cw-hint">New designation and grade, with a salary change if any. Recorded as a promotion in the history.' + (PIPE.isHead() ? '' : ' A salary change goes to the HR Head for approval.') + '</p><div class="mini-form" style="grid-template-columns:repeat(4,1fr)">' +
+                        inp('hp-designation', 'New designation', w.designation) + '<div class="form-group"><label>New skill grade</label><select id="hp-skill">' + PIPE.grades().concat(w.skill && !PIPE.grades().includes(w.skill) ? [w.skill] : []).map(g => '<option' + (g === w.skill ? ' selected' : '') + '>' + escH(g) + '</option>').join('') + '</select></div>' +
+                        inp('hp-gross', 'New fixed gross (leave blank: no change)', '', 'number') + inp('hp-effective', 'Effective date', HRM.day(), 'date') + '<div class="form-group" style="grid-column:span 2"><label>Reason / achievement</label><input type="text" id="hp-reason"></div>' + inp('hp-approvedBy', 'Approved by', PIPE.isHead() ? HRM.me() : '') + inp('hp-approvedOn', 'Approval date', PIPE.isHead() ? HRM.day() : '', 'date') +
+                        '</div><div class="cw-decision"><button type="button" onclick="EHIST.promote(\'' + escH(w.empId) + '\')">Record promotion</button></div>') +
+                    box('Disciplinary action', '<div class="mini-form" style="grid-template-columns:repeat(4,1fr)"><div class="form-group"><label>Action</label><select id="hd-type">' + ['Verbal warning', 'Written warning', 'Show-cause notice', 'Suspension', 'Fine / penalty', 'Final warning', 'Termination recommended'].map(t => '<option>' + t + '</option>').join('') + '</select></div>' +
+                        inp('hd-incident', 'Incident date', HRM.day(), 'date') + inp('hd-date', 'Action date', HRM.day(), 'date') + inp('hd-issuedBy', 'Issued by', HRM.me()) +
+                        '<div class="form-group full-width"><label>What happened</label><textarea id="hd-what" rows="2"></textarea></div><div class="form-group full-width"><label>Action taken / employee response</label><input type="text" id="hd-action"></div>' +
+                        '<div class="form-group"><label>Status</label><select id="hd-status"><option>Open</option><option>Closed</option></select></div></div><div class="cw-decision"><button type="button" onclick="EHIST.discipline(\'' + escH(w.empId) + '\')">Record disciplinary action</button></div>' +
+                        (disc.length ? DASH.table(['Action date', 'Action', 'What happened', 'Status', ''], disc.map(d => [SOC.nice(d.actionDate), escH(d.type), escH(d.incident), escH(d.status), d.status === 'Open' ? '<button type="button" class="action-btn edit" onclick="EHIST.closeDisc(\'' + escH(w.empId) + '\',\'' + escH(d.id) + '\')">Close</button>' : ''])) : '') +
+                        '<p class="cw-hint">Upload the letter or notice under Documents (type: Other). Only HR sees disciplinary records.</p>');
+            };
+        })();
+        Object.assign(EHIST, {
+            promote(empId) {
+                const w = workers.find(x => x.empId === empId); if (!w || !HRM.isHR()) return;
+                const v = id => (document.getElementById(id) || {}).value || '', des = v('hp-designation').trim(), skill = v('hp-skill'), eff = v('hp-effective') || HRM.day(), reason = v('hp-reason').trim(), g = +v('hp-gross') || 0;
+                const changes = {}; if (des && des !== (w.designation || '')) changes.designation = { from: w.designation || '', to: des }; if (skill && skill !== (w.skill || '')) changes.skill = { from: w.skill || '', to: skill };
+                if (!Object.keys(changes).length && !g) { alert('Enter the new designation, grade or salary.'); return; }
+                if (!reason) { alert('Enter the reason for the promotion.'); return; }
+                if (Object.keys(changes).length) {
+                    w.movements = (w.movements || []).concat([{ effective: eff, changes, reason, approvedBy: v('hp-approvedBy'), approvedOn: v('hp-approvedOn'), by: HRM.me(), at: HRM.now(), type: 'Promotion' }]);
+                    Object.keys(changes).forEach(k => { w[k] = changes[k].to; });
+                    HRM.log(w, 'Promotion', 'Promoted: ' + Object.entries(changes).map(([k, c]) => EHIST.label(k) + ' ' + (c.from || '-') + ' → ' + c.to).join('; ') + ' from ' + HRM.nice(eff), changes);
+                }
+                if (g && g !== HRM.gross(w)) {   // scale the components to the new gross, keeping the same split
+                    const cur = HRM.gross(w) || g, comp = {}; HRM.COMP.forEach(k => { comp[k] = Math.round((+w[k] || 0) * g / cur); }); if (!cur || !HRM.COMP.some(k => +w[k])) comp.basicDa = g;
+                    const diff = g - Object.values(comp).reduce((s, x) => s + x, 0); comp.basicDa = (comp.basicDa || 0) + diff;
+                    const rev = { comp, fromGross: HRM.gross(w), toGross: g, incAmt: g - HRM.gross(w), incPct: HRM.gross(w) ? Math.round((g - HRM.gross(w)) * 10000 / HRM.gross(w)) / 100 : 0, from: Object.fromEntries(HRM.COMP.map(k => [k, w[k]])), effective: eff, reason: 'Promotion', remarks: reason, by: HRM.me(), at: HRM.now() };
+                    if (PIPE.isHead()) { rev.approvedBy = v('hp-approvedBy') || HRM.me(); rev.approvedOn = v('hp-approvedOn') || HRM.day(); HRM.applyRevision(w, rev); return; }
+                    w.pendingRevision = rev; HRM.log(w, 'Salary', 'Promotion salary ' + HRM.inr(g) + ' sent to the HR Head for approval');
+                }
+                persistAll(); HRM.renderProfile(); renderWorkersTable();
+            },
+            discipline(empId) {
+                const w = workers.find(x => x.empId === empId); if (!w || !HRM.isHR()) return;
+                const v = id => ((document.getElementById(id) || {}).value || '').trim();
+                if (!v('hd-what')) { alert('Describe what happened.'); return; }
+                const d = { id: uid('DA'), type: v('hd-type'), incidentDate: v('hd-incident'), actionDate: v('hd-date') || HRM.day(), issuedBy: v('hd-issuedBy'), incident: v('hd-what'), action: v('hd-action'), status: v('hd-status') || 'Open', by: HRM.me(), at: HRM.now() };
+                w.disciplinary = (w.disciplinary || []).concat([d]); HRM.log(w, 'Disciplinary', d.type + ' recorded (' + HRM.nice(d.actionDate) + ')');
+                persistAll(); HRM.renderProfile();
+            },
+            closeDisc(empId, id) {
+                const w = workers.find(x => x.empId === empId), d = w && (w.disciplinary || []).find(x => x.id === id); if (!d) return;
+                const r = prompt('Closing remarks'); if (r === null) return; d.status = 'Closed'; d.closedOn = HRM.day(); d.closedRemarks = r; d.action = [d.action, 'Closed: ' + r].filter(Boolean).join(' · ');
+                HRM.log(w, 'Disciplinary', d.type + ' closed — ' + r); persistAll(); HRM.renderProfile();
+            }
+        });
+
+        /* ---------- Worker Master form: an empty field must stay empty (it used to show and save the word "undefined") ---------- */
+        (function () {
+            const clean = () => document.querySelectorAll('#master-form input, #master-form select, #master-form textarea').forEach(e => { if (e.value === 'undefined' || e.value === 'null') e.value = ''; });
+            const ew = editWorker; editWorker = function () { const r = ew.apply(this, arguments); clean(); return r; };
+            const gw = gatherWorkerFormRecord; gatherWorkerFormRecord = function () { clean(); const r = gw.apply(this, arguments); Object.keys(r).forEach(k => { if (r[k] === 'undefined' || r[k] === 'null') r[k] = ''; }); return r; };
+            // repair records that already carry the word
+            const fix = () => { let n = 0; workers.forEach(w => Object.keys(w).forEach(k => { if (w[k] === 'undefined' || w[k] === 'null') { w[k] = ''; n++; } })); return n; };
+            const ap = SYNC.apply.bind(SYNC); SYNC.apply = function (s) { const r = ap(s); try { if (fix() && currentRole === 'hr_admin') { EHIST.take(); persistAll(); } } catch (e) { } return r; };
+        })();
+
         /* ---------- View-only (Viewer) logins: they see their screens but nothing they do is saved ----------
            The database refuses every change from a viewer; this shows a banner and stops the screen pretending it saved. */
         (function () {
