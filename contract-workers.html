@@ -744,6 +744,7 @@
                 <li data-roles="hr_admin,gm_production,production_manager,supervisor,contractor,store"><a href="#announcements" class="nav-link" onclick="switchTab('announcements')">Announcements</a></li>
                 <li data-roles="hr_admin,gm_production,production_manager,supervisor,contractor,store"><a href="#tickets" class="nav-link" onclick="switchTab('tickets')">Tickets &amp; Reminders</a></li>
                 <li data-roles="hr_admin,contractor"><a href="#onboarding" class="nav-link" onclick="switchTab('onboarding')">Onboarding &amp; Induction</a></li>
+                <li data-roles="hr_admin,contractor"><a href="#docs" class="nav-link" onclick="switchTab('docs')">Document Center</a></li>
                 <li data-roles="hr_admin,store,production_manager" id="nav-ppe"><a href="#ppe" class="nav-link" onclick="switchTab('ppe')">PPE &amp; Store</a></li>
                 <li data-roles="hr_admin,gm_production,production_manager,contractor"><a href="#hrm" class="nav-link" onclick="switchTab('hrm')">Employee Management</a></li>
                 <li data-roles="hr_admin,contractor,gm_production"><a href="#master" class="nav-link active" onclick="switchTab('master')">Workers Master Data</a></li>
@@ -799,6 +800,12 @@
                 <h2>Tickets &amp; Reminders</h2>
                 <div id="tk-tabs" class="cw-filter"></div>
                 <div id="tk-body"></div>
+            </div>
+
+            <!-- DOCUMENT CENTER: contractor agreements, Contract Labour Licence, Form II — uploaded, date-checked, validated by HR, renewal alerts -->
+            <div id="docs" class="tab-content">
+                <h2>Document Center</h2>
+                <div id="docc-body"></div>
             </div>
 
             <!-- 1. WORKERS MASTER DATA -->
@@ -6563,6 +6570,289 @@
                 col('Birthdays', '🎂', b) + col('Work anniversaries', '🎉', a, x => x.yrs + (x.yrs === 1 ? ' year' : ' years')) + '</div>';
         };
         document.addEventListener('keydown', e => { if (e.key === 'Escape') CELEB.close(); });
+
+        /* =====================================================================
+           DOCUMENT CENTER — HR and contractors
+           Contractor agreements, Contract Labour Licence, Form II (and other documents):
+           upload the file, enter the dates (registration, renewal, expiry, next renewal, plus any extra fields),
+           the dates are checked, HR validates. Renewal alerts pop up 30 days before, again 15 days before,
+           and every day in the last week (and every day once expired), for HR and the contractor concerned.
+           ===================================================================== */
+        var contractorDocs = [];
+        SYNC.collections.contractorDocs = { get: () => contractorDocs, set: v => { contractorDocs = v; }, key: x => x.id };
+        var DOCC = {
+            TYPES: {
+                agreement: { name: 'Contractor Agreement', labels: ['Agreement date', 'Date of renewal', 'Expiry / end date', 'Next renewal date'], need: true },
+                licence: { name: 'Contract Labour Licence', labels: ['Licence issue date', 'Date of renewal', 'Valid till (expiry)', 'Next renewal date'], need: true },
+                form2: { name: 'Form II (Registration)', labels: ['Date of registration', 'Date of renewal', 'Expiry date', 'Next renewal date'], need: true },
+                other: { name: 'Other document', labels: ['Issue date', 'Date of renewal', 'Expiry date', 'Next renewal date'], need: false }
+            },
+            DATE_KEYS: ['regDate', 'renewalDate', 'expiryDate', 'nextRenewalDate'],
+            PENDING: 'Pending HR Validation', VALID: 'Validated', RETURNED: 'Returned to Contractor',
+            f: { contractor: '', type: '', status: '' }, editing: null, draftFiles: [], extra: [],
+            isHR() { return currentRole === 'hr_admin'; },
+            isViewer() { return !!(signedInUser && signedInUser.access === 'viewer'); },
+            me() { return (signedInUser && (signedInUser.name || signedInUser.user)) || currentRole || ''; },
+            today() { return DASH.iso(new Date()); },
+            nice(d) { return d ? SOC.nice(d) : '-'; },
+            mine() { return this.isHR() ? contractorDocs : contractorDocs.filter(d => cw_normJs(d.contractor) === cw_normJs(currentContractorName)); },
+            contractorNames() { const s = new Set((typeof CONTRACTORS !== 'undefined' ? CONTRACTORS : []).map(c => c.name)); contractorDocs.forEach(d => s.add(d.contractor)); return [...s].filter(Boolean).sort(); },
+            // the date that needs action: the earlier of expiry and next renewal
+            due(d) { const ds = [d.expiryDate, d.nextRenewalDate].filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x || '')).sort(); return ds[0] || ''; },
+            daysLeft(d) { const due = this.due(d); if (!due) return null; return Math.round((new Date(due + 'T00:00:00') - new Date(this.today() + 'T00:00:00')) / 864e5); },
+            current(d) { return d.status !== 'Superseded'; },
+            badge(d) {
+                const n = this.daysLeft(d);
+                if (n === null) return '<span class="badge badge-neutral">No expiry</span>';
+                if (n < 0) return '<span class="badge badge-danger">Expired ' + (-n) + ' day' + (n === -1 ? '' : 's') + ' ago</span>';
+                if (n === 0) return '<span class="badge badge-danger">Expires today</span>';
+                if (n <= 7) return '<span class="badge badge-danger">' + n + ' day' + (n === 1 ? '' : 's') + ' left</span>';
+                if (n <= 30) return '<span class="badge badge-pending">' + n + ' days left</span>';
+                return '<span class="badge badge-active">Valid · ' + n + ' days</span>';
+            },
+            statusBadge(s) { return '<span class="badge ' + (s === this.VALID ? 'badge-active' : s === this.RETURNED ? 'badge-danger' : 'badge-pending') + '">' + escH(s || this.PENDING) + '</span>'; },
+
+            /* ---- date checks ---- */
+            check(x) {
+                const e = [], w = [], t = this.TYPES[x.type] || this.TYPES.other, L = t.labels, ok = v => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
+                if (!x.contractor) e.push('Choose the contractor.');
+                if (!x.type) e.push('Choose the document type.');
+                if (t.need && !ok(x.expiryDate)) e.push(L[2] + ' is required.');
+                if (t.need && !ok(x.regDate)) e.push(L[0] + ' is required.');
+                if (ok(x.regDate) && x.regDate > this.today()) e.push(L[0] + ' cannot be in the future.');
+                if (ok(x.regDate) && ok(x.expiryDate) && x.expiryDate <= x.regDate) e.push(L[2] + ' must be after the ' + L[0].toLowerCase() + '.');
+                if (ok(x.renewalDate) && ok(x.regDate) && x.renewalDate < x.regDate) e.push(L[1] + ' cannot be before the ' + L[0].toLowerCase() + '.');
+                if (ok(x.renewalDate) && ok(x.expiryDate) && x.renewalDate > x.expiryDate) e.push(L[1] + ' cannot be after the ' + L[2].toLowerCase() + '.');
+                if (ok(x.nextRenewalDate) && ok(x.regDate) && x.nextRenewalDate <= x.regDate) e.push(L[3] + ' must be after the ' + L[0].toLowerCase() + '.');
+                if (ok(x.nextRenewalDate) && ok(x.expiryDate) && x.nextRenewalDate > x.expiryDate) w.push(L[3] + ' is after the ' + L[2].toLowerCase() + ' — the document would lapse before renewal.');
+                if (ok(x.expiryDate) && x.expiryDate < this.today()) w.push('This document has already expired (' + this.nice(x.expiryDate) + ').');
+                if (!(x.files || []).length) e.push('Attach the scanned document (PDF or photo).');
+                return { e, w };
+            },
+
+            /* ---- screen ---- */
+            render() {
+                const el = document.getElementById('docc-body'); if (!el) return;
+                if (!['hr_admin', 'contractor'].includes(currentRole)) { el.innerHTML = '<p>The Document Center is for HR and contractors.</p>'; return; }
+                const all = this.mine().filter(d => this.current(d)), f = this.f;
+                const list = all.filter(d => (!f.contractor || d.contractor === f.contractor) && (!f.type || d.type === f.type) &&
+                    (!f.status || (f.status === 'expiring' ? (this.daysLeft(d) !== null && this.daysLeft(d) >= 0 && this.daysLeft(d) <= 30) : f.status === 'expired' ? (this.daysLeft(d) !== null && this.daysLeft(d) < 0) : d.status === f.status)))
+                    .sort((a, b) => (this.due(a) || '9999').localeCompare(this.due(b) || '9999'));
+                const n = (fn) => all.filter(fn).length, dl = d => this.daysLeft(d);
+                const cards = DASH.grid([
+                    DASH.card(all.length, 'Documents on file', ''),
+                    DASH.card(n(d => d.status === this.VALID && (dl(d) === null || dl(d) > 30)), 'Valid', 'validated, more than 30 days left'),
+                    DASH.card(n(d => dl(d) !== null && dl(d) >= 0 && dl(d) <= 30), 'Expiring in 30 days', 'renew now'),
+                    DASH.card(n(d => dl(d) !== null && dl(d) < 0), 'Expired', 'action needed'),
+                    DASH.card(n(d => d.status === this.PENDING), 'Waiting for HR validation', ''),
+                    DASH.card(n(d => d.status === this.RETURNED), 'Returned for correction', '')
+                ]);
+                const opt = (v, l, cur) => '<option value="' + escH(v) + '"' + (cur === v ? ' selected' : '') + '>' + escH(l) + '</option>';
+                const filters = '<div class="mini-form" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin:10px 0">' +
+                    (this.isHR() ? '<div class="form-group"><label>Contractor</label><select onchange="DOCC.f.contractor=this.value;DOCC.render()">' + opt('', 'All contractors', f.contractor) + this.contractorNames().map(c => opt(c, c, f.contractor)).join('') + '</select></div>' : '') +
+                    '<div class="form-group"><label>Document</label><select onchange="DOCC.f.type=this.value;DOCC.render()">' + opt('', 'All documents', f.type) + Object.entries(this.TYPES).map(([k, t]) => opt(k, t.name, f.type)).join('') + '</select></div>' +
+                    '<div class="form-group"><label>Status</label><select onchange="DOCC.f.status=this.value;DOCC.render()">' + opt('', 'All', f.status) + opt('expiring', 'Expiring in 30 days', f.status) + opt('expired', 'Expired', f.status) + opt(this.PENDING, this.PENDING, f.status) + opt(this.VALID, this.VALID, f.status) + opt(this.RETURNED, this.RETURNED, f.status) + '</select></div>' +
+                    (this.isViewer() ? '' : '<button type="button" onclick="DOCC.edit(null)" style="margin-left:auto">+ Upload document</button>') + '</div>';
+                const rows = list.map(d => {
+                    const t = this.TYPES[d.type] || this.TYPES.other, q = '\'' + d.id + '\'';
+                    const acts = ['<button type="button" class="action-btn" onclick="DOCC.view(' + q + ')">View</button>'];
+                    if (!this.isViewer()) {
+                        if (this.isHR() && d.status === this.PENDING) acts.push('<button type="button" class="action-btn edit" onclick="DOCC.view(' + q + ')">Validate</button>');
+                        acts.push('<button type="button" class="action-btn" onclick="DOCC.edit(' + q + ')">' + (d.status === this.RETURNED ? 'Correct' : 'Edit') + '</button>');
+                        acts.push('<button type="button" class="action-btn" onclick="DOCC.renew(' + q + ')">Renew</button>');
+                    }
+                    return [(this.isHR() ? escH(d.contractor) : null), '<b>' + escH(t.name) + '</b>' + (d.number ? '<div style="font-size:11px;color:var(--aw-muted)">No. ' + escH(d.number) + '</div>' : ''),
+                        this.nice(d.regDate), this.nice(d.renewalDate), this.nice(d.expiryDate), this.nice(d.nextRenewalDate), this.badge(d), this.statusBadge(d.status), (d.files || []).length, acts.join(' ')].filter(v => v !== null);
+                });
+                const head = (this.isHR() ? ['Contractor'] : []).concat(['Document', 'Registration / issue', 'Renewal', 'Expiry', 'Next renewal', 'Validity', 'HR status', 'Files', '']);
+                el.innerHTML = '<p style="font-size:12px;color:var(--aw-muted)">' + (this.isHR() ? 'Every contractor\'s agreement, Contract Labour Licence and Form II. Check the dates against the original and validate. Renewal alerts pop up 30 days and 15 days before, and every day in the last week.' : 'Upload your agreement, Contract Labour Licence and Form II. HR checks each one. You will be reminded 30 days and 15 days before expiry, and every day in the last week.') + '</p>' +
+                    cards + '<div id="docc-form"></div><div id="docc-view"></div>' + filters + DASH.table(head, rows, 'No documents yet.') + (this.isHR() ? this.missingHtml() : '');
+                if (this.editing) this.formRender();
+            },
+            missingHtml() {   // HR: which active contractors are missing a validated, unexpired key document
+                const need = Object.entries(this.TYPES).filter(([, t]) => t.need), names = (typeof CONTRACTORS !== 'undefined' ? CONTRACTORS : []).map(c => c.name);
+                const rows = names.map(c => {
+                    const miss = need.filter(([k]) => !contractorDocs.some(d => this.current(d) && d.type === k && cw_normJs(d.contractor) === cw_normJs(c) && d.status === this.VALID && (this.daysLeft(d) === null || this.daysLeft(d) >= 0))).map(([, t]) => t.name);
+                    return miss.length ? [escH(c), miss.map(m => '<span class="badge badge-pending" style="margin:1px">' + escH(m) + '</span>').join(' ')] : null;
+                }).filter(Boolean);
+                return '<div class="section-header">Contractors missing a valid document</div>' + DASH.table(['Contractor', 'Missing or not yet validated'], rows, 'Every active contractor has a valid agreement, licence and Form II.');
+            },
+
+            /* ---- add / edit / renew ---- */
+            edit(id, renewFrom) {
+                const d = id ? contractorDocs.find(x => x.id === id) : null;
+                this.editing = d ? JSON.parse(JSON.stringify(d)) : { id: uid('CD'), contractor: this.isHR() ? (this.f.contractor || '') : currentContractorName, type: '', number: '', regDate: '', renewalDate: '', expiryDate: '', nextRenewalDate: '', extra: [], files: [], remarks: '', isNew: true };
+                if (renewFrom) Object.assign(this.editing, renewFrom);
+                this.render(); const f = document.getElementById('docc-form'); if (f) f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            },
+            renew(id) {
+                const d = contractorDocs.find(x => x.id === id); if (!d) return;
+                // a renewal is a new record; the old one is kept as history (superseded) once the new one is saved
+                this.edit(null, { contractor: d.contractor, type: d.type, number: d.number, regDate: d.regDate, renewalDate: this.today(), expiryDate: '', nextRenewalDate: '', extra: JSON.parse(JSON.stringify(d.extra || [])), files: [], renewOf: d.id });
+            },
+            formRender() {
+                const x = this.editing, el = document.getElementById('docc-form'); if (!x || !el) return;
+                const t = this.TYPES[x.type] || this.TYPES.other, L = t.labels, opt = (v, l) => '<option value="' + escH(v) + '"' + (x.contractor === v || x.type === v ? ' selected' : '') + '>' + escH(l) + '</option>';
+                const date = (k, i) => '<div class="form-group"><label>' + L[i] + (t.need && (k === 'regDate' || k === 'expiryDate') ? ' *' : '') + '</label><input type="date" id="dc-' + k + '" value="' + escH(x[k] || '') + '" onchange="DOCC.grab();DOCC.liveCheck()"></div>';
+                el.innerHTML = '<div class="cw-panel"><div class="section-header" style="margin-top:0">' + (x.renewOf ? 'Renew document' : x.isNew ? 'Upload a document' : 'Edit document') + '</div>' +
+                    '<div class="mini-form" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">' +
+                    '<div class="form-group"><label>Contractor *</label>' + (this.isHR() ? '<select id="dc-contractor" onchange="DOCC.grab()"><option value="">-- Select --</option>' + this.contractorNames().map(c => opt(c, c)).join('') + '</select>' : '<input type="text" value="' + escH(x.contractor) + '" disabled>') + '</div>' +
+                    '<div class="form-group"><label>Document type *</label><select id="dc-type" onchange="DOCC.grab();DOCC.formRender()"><option value="">-- Select --</option>' + Object.entries(this.TYPES).map(([k, tt]) => '<option value="' + k + '"' + (x.type === k ? ' selected' : '') + '>' + escH(tt.name) + '</option>').join('') + '</select></div>' +
+                    '<div class="form-group"><label>Document / licence / registration no.</label><input type="text" id="dc-number" value="' + escH(x.number || '') + '" onchange="DOCC.grab()"></div>' +
+                    date('regDate', 0) + date('renewalDate', 1) + date('expiryDate', 2) + date('nextRenewalDate', 3) + '</div>' +
+                    '<div class="section-header">Extra fields <span style="font-weight:400;font-size:12px;color:var(--aw-muted)">— anything else printed on the document (e.g. max workers allowed, issuing authority, establishment)</span></div>' +
+                    (x.extra || []).map((e, i) => '<div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap"><input type="text" placeholder="Field name" value="' + escH(e.label) + '" id="dc-xl-' + i + '" onchange="DOCC.grab()" style="flex:1;min-width:140px"><input type="' + (e.kind === 'date' ? 'date' : 'text') + '" placeholder="Value" value="' + escH(e.value) + '" id="dc-xv-' + i + '" onchange="DOCC.grab()" style="flex:2;min-width:160px"><button type="button" class="cw-btn-ghost" onclick="DOCC.grab();DOCC.editing.extra.splice(' + i + ',1);DOCC.formRender()">Remove</button></div>').join('') +
+                    '<div style="display:flex;gap:8px;margin-bottom:10px"><button type="button" class="cw-btn-ghost" onclick="DOCC.grab();DOCC.editing.extra.push({label:\'\',value:\'\',kind:\'text\'});DOCC.formRender()">+ Add text field</button><button type="button" class="cw-btn-ghost" onclick="DOCC.grab();DOCC.editing.extra.push({label:\'\',value:\'\',kind:\'date\'});DOCC.formRender()">+ Add date field</button></div>' +
+                    '<div class="section-header">Scanned document *</div>' +
+                    ((x.files || []).length ? (x.files || []).map((fl, i) => '<div style="font-size:12px;padding:3px 0">📄 <a href="#" onclick="RECRUIT.openDoc(\'' + fl.id + '\');return false;">' + escH(fl.name) + '</a> <span style="color:var(--aw-muted)">' + this.nice((fl.at || '').slice(0, 10)) + '</span> <a href="#" onclick="DOCC.editing.files.splice(' + i + ',1);DOCC.formRender();return false;" style="color:var(--aw-danger,#e5484d)">remove</a></div>').join('') : '') +
+                    '<input type="file" accept=".pdf,image/*" multiple onchange="DOCC.attach(this)"> <span id="dc-up" style="font-size:12px;color:var(--aw-muted)"></span>' +
+                    (x.status === this.RETURNED && x.hrRemarks ? '<div class="note" style="margin-top:10px">HR returned this: ' + escH(x.hrRemarks) + '</div>' : '') +
+                    '<div id="dc-check" style="margin-top:10px"></div>' +
+                    '<div class="cw-decision" style="margin-top:10px"><button type="button" onclick="DOCC.save()">' + (this.isHR() ? 'Save' : 'Submit to HR for validation') + '</button><button type="button" class="cw-btn-ghost" onclick="DOCC.editing=null;DOCC.render()">Cancel</button></div></div>';
+                this.liveCheck();
+            },
+            grab() {
+                const x = this.editing; if (!x) return; const v = id => { const e = document.getElementById(id); return e ? e.value.trim() : undefined; };
+                if (this.isHR() && v('dc-contractor') !== undefined) x.contractor = v('dc-contractor');
+                ['type', 'number'].concat(this.DATE_KEYS).forEach(k => { const val = v('dc-' + k); if (val !== undefined) x[k] = val; });
+                (x.extra || []).forEach((e, i) => { const l = v('dc-xl-' + i), val = v('dc-xv-' + i); if (l !== undefined) e.label = l; if (val !== undefined) e.value = val; });
+            },
+            liveCheck() {
+                const el = document.getElementById('dc-check'); if (!el || !this.editing) return; const r = this.check(this.editing);
+                el.innerHTML = r.e.map(m => '<div style="color:var(--aw-danger,#e5484d);font-size:12px">✖ ' + escH(m) + '</div>').join('') + r.w.map(m => '<div style="color:var(--aw-gold);font-size:12px">⚠ ' + escH(m) + '</div>').join('') +
+                    (!r.e.length && !r.w.length ? '<div style="color:#3fb950;font-size:12px">✔ Dates check out.' + (this.due(this.editing) ? ' Renewal alerts will start on ' + this.nice(DASH.iso(new Date(new Date(this.due(this.editing) + 'T00:00:00') - 30 * 864e5))) + '.' : '') + '</div>' : '');
+            },
+            async attach(input) {
+                const files = [...(input.files || [])]; input.value = ''; const x = this.editing; if (!x || !files.length) return;
+                this.grab(); const st = document.getElementById('dc-up');
+                if (!x.contractor) { alert('Choose the contractor first.'); return; }
+                for (const file of files) {
+                    if (file.size > 8 * 1024 * 1024) { alert(file.name + ' is over 8 MB. Please use a smaller file.'); continue; }
+                    try {
+                        if (st) st.textContent = 'Uploading ' + file.name + '…';
+                        const entry = { file, name: file.name, mime: file.type || 'application/octet-stream' }, data = await RECRUIT.toBase64(entry), id = uid('DOC');
+                        const r = await fetch('/api/doc', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, candidate: x.id, kind: 'other', name: entry.name, mime: entry.mime, data, contractor: x.contractor, division: '' }) });
+                        if (!r.ok) throw new Error('Upload failed (' + r.status + ')');
+                        x.files = (x.files || []).concat([{ id, name: entry.name, mime: entry.mime, at: new Date().toISOString(), by: this.me() }]);
+                    } catch (e) { alert(e.message || 'Upload failed.'); }
+                }
+                if (st) st.textContent = ''; this.formRender();
+            },
+            save() {
+                this.grab(); const x = this.editing; if (!x) return;
+                const r = this.check(x); this.liveCheck();
+                if (r.e.length) { alert('Please fix:\n• ' + r.e.join('\n• ')); return; }
+                if (r.w.length && !confirm(r.w.join('\n') + '\n\nSave anyway?')) return;
+                x.extra = (x.extra || []).filter(e => e.label || e.value);
+                const hist = (x.history || []).concat([{ at: new Date().toISOString(), by: this.me(), text: x.renewOf ? 'Renewal uploaded' : x.isNew ? 'Uploaded' : 'Edited' }]);
+                // HR's own uploads still wait for a deliberate validation step; any change by a contractor goes back to HR
+                const rec = Object.assign({}, x, { status: this.PENDING, history: hist, updatedAt: new Date().toISOString(), updatedBy: this.me() });
+                delete rec.isNew; if (x.isNew) { rec.uploadedAt = rec.updatedAt; rec.uploadedBy = this.me(); }
+                delete rec.validatedBy; delete rec.validatedAt;
+                const i = contractorDocs.findIndex(d => d.id === rec.id); if (i >= 0) contractorDocs[i] = rec; else contractorDocs.push(rec);
+                if (rec.renewOf) { const old = contractorDocs.find(d => d.id === rec.renewOf); if (old && this.isHR()) { old.status = 'Superseded'; old.supersededBy = rec.id; } }
+                addAudit((this.TYPES[rec.type] || {}).name + ' for ' + rec.contractor + (x.renewOf ? ' renewed' : x.isNew ? ' uploaded' : ' updated') + ' — expiry ' + (rec.expiryDate || '-'));
+                persistAll(); this.editing = null; this.render(); try { DASH.render(); } catch (e) { }
+            },
+
+            /* ---- view & HR validation ---- */
+            view(id) {
+                const d = contractorDocs.find(x => x.id === id), el = document.getElementById('docc-view'); if (!d || !el) return;
+                const t = this.TYPES[d.type] || this.TYPES.other, L = t.labels, row = (l, v) => '<div><span>' + escH(l) + '</span>' + v + '</div>', q = '\'' + d.id + '\'';
+                const prevOf = contractorDocs.find(x => x.id === d.renewOf);
+                el.innerHTML = '<div class="cw-panel"><div style="display:flex;justify-content:space-between;align-items:center"><div class="section-header" style="margin:0">' + escH(t.name) + ' — ' + escH(d.contractor) + '</div><button type="button" class="cw-btn-ghost" onclick="document.getElementById(\'docc-view\').innerHTML=\'\'">Close</button></div>' +
+                    '<div class="cw-detail-grid">' + row('Number', escH(d.number || '-')) + row(L[0], this.nice(d.regDate)) + row(L[1], this.nice(d.renewalDate)) + row(L[2], this.nice(d.expiryDate)) + row(L[3], this.nice(d.nextRenewalDate)) +
+                    row('Validity', this.badge(d)) + row('HR status', this.statusBadge(d.status)) + (d.extra || []).map(e => row(e.label || 'Field', escH(e.kind === 'date' ? this.nice(e.value) : e.value))).join('') +
+                    row('Uploaded', escH((d.uploadedBy || '-') + ' · ' + this.nice((d.uploadedAt || '').slice(0, 10)))) + (d.validatedBy ? row('Validated', escH(d.validatedBy + ' · ' + this.nice((d.validatedAt || '').slice(0, 10)))) : '') +
+                    (prevOf ? row('Renews', escH((prevOf.number || prevOf.id) + ' (expired ' + this.nice(prevOf.expiryDate) + ')')) : '') + '</div>' +
+                    '<div class="section-header">Files</div>' + ((d.files || []).map(fl => '<div style="font-size:13px;padding:2px 0">📄 <a href="#" onclick="RECRUIT.openDoc(\'' + fl.id + '\');return false;">' + escH(fl.name) + '</a></div>').join('') || '<p style="font-size:12px">No file attached.</p>') +
+                    (d.hrRemarks ? '<div class="note" style="margin-top:8px">HR remarks: ' + escH(d.hrRemarks) + '</div>' : '') +
+                    (this.isHR() && !this.isViewer() && d.status === this.PENDING ?
+                        '<div class="section-header">Validate</div><div style="font-size:13px;line-height:1.9">' +
+                        ['Document opened and checked against the original', 'Contractor name matches the document', 'Number and all dates match the document', 'Document is signed / stamped by the issuing authority']
+                            .map((c, i) => '<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="dv-' + i + '" style="width:auto"> ' + c + '</label>').join('') + '</div>' +
+                        '<div class="cw-decision" style="margin-top:8px"><div class="form-group" style="flex:1"><label>Remarks</label><input type="text" id="dv-rem"></div><button type="button" onclick="DOCC.validate(' + q + ',true)">Validate</button><button type="button" class="cw-btn-ghost" onclick="DOCC.validate(' + q + ',false)">Return to contractor</button></div>' : '') +
+                    ((d.history || []).length ? '<div class="section-header">History</div>' + d.history.slice().reverse().map(h => '<div style="font-size:12px;padding:2px 0">' + this.nice((h.at || '').slice(0, 10)) + ' · ' + escH(h.by || '') + ' — ' + escH(h.text) + '</div>').join('') : '') + '</div>';
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            },
+            validate(id, ok) {
+                const d = contractorDocs.find(x => x.id === id); if (!d || !this.isHR()) return;
+                const rem = (document.getElementById('dv-rem') || {}).value || '';
+                if (ok) {
+                    const all = [0, 1, 2, 3].every(i => (document.getElementById('dv-' + i) || {}).checked);
+                    if (!all) { alert('Please tick every check before validating.'); return; }
+                    const r = this.check(d); if (r.e.length) { alert('The dates do not check out:\n• ' + r.e.join('\n• ') + '\n\nEdit the document first.'); return; }
+                    d.status = this.VALID; d.validatedBy = this.me(); d.validatedAt = new Date().toISOString();
+                    if (d.renewOf) { const old = contractorDocs.find(x => x.id === d.renewOf); if (old) { old.status = 'Superseded'; old.supersededBy = d.id; } }
+                } else {
+                    if (!rem.trim()) { alert('Please write what needs correcting.'); return; }
+                    d.status = this.RETURNED;
+                }
+                d.hrRemarks = rem; d.history = (d.history || []).concat([{ at: new Date().toISOString(), by: this.me(), text: (ok ? 'Validated by HR' : 'Returned to contractor') + (rem ? ': ' + rem : '') }]);
+                addAudit('HR ' + (ok ? 'validated ' : 'returned ') + (this.TYPES[d.type] || {}).name + ' of ' + d.contractor);
+                persistAll(); document.getElementById('docc-view').innerHTML = ''; this.render(); try { DASH.render(); } catch (e) { }
+            },
+
+            /* ---- renewal alerts: 30 days, 15 days, then every day in the last week ---- */
+            alerts() {
+                const renewing = new Set(contractorDocs.filter(r => r.renewOf && r.status !== this.RETURNED && this.current(r)).map(r => r.renewOf));
+                return this.mine().filter(d => this.current(d) && d.status !== this.RETURNED && !renewing.has(d.id)).map(d => ({ d, n: this.daysLeft(d) })).filter(a => a.n !== null && a.n <= 30)
+                    .map(a => Object.assign(a, { stage: a.n <= 7 ? 'daily-' + this.today() : a.n <= 15 ? '15' : '30' })).sort((a, b) => a.n - b.n);
+            },
+            seenKey() { return 'aw_docalert_' + ((signedInUser && signedInUser.user) || currentRole || 'me'); },
+            seen() { try { return JSON.parse(localStorage.getItem(this.seenKey()) || '[]'); } catch (e) { return []; } },
+            popup(force) {
+                if (!['hr_admin', 'contractor'].includes(currentRole) || document.getElementById('docc-modal')) return;
+                const seen = this.seen(), due = this.alerts(), fresh = due.filter(a => !seen.includes(a.d.id + '|' + this.due(a.d) + '|' + a.stage));
+                const show = force ? due : fresh; if (!show.length) return;
+                const box = document.body.appendChild(Object.assign(document.createElement('div'), { id: 'docc-modal' }));
+                box.setAttribute('style', 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9998;display:flex;align-items:center;justify-content:center;padding:16px');
+                const line = a => { const t = this.TYPES[a.d.type] || this.TYPES.other; return '<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--aw-line,#333);font-size:13px"><span><b>' + escH(t.name) + '</b>' + (this.isHR() ? ' — ' + escH(a.d.contractor) : '') + '<br><span style="font-size:11px;color:var(--aw-muted)">' + (a.d.nextRenewalDate && this.due(a.d) === a.d.nextRenewalDate ? 'Renewal due ' : 'Expires ') + this.nice(this.due(a.d)) + '</span></span><span>' + this.badge(a.d) + '</span></div>'; };
+                const worst = show[0].n;
+                box.innerHTML = '<div class="cw-panel" role="alertdialog" aria-label="Document renewal reminder" style="max-width:520px;width:100%;margin:0;max-height:85vh;overflow:auto">' +
+                    '<div class="section-header" style="margin-top:0">' + (worst < 0 ? '⛔ Documents expired' : worst <= 7 ? '⚠ Renewal due this week' : '🔔 Renewal reminder') + '</div>' +
+                    '<p style="font-size:12px;color:var(--aw-muted);margin:0 0 6px">' + (this.isHR() ? 'These contractor documents need renewing.' : 'Please renew these documents and upload the new copy for HR.') + '</p>' +
+                    show.map(line).join('') +
+                    '<div class="cw-decision" style="margin-top:12px"><button type="button" onclick="DOCC.ack();PIPE.go(\'docs\')">Open Document Center</button><button type="button" class="cw-btn-ghost" onclick="DOCC.ack()">OK, remind me later</button></div></div>';
+            },
+            ack() {
+                const l = this.seen(); this.alerts().forEach(a => { const k = a.d.id + '|' + this.due(a.d) + '|' + a.stage; if (!l.includes(k)) l.push(k); });
+                try { localStorage.setItem(this.seenKey(), JSON.stringify(l.slice(-300))); } catch (e) { }
+                const b = document.getElementById('docc-modal'); if (b) b.remove();
+            },
+            dashHtml() {
+                if (!['hr_admin', 'contractor'].includes(currentRole)) return '';
+                const all = this.mine().filter(d => this.current(d)), al = this.alerts(), pend = all.filter(d => d.status === this.PENDING).length, ret = all.filter(d => d.status === this.RETURNED).length;
+                if (!all.length && !this.isHR()) return '<div class="section-header">Documents</div><p style="font-size:12px">No documents on file yet — <a href="#docs" onclick="PIPE.go(\'docs\');return false;">upload your agreement, licence and Form II</a>.</p>';
+                if (!al.length && !pend && !ret) return '';
+                return '<div class="section-header">Documents &amp; renewals</div>' + DASH.grid([
+                    DASH.card(al.filter(a => a.n < 0).length, 'Expired', 'renew now'), DASH.card(al.filter(a => a.n >= 0 && a.n <= 7).length, 'Due this week', ''),
+                    DASH.card(al.filter(a => a.n > 7).length, 'Due within 30 days', ''), DASH.card(pend, this.isHR() ? 'Waiting for my validation' : 'With HR for validation', ''),
+                    DASH.card(ret, 'Returned for correction', '')]) +
+                    '<p style="font-size:12px"><a href="#docs" onclick="PIPE.go(\'docs\');return false;">Open Document Center</a> · <a href="#" onclick="DOCC.popup(true);return false;">Show renewal reminders</a></p>';
+            }
+        };
+        (function () {
+            const st = switchTab; switchTab = function (id) { st(id); if (id === 'docs') DOCC.render(); };
+            const rr = SYNC.rerender.bind(SYNC);
+            SYNC.rerender = function () {
+                rr();
+                try { const tab = document.getElementById('docs'); if (tab && tab.classList.contains('active') && !DOCC.editing) DOCC.render(); } catch (e) { }
+                try { setTimeout(() => DOCC.popup(), 400); } catch (e) { }
+            };
+            const top = SOC.dashTop.bind(SOC);
+            SOC.dashTop = function () { let h = ''; try { h = DOCC.dashHtml(); } catch (e) { } return h + top(); };
+            const nl = NOTIF.list.bind(NOTIF);
+            NOTIF.list = function () {
+                const out = nl();
+                try {
+                    DOCC.alerts().forEach(a => { const t = (DOCC.TYPES[a.d.type] || {}).name || 'Document'; out.unshift({ lvl: a.n <= 7 ? 'red' : 'amber', text: (a.n < 0 ? 'EXPIRED: ' : 'Renew ') + t + (DOCC.isHR() ? ' of ' + a.d.contractor : '') + (a.n < 0 ? ' (' + DOCC.nice(DOCC.due(a.d)) + ')' : ' — ' + a.n + ' day' + (a.n === 1 ? '' : 's') + ' left'), fn: "PIPE.go('docs')" }); });
+                    if (DOCC.isHR()) contractorDocs.filter(d => d.status === DOCC.PENDING).forEach(d => out.push({ lvl: 'amber', text: 'Validate ' + ((DOCC.TYPES[d.type] || {}).name || 'document') + ' of ' + d.contractor, fn: "PIPE.go('docs');setTimeout(()=>DOCC.view('" + d.id + "'),200)" }));
+                    if (currentRole === 'contractor') DOCC.mine().filter(d => d.status === DOCC.RETURNED).forEach(d => out.push({ lvl: 'amber', text: ((DOCC.TYPES[d.type] || {}).name || 'Document') + ' returned by HR: ' + (d.hrRemarks || ''), fn: "PIPE.go('docs');setTimeout(()=>DOCC.edit('" + d.id + "'),200)" }));
+                } catch (e) { }
+                return out;
+            };
+        })();
 
         /* ---- resignation / exit workflow ---- */
         var EXITX = {
