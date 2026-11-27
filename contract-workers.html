@@ -6488,6 +6488,82 @@
                 col('Birthdays', '🎂', b) + col('Work anniversaries', '🎉', a, x => x.yrs + (x.yrs === 1 ? ' year' : ' years')) + '</div>';
         };
 
+        /* ---- celebrations: click a name for details, click the number for a ready-made WhatsApp wish ----
+           Every dashboard shows the celebrations of the workers that login looks after:
+           HR / GM / Admin — everyone; HOD / Manager / Supervisor — their division(s); Contractor — their own workers;
+           Store — the Store department's workers. */
+        var CELEB = {
+            scope() {
+                if (currentRole === 'store') { const st = workers.filter(w => /store/i.test(w.division || '') || /store/i.test(w.department || '')); return st.length ? st : workers; }
+                return (typeof HRM !== 'undefined' && HRM.scope) ? HRM.scope() : DASH.scope();
+            },
+            phone(m) {   // Indian mobile → WhatsApp number (country code 91)
+                let d = String(m || '').replace(/\D/g, '');
+                if (d.length === 11 && d[0] === '0') d = d.slice(1);
+                if (d.length === 10) d = '91' + d;
+                return d.length >= 11 && d.length <= 13 ? d : '';
+            },
+            first(w) { return String(w.name || '').trim().split(/\s+/)[0] || 'friend'; },
+            from() { const n = (signedInUser && (signedInUser.name || signedInUser.user)) || ''; return n && currentRole !== 'contractor' ? n + ', Aristo' : 'Team Aristo'; },
+            wish(x) {
+                return x.kind === 'birthday'
+                    ? 'Dear ' + this.first(x.w) + ', wishing you a very Happy Birthday! 🎂 May this year bring you good health, happiness and success. Best wishes from ' + this.from() + '.'
+                    : 'Dear ' + this.first(x.w) + ', congratulations on completing ' + x.yrs + (x.yrs === 1 ? ' year' : ' years') + ' with Aristo! 🎉 Thank you for your hard work and dedication. Best wishes from ' + this.from() + '.';
+            },
+            waLink(x) { const p = this.phone(x.w.mobile); return p ? 'https://wa.me/' + p + '?text=' + encodeURIComponent(this.wish(x)) : ''; },
+            find(empId, kind) { return SOC.celebrations().find(x => String(x.w.empId) === empId && x.kind === kind); },
+            canProfile() { return ['hr_admin', 'gm_production', 'production_manager', 'contractor'].includes(currentRole); },
+            open(empId, kind) {
+                const x = this.find(empId, kind); if (!x) return;
+                const w = x.w, wa = this.waLink(x), f = (l, v) => v ? '<div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--aw-line,#333);font-size:13px"><span style="color:var(--aw-muted)">' + l + '</span><span style="text-align:right">' + v + '</span></div>' : '';
+                const ddmm = d => /^\d{4}-\d{2}-\d{2}/.test(d || '') ? SOC.nice(d) : '';
+                const box = document.getElementById('celeb-modal') || document.body.appendChild(Object.assign(document.createElement('div'), { id: 'celeb-modal' }));
+                box.setAttribute('style', 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px');
+                box.onclick = e => { if (e.target === box) CELEB.close(); };
+                box.innerHTML = '<div class="cw-panel" role="dialog" aria-label="Employee details" style="max-width:420px;width:100%;margin:0;max-height:90vh;overflow:auto">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div class="section-header" style="margin:0">' + (x.kind === 'birthday' ? '🎂 Birthday today' : '🎉 ' + x.yrs + (x.yrs === 1 ? ' year' : ' years') + ' with us today') + '</div><button type="button" class="cw-btn-ghost" onclick="CELEB.close()" aria-label="Close">✕</button></div>' +
+                    '<div style="font-size:17px;font-weight:600;margin:8px 0 6px">' + escH(w.name) + '</div>' +
+                    f('Employee ID', escH(w.empId)) + f('Designation', escH(w.designation || '')) + f('Department', escH(w.division || '')) + f('Contractor', escH(w.contractor || '')) +
+                    f('Location', escH(w.location || '')) + f('Date of joining', ddmm(w.doj)) + f('Date of birth', ddmm(w.dob)) +
+                    f('Mobile', w.mobile ? (wa ? '<a href="' + wa + '" target="_blank" rel="noopener" title="Send the wish on WhatsApp">' + escH(w.mobile) + '</a>' : escH(w.mobile)) : '<span style="color:var(--aw-muted)">not recorded</span>') +
+                    '<div style="margin-top:12px;font-size:12px;color:var(--aw-muted)">Message that will be drafted:</div><div style="font-size:13px;padding:8px;border:1px dashed var(--aw-line,#444);border-radius:8px;margin-top:4px">' + escH(this.wish(x)) + '</div>' +
+                    '<div class="cw-decision" style="margin-top:12px;flex-wrap:wrap">' +
+                    (wa ? '<a href="' + wa + '" target="_blank" rel="noopener" onclick="CELEB.sent(\'' + escH(w.empId) + '\',\'' + x.kind + '\')" style="display:inline-block;background:#25D366;color:#fff;padding:8px 14px;border-radius:8px;text-decoration:none;font-weight:600">💬 Send wish on WhatsApp</a>' : '<span style="font-size:12px;color:var(--aw-muted)">No valid mobile number on record — add it in the employee details to send a WhatsApp wish.</span>') +
+                    (this.canProfile() ? '<button type="button" class="cw-btn-ghost" onclick="CELEB.profile(\'' + escH(w.empId) + '\')">Open full profile</button>' : '') +
+                    '</div></div>';
+            },
+            close() { const b = document.getElementById('celeb-modal'); if (b) b.remove(); },
+            profile(empId) { this.close(); try { const l = document.querySelector('nav a[href="#hrm"]'); if (l) l.click(); HRM.show(empId); } catch (e) { console.warn(e); } },
+            sentKey() { return 'aw_wished_' + ((signedInUser && signedInUser.user) || 'me') + '_' + DASH.iso(new Date()); },
+            wished() { try { return JSON.parse(localStorage.getItem(this.sentKey()) || '[]'); } catch (e) { return []; } },
+            sent(empId, kind) { try { const l = this.wished(); if (!l.includes(empId + kind)) l.push(empId + kind); localStorage.setItem(this.sentKey(), JSON.stringify(l)); } catch (e) { } setTimeout(() => { try { DASH.render(); } catch (e) { } }, 300); }
+        };
+        SOC.celebrations = function () {
+            const t = DASH.iso(new Date()), md = t.slice(5), list = CELEB.scope().filter(w => isWorking(w.status) || w.status === 'Onboarding'), out = [];
+            list.forEach(w => {
+                if (/^\d{4}-\d{2}-\d{2}/.test(w.dob || '') && w.dob.slice(5, 10) === md) out.push({ w, kind: 'birthday' });
+                if (/^\d{4}-\d{2}-\d{2}/.test(w.doj || '') && w.doj.slice(5, 10) === md) { const yrs = +t.slice(0, 4) - +w.doj.slice(0, 4); if (yrs >= 1) out.push({ w, kind: 'anniversary', yrs }); }
+            });
+            return out;
+        };
+        SOC.celebHtml = function () {
+            const c = this.celebrations(); if (!c.length) return '';
+            const b = c.filter(x => x.kind === 'birthday'), a = c.filter(x => x.kind === 'anniversary'), done = CELEB.wished();
+            const who = { hr_admin: 'all workers', gm_production: 'all workers', admin: 'all workers', contractor: 'your workers', store: 'Store department', production_manager: 'your department', supervisor: 'your department' }[currentRole] || 'your workers';
+            const row = (x, fmt) => {
+                const id = escH(x.w.empId), wa = CELEB.waLink(x), q = '\'' + id + '\',\'' + x.kind + '\'';
+                return '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:12px;padding:4px 0;border-bottom:1px solid var(--aw-line,#333)">' +
+                    '<span><a href="#" onclick="CELEB.open(' + q + ');return false;" title="View details" style="font-weight:600">' + escH(x.w.name) + '</a> <span style="color:var(--aw-muted);font-size:11px">' + id + (x.w.division ? ' · ' + escH(x.w.division) : '') + (fmt ? ' · ' + fmt(x) : '') + '</span></span>' +
+                    (wa ? '<a href="' + wa + '" target="_blank" rel="noopener" onclick="CELEB.sent(' + q + ')" title="Send a wish on WhatsApp" style="white-space:nowrap;color:#25D366;font-weight:600">' + (done.includes(x.w.empId + x.kind) ? '✓ ' : '💬 ') + escH(x.w.mobile) + '</a>'
+                        : '<span style="color:var(--aw-muted);font-size:11px;white-space:nowrap">no mobile</span>') + '</div>';
+            };
+            const col = (title, icon, rows, fmt) => '<div class="cw-panel" style="margin:0;padding:8px 10px"><b style="color:var(--aw-gold);font-size:12px">' + icon + ' ' + title + ' (' + rows.length + ')</b>' +
+                (rows.length ? rows.slice(0, 25).map(x => row(x, fmt)).join('') + (rows.length > 25 ? '<div style="font-size:11px;color:var(--aw-muted)">+' + (rows.length - 25) + ' more</div>' : '') : '<div style="font-size:12px;color:var(--aw-muted);padding-top:4px">None today</div>') + '</div>';
+            return '<div class="section-header">Today\'s celebrations <span style="font-weight:400;font-size:12px;color:var(--aw-muted)">— ' + who + ' · click a name for details, a number to wish on WhatsApp</span></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-bottom:12px">' +
+                col('Birthdays', '🎂', b) + col('Work anniversaries', '🎉', a, x => x.yrs + (x.yrs === 1 ? ' year' : ' years')) + '</div>';
+        };
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') CELEB.close(); });
+
         /* ---- resignation / exit workflow ---- */
         var EXITX = {
             ST: { HR: 'Pending HR Review', SUP: 'Pending Supervisor Clearance', PROD: 'Production Cleared', HRC: 'HR Cleared', CLOSED: 'Closed' },
