@@ -247,6 +247,7 @@ const ESS = {
   },
   // save one record; the database checks it is yours and allowed
   async save(c, rec, auditText) {
+    if (this.me && this.me.access === 'viewer') throw new Error('You have view-only access. Nothing was changed.');
     this.status('Saving…');
     const w = this.worker || {};
     const res = await this.api('/api/save', { upserts: [{ c, id: rec.id, d: rec, empId: this.me.empId, contractor: w.contractor || null, division: w.division || null }], deletes: [], settings: {}, audit: auditText ? [auditText] : [] });
@@ -358,6 +359,7 @@ const ESS = {
     const me = this.me, w = this.worker || {}, mine = c => this.list(c).filter(x => x.empId === me.empId);
     document.getElementById('hello').textContent = 'Hello, ' + ((w.name || me.name || '').split(' ')[0] || 'there');
     document.getElementById('who').textContent = [me.empId, w.designation, w.division, w.contractor].filter(Boolean).join(' · ');
+    document.getElementById('who').textContent += me.access === 'viewer' ? ' · View only' : '';
     document.getElementById('today-label').textContent = nice(todayISO());
     const p = (this.recs.punches || {})[me.empId + '|' + todayISO()] || {};
     document.getElementById('p-in').textContent = p.in || '—'; document.getElementById('p-out').textContent = p.out || '—';

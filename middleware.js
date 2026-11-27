@@ -144,6 +144,9 @@ async function api(req, url, s) {
   if (url.pathname === '/api/admin/set-email' && req.method === 'POST') {
     return rpc('cw_admin_set_email', Object.assign({}, who, { p_target: String(body.user || ''), p_email: String(body.email || '').trim() }));
   }
+  if (url.pathname === '/api/admin/set-access' && req.method === 'POST') {
+    return rpc('cw_admin_set_access', Object.assign({}, who, { p_target: String(body.user || ''), p_access: String(body.access || '') }));
+  }
   if (url.pathname === '/api/admin/mail' && req.method === 'POST') {
     return rpc('cw_admin_mail', Object.assign({}, who, { p_what: String(body.what || ''), p_to: String(body.to || '').trim() }));
   }

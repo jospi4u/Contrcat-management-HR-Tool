@@ -6635,6 +6635,27 @@
             };
         })();
 
+        /* ---------- View-only (Viewer) logins: they see their screens but nothing they do is saved ----------
+           The database refuses every change from a viewer; this shows a banner and stops the screen pretending it saved. */
+        (function () {
+            const isViewer = () => !!(signedInUser && signedInUser.access === 'viewer');
+            let warned = 0;
+            const pa = persistAll;
+            persistAll = function () {
+                if (!isViewer()) return pa.apply(this, arguments);
+                if (Date.now() - warned > 3000) { warned = Date.now(); alert('You have view-only access. Nothing was changed. Ask the admin for Editor access if you need to make changes.'); }
+                try { SYNC.pull(true); } catch (e) { }   // put the screen back to what is really saved (force: drop the unsaved change)
+            };
+            const banner = () => {
+                let b = document.getElementById('viewer-banner');
+                if (!isViewer()) { if (b) b.remove(); return; }
+                if (!b) { b = document.createElement('div'); b.id = 'viewer-banner'; b.className = 'access-note'; b.style.cssText = 'margin:0 0 12px;border-color:var(--aw-gold-line)'; const m = document.querySelector('main'); if (m) m.insertBefore(b, m.firstChild); }
+                b.innerHTML = '👁 <b>View-only access</b> — you can see everything for your role, but you cannot add, change or approve anything.';
+                const badge = document.getElementById('role-badge'); if (badge && !/View only/.test(badge.textContent)) badge.textContent += ' · View only';
+            };
+            const arp = applyRolePermissions; applyRolePermissions = function () { arp.apply(this, arguments); try { banner(); } catch (e) { } };
+        })();
+
         /* ---------- install as a phone / desktop app ---------- */
         if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
         let installPrompt = null;

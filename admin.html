@@ -158,8 +158,9 @@ dialog h3{font-family:var(--display);color:var(--ink);font-size:20px;margin:0 0 
     <section id="users">
       <h2>Users</h2>
       <p class="sub">Every login to the app. Changes take effect at once: a deactivated, deleted or reset login is signed out on its next click.</p>
-      <div class="toolbar"><button onclick="editUser()">+ Add user</button><button class="ghost" onclick="openWorkerLogins()">+ Create worker logins</button><input id="user-q" placeholder="Search name, ID, contractor…" oninput="renderUsers()"><select id="user-role" onchange="renderUsers()"><option value="">All roles</option></select></div>
-      <div class="scroll"><table><thead><tr><th>User ID</th><th>Name</th><th>Role</th><th>Contractor / Division</th><th>Email</th><th>Status</th><th>Last sign-in</th><th>Actions</th></tr></thead><tbody id="users-body"></tbody></table></div>
+      <div class="toolbar"><button onclick="editUser()">+ Add user</button><button class="ghost" onclick="openWorkerLogins()">+ Create worker logins</button><input id="user-q" placeholder="Search name, ID, contractor…" oninput="renderUsers()"><select id="user-role" onchange="renderUsers()"><option value="">All roles</option></select><select id="user-access" onchange="renderUsers()"><option value="">Editors and viewers</option><option value="editor">Editors only</option><option value="viewer">Viewers only</option></select></div>
+      <p class="sub" id="user-access-count" style="margin:6px 0"></p>
+      <div class="scroll"><table><thead><tr><th>User ID</th><th>Name</th><th>Role</th><th>Contractor / Division</th><th>Access</th><th>Email</th><th>Status</th><th>Last sign-in</th><th>Actions</th></tr></thead><tbody id="users-body"></tbody></table></div>
     </section>
 
     <!-- CONTRACTORS -->
@@ -234,6 +235,7 @@ dialog h3{font-family:var(--display);color:var(--ink);font-size:20px;margin:0 0 
   <div class="grid">
     <div><label>User ID</label><input id="u-id" autocapitalize="none" spellcheck="false" placeholder="e.g. pm.lacquer"></div>
     <div><label>Name</label><input id="u-name" placeholder="Full name or job title"></div>
+    <div><label>Access</label><select id="u-access"><option value="editor">Editor — can add, change and approve</option><option value="viewer">Viewer — can only look</option></select></div>
     <div><label>Email (for notifications)</label><input id="u-email" type="email" autocapitalize="none" spellcheck="false" placeholder="name@aristo-india.com"></div>
     <div><label>Role</label><select id="u-role" onchange="roleFields()"></select></div>
     <div id="u-con-wrap"><label>Contractor</label><select id="u-con"></select></div>
@@ -408,15 +410,19 @@ const DIVISION_GROUPS = ['Aristo Cabinetry Production|Art of Lacquering'];
 const divLabel = d => String(d || '').split('|').join(' + ');
 document.getElementById('u-div').innerHTML = DIVISIONS.concat(DIVISION_GROUPS).map(d => `<option value="${esc(d)}">${esc(divLabel(d))}</option>`).join('');
 function renderUsers() {
-  const q = document.getElementById('user-q').value.toLowerCase(), r = document.getElementById('user-role').value;
-  const list = D.users.filter(u => (!r || u.role === r) && (!q || [u.user, u.name, u.contractor, u.division].join(' ').toLowerCase().includes(q)));
+  const q = document.getElementById('user-q').value.toLowerCase(), r = document.getElementById('user-role').value, ac = document.getElementById('user-access').value;
+  const accOf = u => u.access === 'viewer' ? 'viewer' : 'editor';
+  const list = D.users.filter(u => (!r || u.role === r) && (!ac || accOf(u) === ac) && (!q || [u.user, u.name, u.contractor, u.division, u.email].join(' ').toLowerCase().includes(q)));
+  const act = D.users.filter(u => u.active), ed = act.filter(u => accOf(u) === 'editor').length;
+  document.getElementById('user-access-count').innerHTML = '<b>' + ed + '</b> editor' + (ed === 1 ? '' : 's') + ' (can add, change and approve) · <b>' + (act.length - ed) + '</b> viewer' + (act.length - ed === 1 ? '' : 's') + ' (can only look) — among ' + act.length + ' active logins';
   document.getElementById('users-body').innerHTML = list.map(u => `<tr>
     <td><b>${esc(u.user)}</b></td><td>${esc(u.name || '—')}</td><td>${esc(ROLES[u.role] || u.role)}</td><td>${esc(u.role === 'employee' ? [u.empId, u.division].filter(Boolean).join(' · ') : (u.contractor || divLabel(u.division) || '—'))}${u.mustChange ? ' <span class="badge warn">new password due</span>' : ''}</td>
+    <td>${accOf(u) === 'viewer' ? '<span class="badge warn">Viewer</span>' : '<span class="badge ok">Editor</span>'}</td>
     <td>${u.email ? esc(u.email) : (u.role === 'employee' ? '<span class="mut">—</span>' : '<span class="badge warn">no email</span>')}</td>
     <td>${u.active ? '<span class="badge ok">Active</span>' : '<span class="badge bad">Off</span>'}</td><td>${u.last_login ? when(u.last_login) + ' <span class="mut">· ' + ago(u.last_login) + '</span>' : '<span class="mut">never</span>'}</td>
     <td style="white-space:nowrap"><button class="ghost sm" onclick="editUser('${esc(u.user)}')">Edit</button> <button class="ghost sm" onclick="resetPw('${esc(u.user)}')">Reset password</button>
       <button class="ghost sm" onclick="toggleUser('${esc(u.user)}')">${u.active ? 'Switch off' : 'Switch on'}</button> <button class="danger sm" onclick="deleteUser('${esc(u.user)}')">Delete</button></td></tr>`).join('')
-    || '<tr><td colspan="7" class="mut">No users match.</td></tr>';
+    || '<tr><td colspan="9" class="mut">No users match.</td></tr>';
 }
 function roleFields() {
   const r = document.getElementById('u-role').value;
@@ -438,6 +444,7 @@ function editUser(id) {
   document.getElementById('u-id').value = editing ? editing.user : ''; document.getElementById('u-id').disabled = !!editing;
   document.getElementById('u-name').value = editing ? editing.name || '' : '';
   document.getElementById('u-email').value = editing ? editing.email || '' : '';
+  document.getElementById('u-access').value = editing && editing.access === 'viewer' ? 'viewer' : 'editor';
   roleOptions(document.getElementById('u-role')); if (!editing || editing.role !== 'employee') staffRoles();
   document.getElementById('u-role').value = editing ? editing.role : 'contractor'; document.getElementById('u-role').disabled = !!(editing && editing.role === 'employee');
   document.getElementById('u-con').innerHTML = contractors().map(c => `<option${c.active === false ? ' disabled' : ''}>${esc(c.name)}</option>`).join('');
@@ -462,6 +469,8 @@ async function saveUser(overrides) {
     // the notification email is saved separately; only when it changed (or for a new login)
     const email = v('u-email').toLowerCase(), was = ((D.users.find(x => x.user === body.user) || {}).email || '').toLowerCase();
     if (!overrides && email !== was) await api('/api/admin/set-email', { user: body.user, email });
+    const access = v('u-access'), wasAccess = ((D.users.find(x => x.user === body.user) || {}).access) || 'editor';
+    if (!overrides && access !== wasAccess) await api('/api/admin/set-access', { user: body.user, access });
     document.getElementById('user-dlg').close();
     if (body.password) { document.getElementById('pw-user').textContent = body.user; document.getElementById('pw-value').textContent = body.password; document.getElementById('pw-dlg').showModal(); }
     else toast('Saved ' + body.user);
