@@ -6164,7 +6164,7 @@
             /* ---------------- download one profile ---------------- */
             printProfile(empId) {
                 const w = workers.find(x => x.empId === empId); if (!w) return;
-                const keep = this.tab, sect = this.tabs().filter(t => t[0] !== 'actions').map(([k, l]) => { this.editing = ''; return '<h2>' + l + '</h2>' + this['t_' + k](w); }).join(''); this.tab = keep;
+                const keep = this.tab, sect = this.tabs().filter(t => t[0] !== 'actions' && t[0] !== 'edit').map(([k, l]) => { this.editing = ''; return '<h2>' + l + '</h2>' + this['t_' + k](w); }).join(''); this.tab = keep;
                 const win = window.open('', '_blank'); if (!win) { alert('Allow pop-ups to download the profile.'); return; }
                 win.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + escH(w.empId + ' ' + w.name) + '</title><style>body{font-family:Arial,sans-serif;font-size:12px;color:#111;margin:24px}h1{font-size:20px;margin:0}h2{font-size:14px;border-bottom:2px solid #b8945a;padding-bottom:3px;margin-top:20px}.cw-detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px}.cw-detail-grid span{display:block;color:#666;font-size:10px;text-transform:uppercase}table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid #ccc;padding:4px 6px;text-align:left}button,.cw-decision,.cw-hint,input,select{display:none}.badge{border:1px solid #999;border-radius:8px;padding:1px 6px;font-size:10px;margin-right:4px}@media print{h2{page-break-after:avoid}}</style></head><body>' +
                     '<h1>' + escH(w.name) + '</h1><div>' + escH(w.empId + ' · ' + (w.designation || '') + ' · ' + (w.contractor || '')) + '</div><div style="color:#666">Employee profile · Aristo Contract Manpower · ' + new Date().toLocaleString('en-IN') + '</div>' + sect + '<script>setTimeout(function(){window.print()},300)<\/script></body></html>');
@@ -6633,6 +6633,107 @@
                 });
                 return out;
             };
+        })();
+
+        /* ---------- HR: edit every master field of an employee from the profile (Edit Details tab) ----------
+           Corrections only — increments go through HR Actions → Salary revision, moves through Transfer, exits through Separation. */
+        (function () {
+            const F = {
+                'Identity & employment': [['name', 'Name'], ['oldEmpId', 'Old Emp ID'], ['contractor', 'Contractor', 'con'], ['division', 'Division', 'div'], ['department', 'Department'], ['section', 'Section'], ['designation', 'Designation'], ['skill', 'Skill grade', 'grade'],
+                    ['doj', 'Date of joining', 'date'], ['oldDoj', 'Original date of joining', 'date'], ['location', 'Branch / location'], ['shift', 'Shift'], ['reportingManager', 'Reporting supervisor'], ['productionManager', 'Production manager'],
+                    ['category', 'Employment category', ['Contract labour', 'Apprentice', 'Trainee', 'Fixed-term']], ['confirmationStatus', 'Confirmation status', ['Probation', 'Confirmed', 'Not applicable']], ['expYr', 'Experience (years)', 'number'], ['expMo', 'Experience (months)', 'number']],
+                'Personal': [['dob', 'Date of birth', 'date'], ['gender', 'Gender', ['Male', 'Female', 'Transgender']], ['maritalStatus', 'Marital status', ['Single', 'Married', 'Widowed', 'Separated']], ['bloodGroup', 'Blood group', ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']],
+                    ['mobile', 'Mobile'], ['email', 'Personal email', 'email'], ['emergencyName', 'Emergency contact person'], ['emergency', 'Emergency contact number'], ['state', 'State'], ['presAddr', 'Current address', 'area'], ['permAddr', 'Permanent address', 'area'], ['nominee', 'Nominee', 'area']],
+                'Education': [['education', 'Highest qualification'], ['institution', 'Institution'], ['board', 'Board / university'], ['passYear', 'Year of passing'], ['prevExperience', 'Previous work experience', 'area']],
+                'Statutory & bank': [['uan', 'UAN'], ['pfNumber', 'PF number'], ['esi', 'ESIC no.'], ['pan', 'PAN'], ['aadhar', 'Aadhaar (only the last 4 digits are kept)'], ['bankName', 'Bank name'], ['bankAccount', 'Bank account'], ['ifsc', 'IFSC'], ['pfStatus', 'PF', ['Covered', 'Not covered', 'Exempt']], ['esiStatus', 'ESI', ['Covered', 'Not covered (above limit)', 'Exempt']]],
+                'Fixed salary (corrections)': HRM.COMP.map(k => [k, HRM.COMP_LABEL[k], 'number'])
+            };
+            HRM.FULL_EDIT = F;
+            HRM.t_edit = function (w) {
+                if (!this.isHR()) return '';
+                const ctl = ([k, l, t]) => {
+                    const v = w[k] == null ? '' : String(w[k]), id = 'hf-' + k, opt = list => '<select id="' + id + '"><option value="">--</option>' + list.concat(v && !list.includes(v) ? [v] : []).map(o => '<option' + (o === v ? ' selected' : '') + '>' + escH(o) + '</option>').join('') + '</select>';
+                    const c = Array.isArray(t) ? opt(t) : t === 'con' ? opt(XIMP.knownCons()) : t === 'div' ? opt(DIVISIONS) : t === 'grade' ? opt(PIPE.grades())
+                        : t === 'area' ? '<textarea id="' + id + '" rows="2">' + escH(v) + '</textarea>' : '<input type="' + (t || 'text') + '" id="' + id + '" value="' + escH(v) + '">';
+                    return '<div class="form-group' + (t === 'area' ? ' full-width' : '') + '"><label>' + escH(l) + '</label>' + c + '</div>';
+                };
+                return '<p class="cw-hint">Correct or complete any detail of ' + escH(w.name) + ' (' + escH(w.empId) + '). Every change is kept in History &amp; Audit. For an increment use <b>HR Actions → Salary revision</b>; for a transfer <b>HR Actions → Transfer</b>, so the history shows it as such.</p>' +
+                    Object.entries(F).map(([title, fs]) => '<div class="section-header">' + title + '</div><div class="mini-form" style="grid-template-columns:repeat(3,1fr)">' + fs.map(ctl).join('') + '</div>').join('') +
+                    '<div class="cw-decision"><button type="button" onclick="HRM.saveFull(\'' + escH(w.empId) + '\')">Save all changes</button><button type="button" class="cw-btn-ghost" onclick="HRM.tab=\'overview\';HRM.renderProfile()">Cancel</button></div>';
+            };
+            HRM.saveFull = function (empId) {
+                const w = workers.find(x => x.empId === empId); if (!w || !this.isHR()) return;
+                const changes = {}, num = new Set(['expYr', 'expMo'].concat(HRM.COMP));
+                Object.values(F).flat().forEach(([k]) => {
+                    const e = document.getElementById('hf-' + k); if (!e) return; let v = e.value.trim();
+                    if (k === 'aadhar' && v) v = RECRUIT.maskAadhaar(v); if ((k === 'pan' || k === 'ifsc' || k === 'pfNumber') && v) v = v.toUpperCase(); if (k === 'mobile' && v) v = v.replace(/\D/g, '').slice(-10);
+                    if (num.has(k) && v !== '') v = +v;
+                    if (String(w[k] == null ? '' : w[k]) !== String(v)) changes[k] = { from: w[k] == null ? '' : w[k], to: v };
+                });
+                if (changes.name && !changes.name.to) { alert('The name cannot be empty.'); return; }
+                if (changes.pan && changes.pan.to && !/^[A-Z]{5}\d{4}[A-Z]$/.test(changes.pan.to)) { alert('PAN should look like ABCDE1234F.'); return; }
+                if (changes.ifsc && changes.ifsc.to && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(changes.ifsc.to)) { alert('The IFSC code is not valid.'); return; }
+                if (!Object.keys(changes).length) { alert('Nothing has changed.'); return; }
+                Object.keys(changes).forEach(k => { w[k] = changes[k].to; });
+                if (HRM.COMP.some(k => changes[k])) w.gross = HRM.gross(w);
+                if (changes.dob && w.dob) { const a = new Date().getFullYear() - +String(w.dob).slice(0, 4); if (a > 14 && a < 80) w.age = a; }
+                if (changes.contractor && w.contractor) knownContractors.add(w.contractor);
+                this.log(w, 'Edit', 'Details corrected by HR: ' + Object.keys(changes).join(', '), changes);
+                persistAll(); this.tab = 'overview'; this.renderProfile(); renderWorkersTable();
+                alert('Saved ' + Object.keys(changes).length + ' change(s) for ' + w.name + '.');
+            };
+            const tb = HRM.tabs.bind(HRM);
+            HRM.tabs = function () { const t = tb(); if (this.isHR()) t.splice(1, 0, ['edit', 'Edit Details']); return t; };
+            // a clear Edit button in the profile header for HR
+            const rp = HRM.renderProfile.bind(HRM);
+            HRM.renderProfile = function () {
+                rp.apply(this, arguments);
+                if (!this.isHR() || !this.open) return;
+                const bar = document.querySelector('#hrm-body .cw-decision'); if (bar && !bar.querySelector('.hf-edit-btn')) bar.insertAdjacentHTML('beforeend', '<button type="button" class="hf-edit-btn" onclick="HRM.tab=\'edit\';HRM.renderProfile()">✎ Edit employee details</button>');
+            };
+        })();
+
+        /* ---------- Control panels: related screens under one menu item, each role keeps exactly the access it had ----------
+           Employees = Employee Management + Worker Master Data; Requisitions = Hiring Requisition Form + Requisition Tracker. */
+        const PANELS = {
+            GROUPS: [{ id: 'employees', label: 'Employees', tabs: [['hrm', 'Employee Management'], ['master', 'Worker Master Data']] },
+                     { id: 'requisitions', label: 'Requisitions', tabs: [['requisition-form', 'Hiring Requisition Form'], ['requisition-tracker', 'Manpower Requisition Tracker']] }],
+            liOf(tab) { const a = document.querySelector('nav li[data-roles] a[href="#' + tab + '"]'); return a && a.closest('li'); },
+            allowed(tab) { const li = this.liOf(tab); return !!li && li.dataset.roles.split(',').includes(currentRole); },
+            groupOf(tab) { return this.GROUPS.find(g => g.tabs.some(t => t[0] === tab)); },
+            apply() {
+                this.GROUPS.forEach(g => {
+                    const vis = g.tabs.filter(([t]) => this.allowed(t));
+                    let gli = document.getElementById('nav-grp-' + g.id);
+                    if (!gli) {
+                        const first = this.liOf(g.tabs[0][0]); if (!first) return;
+                        gli = document.createElement('li'); gli.id = 'nav-grp-' + g.id;
+                        gli.innerHTML = '<a href="#panel-' + g.id + '" class="nav-link" onclick="event.preventDefault();PANELS.open(\'' + g.id + '\')">' + g.label + '</a>';
+                        first.parentNode.insertBefore(gli, first);
+                    }
+                    gli.style.display = vis.length ? '' : 'none';
+                    g.tabs.forEach(([t]) => { const li = this.liOf(t); if (li) li.style.display = 'none'; });   // reached through the panel now
+                    // the sub-menu at the top of each screen in the panel (only the screens this role may open)
+                    g.tabs.forEach(([t]) => {
+                        const pane = document.getElementById(t); if (!pane) return;
+                        let bar = pane.querySelector(':scope > .aw-panel-bar');
+                        if (!bar) { bar = document.createElement('div'); bar.className = 'aw-panel-bar cw-filter'; bar.style.cssText = 'margin:0 0 14px'; pane.insertBefore(bar, pane.firstChild); }
+                        bar.innerHTML = vis.length > 1 ? '<span style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--aw-muted);margin-right:8px">' + g.label + ':</span>' + vis.map(([id, l]) => '<button type="button" class="' + (id === t ? 'on' : '') + '" onclick="PANELS.go(\'' + id + '\')">' + l + '</button>').join('') : '';
+                    });
+                });
+                this.mark();
+            },
+            open(gid) { const g = this.GROUPS.find(x => x.id === gid), vis = g.tabs.filter(([t]) => this.allowed(t)); if (!vis.length) return; this.go(g.last && vis.some(v => v[0] === g.last) ? g.last : vis[0][0]); },
+            go(tab) { const li = this.liOf(tab); if (!li || !this.allowed(tab)) return; li.querySelector('a').click(); },   // the original menu link does the switching (and its screen's refresh)
+            mark() {
+                const active = document.querySelector('.tab-content.active'); if (!active) return; const g = this.groupOf(active.id);
+                this.GROUPS.forEach(x => { const a = document.querySelector('#nav-grp-' + x.id + ' a'); if (a) a.classList.toggle('active', x === g); });
+                if (g) g.last = active.id;
+            }
+        };
+        (function () {
+            const arp = applyRolePermissions; applyRolePermissions = function () { arp.apply(this, arguments); try { PANELS.apply(); } catch (e) { console.warn(e); } };
+            const st = switchTab; switchTab = function (id) { st.apply(this, arguments); try { PANELS.mark(); } catch (e) { } };
         })();
 
         /* ---------- View-only (Viewer) logins: they see their screens but nothing they do is saved ----------
