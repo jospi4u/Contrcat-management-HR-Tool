@@ -607,7 +607,7 @@ begin
   return jsonb_build_object(
     'users', coalesce((select jsonb_agg(jsonb_build_object('user', user_id, 'role', role, 'contractor', contractor, 'division', division,
                           'name', name, 'active', active, 'created_at', created_at, 'last_login', last_login, 'has_password', fp is not null,
-                          'empId', emp_id, 'mustChange', must_change)
+                          'empId', emp_id, 'mustChange', must_change, 'email', email)
                         order by role, user_id) from app_users), '[]'::jsonb),
     'logins', coalesce((select jsonb_agg(x order by x.at desc) from
                         (select at, user_id, success, ip, user_agent, note from login_events order by at desc limit 500) x), '[]'::jsonb),
@@ -721,6 +721,194 @@ begin
   end if;
   insert into audit_log (user_id, text) values (u.user_id, 'Admin sent ' || n || ' row(s) to the Google Sheet (' || p_what || ')');
   return jsonb_build_object('ok', true, 'rows', n);
+end $$;
+
+-- ---------------------------------------------------------------------
+-- EMAIL NOTIFICATIONS. When a request moves to a new step, the database works out who has to act or
+-- be told, and posts the emails to the admin's Apps Script (same link as the Google Sheet), which sends
+-- them from the admin's Google account. Each login's email is set in the Admin Portal. The person who
+-- made the change is not emailed about it. A mail problem never stops anyone saving.
+-- ---------------------------------------------------------------------
+alter table app_users add column if not exists email text;
+
+create or replace function cw_html(t text) returns text language sql immutable as $$
+  select replace(replace(replace(coalesce(t, ''), '&', '&amp;'), '<', '&lt;'), '>', '&gt;') $$;
+
+-- emails of active logins: by role (scoped to the division / contractor where that applies) or by user id
+create or replace function cw_mail_to(p_roles text[], p_div text, p_con text, p_users text[]) returns text[]
+language sql stable security definer set search_path = public as $$
+  select coalesce(array_agg(distinct lower(trim(a.email))), '{}') from app_users a
+  where a.active and coalesce(a.email, '') like '%_@_%.__%' and (
+    (p_users is not null and a.user_id = any(p_users))
+    or (a.role = any(coalesce(p_roles, '{}')) and (
+          a.role in ('hr_admin', 'admin', 'gm_production', 'store')
+          or (a.role in ('production_manager', 'supervisor') and cw_in_div(a.division, p_div))
+          or (a.role = 'contractor' and cw_norm(a.contractor) = cw_norm(p_con))))
+    -- a GM who is also a division's HOD hears what that division's managers hear
+    or (a.role = 'gm_production' and 'production_manager' = any(coalesce(p_roles, '{}')) and cw_in_div(a.division, p_div)))
+$$;
+create or replace function cw_setting_users(p_key text, p_path text) returns text[] language sql stable security definer set search_path = public as $$
+  select coalesce(array_agg(x), '{}') from app_settings s, jsonb_array_elements_text(
+    case when p_path is null then (case when jsonb_typeof(s.value) = 'array' then s.value else '[]'::jsonb end) else coalesce(s.value->p_path, '[]'::jsonb) end) x
+  where s.key = p_key $$;
+create or replace function cw_ticket_users(p_dept text) returns text[] language sql stable security definer set search_path = public as $$
+  select coalesce(array_agg(h), '{}') from app_settings s, jsonb_array_elements(case when jsonb_typeof(s.value) = 'array' then s.value else '[]'::jsonb end) d, jsonb_array_elements_text(coalesce(d->'handlers', '[]'::jsonb)) h
+  where s.key = 'ticketDepartments' and d->>'name' = p_dept $$;
+create or replace function cw_worker_email(p_emp text) returns text[] language sql stable security definer set search_path = public as $$
+  select coalesce(array_agg(distinct lower(trim(e))) filter (where e like '%_@_%.__%'), '{}') from (
+    select data->>'email' e from records where collection = 'workers' and id = p_emp
+    union all select email from app_users where emp_id = p_emp and active) x $$;
+create or replace function cw_mail_enabled() returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((select coalesce((value->>'mail')::boolean, true) and coalesce(value->>'url', '') <> '' from app_settings where key = 'admin_sheet'), false) $$;
+
+-- one message per recipient, posted in one call to the Apps Script
+create or replace function cw_mail_send(p_msgs jsonb, p_skip text) returns void
+language plpgsql volatile security definer set search_path = public as $$
+declare s jsonb; out jsonb := '[]'::jsonb; m jsonb; t text;
+begin
+  if not cw_mail_enabled() or p_msgs is null or jsonb_array_length(p_msgs) = 0 then return; end if;
+  select value into s from app_settings where key = 'admin_sheet';
+  for m in select * from jsonb_array_elements(p_msgs) loop
+    for t in select distinct lower(x) from jsonb_array_elements_text(coalesce(m->'to', '[]'::jsonb)) x loop
+      if t is distinct from lower(coalesce(p_skip, '')) then out := out || jsonb_build_array(jsonb_build_object('to', t, 'subject', m->>'subject', 'html', m->>'html')); end if;
+    end loop;
+  end loop;
+  if jsonb_array_length(out) = 0 then return; end if;
+  perform net.http_post(url := s->>'url', body := jsonb_build_object('token', s->>'token', 'mail', out),
+                        headers := '{"Content-Type": "application/json"}'::jsonb, timeout_milliseconds := 8000);
+exception when others then null;
+end $$;
+
+create or replace function cw_mail_msg(p_to text[], p_title text, p_line text, p_rows jsonb) returns jsonb language sql immutable as $$
+  select case when coalesce(array_length(p_to, 1), 0) = 0 then null else jsonb_build_object('to', to_jsonb(p_to), 'subject', 'Aristo HR · ' || p_title,
+    'html', '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1a1a1a;max-width:560px">'
+      || '<div style="border-bottom:3px solid #b8945a;padding-bottom:6px;margin-bottom:12px;font-size:16px"><b>Aristo Contract Manpower</b></div>'
+      || '<p style="font-size:15px">' || cw_html(p_line) || '</p>'
+      || coalesce((select '<table style="border-collapse:collapse;font-size:13px;margin:8px 0">' || string_agg('<tr><td style="color:#777;padding:3px 12px 3px 0">' || cw_html(k) || '</td><td style="padding:3px 0"><b>' || cw_html(v) || '</b></td></tr>', '' order by ord) || '</table>'
+                   from jsonb_each_text(coalesce(p_rows, '{}'::jsonb)) with ordinality as e(k, v, ord) where coalesce(v, '') <> ''), '')
+      || '<p style="margin-top:16px"><a href="https://aristo-contract-manpower.vercel.app" style="background:#b8945a;color:#000;padding:8px 14px;text-decoration:none;font-weight:bold">Open the app</a></p>'
+      || '<p style="color:#888;font-size:11px;margin-top:18px">Automatic message from the Aristo HR app — please do not reply.</p></div>') end $$;
+
+-- who hears about which step
+create or replace function cw_notify() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  d jsonb := new.data; st text := new.data->>'status'; ost text; c text := new.collection;
+  dv text := coalesce(new.division, new.data->>'division'); cn text := coalesce(new.contractor, new.data->>'contractor');
+  nm text := coalesce(new.data->>'name', ''); eid text := coalesce(new.data->>'empId', new.data->>'workerEmpId', '');
+  hr text[]; actor text;
+  msgs jsonb := '[]'::jsonb; info jsonb;
+  -- helper: append a message if it has recipients
+begin
+  if tg_op = 'UPDATE' then ost := old.data->>'status'; end if;
+  if st is null or st is not distinct from ost then return new; end if;
+  hr := cw_mail_to(array['hr_admin'], null, null, null);
+  select lower(email) into actor from app_users where user_id = new.updated_by;
+  info := jsonb_strip_nulls(jsonb_build_object('Name', nullif(nm, ''), 'Employee ID', nullif(eid, ''), 'Division', dv, 'Contractor', cn, 'Status', st));
+
+  if c = 'requisitions' then
+    info := jsonb_strip_nulls(jsonb_build_object('Requisition', d->>'id', 'Position', d->>'position', 'Workers', d->>'count', 'Type', d->>'type', 'Division', dv, 'Status', st));
+    if st = 'Pending PM Approval' then msgs := msgs || jsonb_build_array(cw_mail_msg(cw_mail_to(array['production_manager'], dv, null, null), 'Requisition ' || (d->>'id') || ' needs your approval', 'A manpower requisition from your division is waiting for your approval.', info));
+    elsif st = 'Pending GM Approval' then msgs := msgs || jsonb_build_array(cw_mail_msg(cw_mail_to(array['gm_production'], null, null, null), 'Requisition ' || (d->>'id') || ' needs GM approval', 'A new manpower requisition is waiting for your approval.', info));
+    elsif st = 'Pending HR Approval' then msgs := msgs || jsonb_build_array(cw_mail_msg(hr, 'Requisition ' || (d->>'id') || ' ready for HR', 'A requisition has been approved by Production and is waiting for HR to assign contractors.', info));
+    elsif st = 'Approved' then
+      msgs := msgs || jsonb_build_array(cw_mail_msg((select coalesce(array_agg(distinct e), '{}') from jsonb_array_elements_text(coalesce(d->'assignedContractors', '[]'::jsonb)) ac, unnest(cw_mail_to(array['contractor'], null, ac, null)) e),
+                'New requirement ' || (d->>'id') || ' assigned to you', 'A manpower requirement has been assigned to you. Please submit suitable candidates within 7 days.', info || jsonb_strip_nulls(jsonb_build_object('Deadline', d->>'deadline'))));
+      msgs := msgs || jsonb_build_array(cw_mail_msg(cw_mail_to(array['production_manager', 'supervisor'], dv, null, null), 'Requisition ' || (d->>'id') || ' approved', 'Your requisition has been approved and assigned to contractors.', info));
+    elsif st = 'Rejected' then msgs := msgs || jsonb_build_array(cw_mail_msg(cw_mail_to(array['production_manager', 'supervisor'], dv, null, null), 'Requisition ' || (d->>'id') || ' rejected', 'Your requisition was not approved.', info));
+    end if;
+
+  elsif c = 'candidates' then
+    info := jsonb_strip_nulls(jsonb_build_object('Candidate', nullif(nm, ''), 'Position', d->>'position', 'Requisition', d->>'requisitionId', 'Division', dv, 'Contractor', cn, 'Status', st));
+    if st = 'Submitted' then msgs := msgs || jsonb_build_array(cw_mail_msg(hr, 'New candidate: ' || nm, 'A contractor has submitted a candidate for screening.', info));
+    elsif st = 'Returned to Contractor' then msgs := msgs || jsonb_build_array(cw_mail_msg(cw_mail_to(array['contractor'], null, cn, null), 'Candidate returned: ' || nm, 'HR sent the candidate back for corrections: ' || coalesce(d->>'hrRemarks', ''), info));
+    elsif st = 'HR Interview Scheduled' then msgs := msgs || jsonb_build_array(cw_mail_msg(cw_mail_to(array['contractor'], null, cn, null), 'HR interview: ' || nm, 'HR has scheduled an interview. Please make sure the candidate attends.', info || jsonb_strip_nulls(jsonb_build_object('Interview', concat_ws(' ', d->'hrInterview'->>'scheduled', d->'hrInterview'->>'time')))));
+    elsif st = 'Supervisor Interview' then msgs := msgs || jsonb_build_array(cw_mail_msg(cw_mail_to(array['supervisor'], dv, null, null), 'Interview needed: ' || nm, 'HR has selected this candidate. Please hold the department interview within one working day.', info));
+    elsif st = 'PM Review' then msgs := msgs || jsonb_build_array(cw_mail_msg(cw_mail_to(array['production_manager'], dv, null, null), 'Approval needed: ' || nm, 'The Supervisor has selected this candidate. Please verify and approve the grade.', info || jsonb_strip_nulls(jsonb_build_object('Recommended grade', d->>'recommendedGrade'))));
+    elsif st in ('HR Officer Verification', 'Returned for Clarification') then msgs := msgs || jsonb_build_array(cw_mail_msg(hr, 'Verify candidate: ' || nm, case when st = 'Returned for Clarification' then 'The HR Head asked for clarification.' else 'Production has approved this candidate. Please verify and forward to the HR Head.' end, info));
+    elsif st = 'HR Head Approval' then msgs := msgs || jsonb_build_array(cw_mail_msg(cw_mail_to(null, null, null, cw_setting_users('admin_hr_heads', null)), 'HR Head approval: ' || nm, 'A candidate is waiting for your final approval and salary fixing.', info));
+    elsif st = 'Approved for Onboarding' then msgs := msgs || jsonb_build_array(cw_mail_msg(cw_mail_to(array['contractor'], null, cn, null) || hr, 'Approved: ' || nm, 'The candidate is approved. Please confirm the actual joining date in the app.', info));
+    elsif st = 'Joined' then msgs := msgs || jsonb_build_array(cw_mail_msg(hr || cw_mail_to(array['supervisor'], dv, null, null), 'Joined: ' || nm, 'The contractor has confirmed the employee joined.', info || jsonb_strip_nulls(jsonb_build_object('Joined on', d->'joining'->>'date'))));
+    elsif st like 'Rejected%' then msgs := msgs || jsonb_build_array(cw_mail_msg(cw_mail_to(array['contractor'], null, cn, null), 'Candidate not selected: ' || nm, st || '.', info));
+    end if;
+
+  elsif c = 'resignations' then
+    info := info || jsonb_strip_nulls(jsonb_build_object('Category', coalesce(d->>'category', d->>'type'), 'Last working day', d->>'lwd'));
+    if st = 'Pending Supervisor' then msgs := msgs || jsonb_build_array(cw_mail_msg(cw_mail_to(array['supervisor'], dv, null, null), 'Resignation: ' || nm, 'An employee has submitted a resignation for your review.', info));
+    elsif st = 'Pending HR Review' then msgs := msgs || jsonb_build_array(cw_mail_msg(hr, 'Separation request: ' || nm, 'A separation request is waiting for HR confirmation.', info));
+    elsif st = 'Pending Supervisor Clearance' then
+      msgs := msgs || jsonb_build_array(cw_mail_msg(cw_mail_to(array['supervisor'], dv, null, null), 'Exit clearance needed: ' || nm, 'HR has confirmed the resignation. Please accept it and complete the exit clearance.', info));
+      msgs := msgs || jsonb_build_array(cw_mail_msg(cw_mail_to(array['production_manager'], dv, null, null), 'For information — exit clearance: ' || nm, 'HR has confirmed this resignation; the Supervisor is completing the exit clearance.', info));
+    elsif st = 'Production Cleared' then msgs := msgs || jsonb_build_array(cw_mail_msg(hr || cw_mail_to(array['contractor'], null, cn, null), 'Production formalities complete: ' || nm, 'The Supervisor has accepted the resignation and confirmed the production exit clearance. HR exit clearance is next.', info));
+    elsif st = 'HR Cleared' then msgs := msgs || jsonb_build_array(cw_mail_msg(cw_mail_to(array['contractor'], null, cn, null), 'Please confirm and close: ' || nm, 'HR has completed the exit clearance. Please confirm in the app to close the resignation.', info || jsonb_strip_nulls(jsonb_build_object('Relieving date', d->'hrClearance'->>'relievingDate'))));
+    elsif st = 'Closed' then msgs := msgs || jsonb_build_array(cw_mail_msg(hr, 'Resignation closed: ' || nm, 'The contractor has confirmed. The resignation is closed.', info));
+    elsif st like 'Rejected%' then msgs := msgs || jsonb_build_array(cw_mail_msg(cw_mail_to(array['contractor'], null, cn, null) || cw_worker_email(eid), 'Separation request not accepted: ' || nm, st || coalesce(': ' || nullif(d->>'hrRemarks', ''), '') || '.', info));
+    end if;
+
+  elsif c in ('leaveRequests', 'regularizations', 'profileChanges') then
+    info := info || jsonb_strip_nulls(jsonb_build_object('Type', coalesce(d->>'type', d->>'fieldLabel'), 'From', d->>'from', 'To', d->>'to', 'Date', d->>'date'));
+    if st = 'Pending Supervisor' then msgs := msgs || jsonb_build_array(cw_mail_msg(cw_mail_to(array['supervisor'], dv, null, null), 'Approval needed: ' || nm, 'A request is waiting for your approval.', info));
+    elsif st = 'Pending HR' then msgs := msgs || jsonb_build_array(cw_mail_msg(hr, 'Approval needed: ' || nm, 'A request is waiting for HR approval.', info));
+    elsif st = 'Approved' or st like 'Rejected%' then msgs := msgs || jsonb_build_array(cw_mail_msg(cw_worker_email(eid), 'Your request: ' || st, 'Your request has been ' || lower(st) || '.', info));
+    end if;
+
+  elsif c = 'pendingSubmissions' then
+    if st = 'Pending HR Verification' then msgs := msgs || jsonb_build_array(cw_mail_msg(hr, 'Verify new employee: ' || nm, 'A contractor has registered a new employee for HR verification.', info));
+    elsif st in ('Returned for Correction', 'Rejected') then msgs := msgs || jsonb_build_array(cw_mail_msg(cw_mail_to(array['contractor'], null, cn, null), 'Registration ' || lower(st) || ': ' || nm, coalesce(nullif(d->>'hrRemarks', ''), st), info));
+    end if;
+
+  elsif c = 'tickets' then
+    info := jsonb_strip_nulls(jsonb_build_object('Ticket', d->>'no', 'Subject', d->>'subject', 'Department', d->>'toDept', 'Raised by', d->>'raisedByName', 'Due', d->>'dueDate', 'Status', st));
+    if st in ('Open', 'Reopened') then msgs := msgs || jsonb_build_array(cw_mail_msg(case when coalesce(array_length(cw_ticket_users(d->>'toDept'), 1), 0) = 0 then hr else cw_mail_to(null, null, null, cw_ticket_users(d->>'toDept')) end, 'Ticket ' || (d->>'no') || ': ' || coalesce(d->>'subject', ''), case when st = 'Reopened' then 'The ticket has been reopened.' else 'A new ticket has been raised to your department.' end, info));
+    else msgs := msgs || jsonb_build_array(cw_mail_msg(cw_mail_to(null, null, null, array[d->>'raisedBy']), 'Ticket ' || (d->>'no') || ' — ' || st, case when st = 'Resolved' then 'Your ticket has been resolved. Please confirm and close it, or reopen it.' else 'Your ticket has been updated.' end, info));
+    end if;
+
+  elsif c = 'ppeRequests' then
+    info := jsonb_strip_nulls(jsonb_build_object('For', coalesce(nullif(nm, ''), d->>'requisitionId'), 'Employee ID', nullif(eid, ''), 'Position', d->>'position', 'Division', dv, 'Status', st));
+    if st = 'Pending Admin' then msgs := msgs || jsonb_build_array(cw_mail_msg(cw_mail_to(null, null, null, cw_setting_users('ppeDesk', 'admin')), 'PPE to confirm: ' || coalesce(nullif(nm, ''), d->>'position', ''), 'Please confirm the PPE requirement.', info));
+    elsif st = 'Pending Store' then msgs := msgs || jsonb_build_array(cw_mail_msg(cw_mail_to(array['store'], null, null, cw_setting_users('ppeDesk', 'store')), 'PPE to issue: ' || coalesce(nullif(nm, ''), d->>'position', ''), 'Admin has confirmed the PPE. Please issue it.', info));
+    end if;
+  end if;
+
+  select coalesce(jsonb_agg(m), '[]'::jsonb) into msgs from jsonb_array_elements(msgs) m where m <> 'null'::jsonb;
+  perform cw_mail_send(msgs, actor);
+  return new;
+exception when others then return new;   -- email must never block a save
+end $$;
+
+drop trigger if exists records_notify on records;
+create trigger records_notify after insert or update on records for each row execute function cw_notify();
+
+-- Admin Portal: set a login's email, turn emails on / off, send a test email
+create or replace function cw_admin_set_email(p_user text, p_key text, p_target text, p_email text) returns jsonb
+language plpgsql volatile security definer set search_path = public as $$
+declare u app_users; e text := lower(trim(coalesce(p_email, '')));
+begin
+  u := cw_admin(p_user, p_key);
+  if e <> '' and e !~ '^[^@\s]+@[^@\s]+\.[a-z]{2,}$' then raise exception 'That email address does not look right' using errcode = '22023'; end if;
+  update app_users set email = nullif(e, '') where user_id = lower(trim(p_target));
+  if not found then raise exception 'no such login' using errcode = 'P0002'; end if;
+  insert into audit_log (user_id, text) values (u.user_id, 'Admin set the email for ' || lower(trim(p_target)));
+  return jsonb_build_object('ok', true);
+end $$;
+create or replace function cw_admin_mail(p_user text, p_key text, p_what text, p_to text) returns jsonb
+language plpgsql volatile security definer set search_path = public as $$
+declare u app_users; s jsonb;
+begin
+  u := cw_admin(p_user, p_key);
+  select value into s from app_settings where key = 'admin_sheet';
+  if s is null or coalesce(s->>'url', '') = '' then raise exception 'Connect the Google Sheet first' using errcode = '22023'; end if;
+  if p_what in ('on', 'off') then
+    update app_settings set value = value || jsonb_build_object('mail', p_what = 'on'), updated_at = now(), updated_by = u.user_id where key = 'admin_sheet';
+    insert into audit_log (user_id, text) values (u.user_id, 'Admin turned email notifications ' || p_what);
+  elsif p_what = 'test' then
+    if coalesce(p_to, '') !~ '^[^@\s]+@[^@\s]+\.[a-z]{2,}$' then raise exception 'Enter an email address for the test' using errcode = '22023'; end if;
+    perform net.http_post(url := s->>'url', body := jsonb_build_object('token', s->>'token', 'mail', jsonb_build_array(
+      cw_mail_msg(array[lower(p_to)], 'Test email', 'Email notifications from the HR app are working.', jsonb_build_object('Sent by', u.user_id)) - 'to' || jsonb_build_object('to', lower(p_to)))),
+      headers := '{"Content-Type": "application/json"}'::jsonb, timeout_milliseconds := 8000);
+  else raise exception 'unknown action' using errcode = '22023';
+  end if;
+  return jsonb_build_object('ok', true);
 end $$;
 
 -- add or change a login. p_fp / p_salt are null to keep the current password.
@@ -853,11 +1041,14 @@ end $$;
 
 revoke all on function cw_admin(text, text), cw_user_json(app_users), cw_sheet(), cw_sheet_send(jsonb), cw_login_row(login_events), cw_event_row(app_events) from public;
 revoke execute on function cw_admin(text, text), cw_user_json(app_users), cw_sheet(), cw_sheet_send(jsonb), cw_login_row(login_events), cw_event_row(app_events) from anon, authenticated;
+revoke execute on function cw_html(text), cw_mail_to(text[], text, text, text[]), cw_setting_users(text, text), cw_ticket_users(text), cw_worker_email(text),
+  cw_mail_enabled(), cw_mail_send(jsonb, text), cw_mail_msg(text[], text, text, jsonb), cw_notify() from public, anon, authenticated;
 grant execute on function cw_login_salt(text), cw_login(text, text, text, text), cw_whoami(text, text), cw_event(text, text, text, jsonb),
   cw_admin_overview(text, text), cw_admin_save_user(text, text, text, text, text, text, text, boolean, text, text),
   cw_admin_delete_user(text, text, text), cw_admin_set_contractors(text, text, jsonb), cw_admin_rename_contractor(text, text, text, text),
   cw_admin_set_sheet(text, text, text, text, boolean), cw_admin_sheet_send(text, text, text, jsonb),
-  cw_admin_create_logins(text, text, jsonb), cw_change_password(text, text, text, text)
+  cw_admin_create_logins(text, text, jsonb), cw_change_password(text, text, text, text),
+  cw_admin_set_email(text, text, text, text), cw_admin_mail(text, text, text, text)
   to anon, authenticated;
 
 revoke all on function cw_auth(text, text), cw_load(text, text), cw_save(text, text, jsonb, jsonb, jsonb, jsonb) from public;
