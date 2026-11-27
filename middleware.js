@@ -140,6 +140,13 @@ async function api(req, url, s) {
   if (url.pathname === '/api/admin/sheet' && req.method === 'POST') {
     return rpc('cw_admin_set_sheet', Object.assign({}, who, { p_url: String(body.url || '').trim(), p_token: String(body.token || ''), p_enabled: body.enabled !== false }));
   }
+  // email notifications: each login's address, on / off, and a test email
+  if (url.pathname === '/api/admin/set-email' && req.method === 'POST') {
+    return rpc('cw_admin_set_email', Object.assign({}, who, { p_target: String(body.user || ''), p_email: String(body.email || '').trim() }));
+  }
+  if (url.pathname === '/api/admin/mail' && req.method === 'POST') {
+    return rpc('cw_admin_mail', Object.assign({}, who, { p_what: String(body.what || ''), p_to: String(body.to || '').trim() }));
+  }
   if (url.pathname === '/api/admin/sheet-send' && req.method === 'POST') {
     return rpc('cw_admin_sheet_send', Object.assign({}, who, { p_what: String(body.what || ''), p_summary: body.summary && typeof body.summary === 'object' ? body.summary : {} }));
   }

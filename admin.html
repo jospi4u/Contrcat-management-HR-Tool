@@ -159,7 +159,7 @@ dialog h3{font-family:var(--display);color:var(--ink);font-size:20px;margin:0 0 
       <h2>Users</h2>
       <p class="sub">Every login to the app. Changes take effect at once: a deactivated, deleted or reset login is signed out on its next click.</p>
       <div class="toolbar"><button onclick="editUser()">+ Add user</button><button class="ghost" onclick="openWorkerLogins()">+ Create worker logins</button><input id="user-q" placeholder="Search name, ID, contractor…" oninput="renderUsers()"><select id="user-role" onchange="renderUsers()"><option value="">All roles</option></select></div>
-      <div class="scroll"><table><thead><tr><th>User ID</th><th>Name</th><th>Role</th><th>Contractor / Division</th><th>Status</th><th>Last sign-in</th><th>Actions</th></tr></thead><tbody id="users-body"></tbody></table></div>
+      <div class="scroll"><table><thead><tr><th>User ID</th><th>Name</th><th>Role</th><th>Contractor / Division</th><th>Email</th><th>Status</th><th>Last sign-in</th><th>Actions</th></tr></thead><tbody id="users-body"></tbody></table></div>
     </section>
 
     <!-- CONTRACTORS -->
@@ -183,6 +183,18 @@ dialog h3{font-family:var(--display);color:var(--ink);font-size:20px;margin:0 0 
       <h2>Google Sheet</h2>
       <p class="sub">Every event — sign-ins (and failed ones), app opened, aha moments, documents read — lands in your own Google Sheet as it happens.</p>
       <div class="card"><h3>Status</h3><div id="sheet-status"></div></div>
+      <div class="card"><h3>Email notifications</h3>
+        <p class="mut" style="margin:0 0 8px">When a requisition, candidate, resignation, leave, registration, ticket or PPE request moves to its next step, the people who must act (or be told) get an email — sent from the Google account that owns the script. Give every login an email address in <b>Users</b>.</p>
+        <div id="mail-status"></div>
+        <ol class="mut" style="margin:8px 0 8px 18px;padding:0;font-size:13px">
+          <li>Copy the script below again (it now also sends emails) and paste it over the old one in Apps Script. Save.</li>
+          <li>In Apps Script choose the function <b>allowEmail</b> and press <b>Run</b>; allow Google's permission request. You get a test email.</li>
+          <li><b>Deploy → Manage deployments → ✏️ Edit → Version: New version → Deploy</b>. The web app link stays the same.</li>
+          <li>Send a test below.</li>
+        </ol>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end"><div style="flex:1;min-width:220px"><label>Send a test email to</label><input id="mail-test-to" type="email" placeholder="you@aristo-india.com"></div>
+          <button class="ghost" onclick="mailTest()">Send test email</button><button class="ghost" id="mail-toggle" onclick="mailToggle()">Turn off</button></div>
+      </div>
       <div class="card">
         <h3>Connect a sheet (about 3 minutes)</h3>
         <ol class="steps">
@@ -222,6 +234,7 @@ dialog h3{font-family:var(--display);color:var(--ink);font-size:20px;margin:0 0 
   <div class="grid">
     <div><label>User ID</label><input id="u-id" autocapitalize="none" spellcheck="false" placeholder="e.g. pm.lacquer"></div>
     <div><label>Name</label><input id="u-name" placeholder="Full name or job title"></div>
+    <div><label>Email (for notifications)</label><input id="u-email" type="email" autocapitalize="none" spellcheck="false" placeholder="name@aristo-india.com"></div>
     <div><label>Role</label><select id="u-role" onchange="roleFields()"></select></div>
     <div id="u-con-wrap"><label>Contractor</label><select id="u-con"></select></div>
     <div id="u-div-wrap"><label>Division</label><select id="u-div"></select></div>
@@ -399,6 +412,7 @@ function renderUsers() {
   const list = D.users.filter(u => (!r || u.role === r) && (!q || [u.user, u.name, u.contractor, u.division].join(' ').toLowerCase().includes(q)));
   document.getElementById('users-body').innerHTML = list.map(u => `<tr>
     <td><b>${esc(u.user)}</b></td><td>${esc(u.name || '—')}</td><td>${esc(ROLES[u.role] || u.role)}</td><td>${esc(u.role === 'employee' ? [u.empId, u.division].filter(Boolean).join(' · ') : (u.contractor || divLabel(u.division) || '—'))}${u.mustChange ? ' <span class="badge warn">new password due</span>' : ''}</td>
+    <td>${u.email ? esc(u.email) : (u.role === 'employee' ? '<span class="mut">—</span>' : '<span class="badge warn">no email</span>')}</td>
     <td>${u.active ? '<span class="badge ok">Active</span>' : '<span class="badge bad">Off</span>'}</td><td>${u.last_login ? when(u.last_login) + ' <span class="mut">· ' + ago(u.last_login) + '</span>' : '<span class="mut">never</span>'}</td>
     <td style="white-space:nowrap"><button class="ghost sm" onclick="editUser('${esc(u.user)}')">Edit</button> <button class="ghost sm" onclick="resetPw('${esc(u.user)}')">Reset password</button>
       <button class="ghost sm" onclick="toggleUser('${esc(u.user)}')">${u.active ? 'Switch off' : 'Switch on'}</button> <button class="danger sm" onclick="deleteUser('${esc(u.user)}')">Delete</button></td></tr>`).join('')
@@ -423,6 +437,7 @@ function editUser(id) {
   document.getElementById('u-title').textContent = editing ? 'Edit ' + editing.user : 'Add user';
   document.getElementById('u-id').value = editing ? editing.user : ''; document.getElementById('u-id').disabled = !!editing;
   document.getElementById('u-name').value = editing ? editing.name || '' : '';
+  document.getElementById('u-email').value = editing ? editing.email || '' : '';
   roleOptions(document.getElementById('u-role')); if (!editing || editing.role !== 'employee') staffRoles();
   document.getElementById('u-role').value = editing ? editing.role : 'contractor'; document.getElementById('u-role').disabled = !!(editing && editing.role === 'employee');
   document.getElementById('u-con').innerHTML = contractors().map(c => `<option${c.active === false ? ' disabled' : ''}>${esc(c.name)}</option>`).join('');
@@ -444,6 +459,9 @@ async function saveUser(overrides) {
   if (body.role !== 'production_manager' && body.role !== 'supervisor' && body.role !== 'gm_production') body.division = '';
   try {
     await api('/api/admin/save-user', body);
+    // the notification email is saved separately; only when it changed (or for a new login)
+    const email = v('u-email').toLowerCase(), was = ((D.users.find(x => x.user === body.user) || {}).email || '').toLowerCase();
+    if (!overrides && email !== was) await api('/api/admin/set-email', { user: body.user, email });
     document.getElementById('user-dlg').close();
     if (body.password) { document.getElementById('pw-user').textContent = body.user; document.getElementById('pw-value').textContent = body.password; document.getElementById('pw-dlg').showModal(); }
     else toast('Saved ' + body.user);
@@ -578,6 +596,14 @@ function doPost(e) {
       const rows = body.rows.map(r => [new Date(r.at), r.user || '', r.name || '', r.role || '', r.event || '', r.detail || '', r.seconds == null ? '' : r.seconds, r.device || '', r.ip || '']);
       sh.getRange(sh.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
     }
+    if (body.mail && body.mail.length) {   // email notifications from the HR app, sent from this Google account
+      const log = ss.getSheetByName('Emails') || ss.insertSheet('Emails');
+      if (log.getLastRow() === 0) { log.appendRow(['Time', 'To', 'Subject', 'Result']); log.setFrozenRows(1); }
+      body.mail.slice(0, 50).forEach(m => {
+        try { MailApp.sendEmail({ to: m.to, subject: m.subject, htmlBody: m.html, name: 'Aristo HR App' }); log.appendRow([new Date(), m.to, m.subject, 'Sent']); }
+        catch (err) { log.appendRow([new Date(), m.to, m.subject, 'Failed: ' + err]); }
+      });
+    }
     if (body.summary) {
       const sh = ss.getSheetByName('Summary') || ss.insertSheet('Summary');
       const keys = ['Period', 'Who used it', 'Reached aha', 'Time to aha', 'Drop-off', 'Cost per run', 'Outcome per run', 'Funnel'];
@@ -586,9 +612,29 @@ function doPost(e) {
     }
   } finally { lock.releaseLock(); }
   return ContentService.createTextOutput('ok');
-}`;
+}
+
+// Run this once from the editor (select it, press Run) so Google asks you to allow sending email.
+function allowEmail() { MailApp.sendEmail(Session.getActiveUser().getEmail(), 'Aristo HR App — email allowed', 'The HR app can now send notifications from this account.'); }`;
+}
+function renderMail() {
+  const s = D.sheet || {}, el = document.getElementById('mail-status'); if (!el) return;
+  const on = !!s.url && s.mail !== false, staff = (D.users || []).filter(u => u.role !== 'employee' && u.active), missing = staff.filter(u => !u.email);
+  el.innerHTML = (s.url ? (on ? '<span class="badge ok">On</span>' : '<span class="badge warn">Off</span>') : '<span class="badge warn">Connect the Google Sheet first</span>') +
+    ' &nbsp;<span class="mut">' + (staff.length - missing.length) + ' of ' + staff.length + ' logins have an email' + (missing.length ? ' — missing: ' + esc(missing.slice(0, 12).map(u => u.user).join(', ')) + (missing.length > 12 ? '…' : '') : '') + '</span>';
+  const b = document.getElementById('mail-toggle'); if (b) { b.textContent = on ? 'Turn off' : 'Turn on'; b.disabled = !s.url; }
+  const t = document.getElementById('mail-test-to'); if (t && !t.value) { const me = (D.users || []).find(u => u.role === 'admin' && u.email) || (D.users || []).find(u => u.user === 'joseph'); if (me && me.email) t.value = me.email; }
+}
+async function mailToggle() {
+  const on = (D.sheet || {}).mail !== false;
+  try { await api('/api/admin/mail', { what: on ? 'off' : 'on' }); toast('Email notifications turned ' + (on ? 'off' : 'on')); load(); } catch (e) { alert(e.message); }
+}
+async function mailTest() {
+  const to = document.getElementById('mail-test-to').value.trim(); if (!to) { alert('Enter an email address.'); return; }
+  try { await api('/api/admin/mail', { what: 'test', to }); toast('Test email sent to ' + to + ' — check the inbox (and the Emails tab in your sheet)'); } catch (e) { alert(e.message); }
 }
 function renderSheet() {
+  renderMail();
   const s = D.sheet || {};
   if (!sheetToken) sheetToken = s.token || newToken();
   document.getElementById('sheet-script').textContent = scriptText(sheetToken);
