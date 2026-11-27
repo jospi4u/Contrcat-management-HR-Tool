@@ -6582,10 +6582,10 @@
         SYNC.collections.contractorDocs = { get: () => contractorDocs, set: v => { contractorDocs = v; }, key: x => x.id };
         var DOCC = {
             TYPES: {
-                agreement: { name: 'Contractor Agreement', labels: ['Agreement date', 'Date of renewal', 'Expiry / end date', 'Next renewal date'], need: true },
-                licence: { name: 'Contract Labour Licence', labels: ['Licence issue date', 'Date of renewal', 'Valid till (expiry)', 'Next renewal date'], need: true },
-                form2: { name: 'Form II (Registration)', labels: ['Date of registration', 'Date of renewal', 'Expiry date', 'Next renewal date'], need: true },
-                other: { name: 'Other document', labels: ['Issue date', 'Date of renewal', 'Expiry date', 'Next renewal date'], need: false }
+                agreement: { name: 'Contractor Agreement', labels: ['Start date', 'Date of renewal', 'Expiry date', 'Next renewal date'], need: true },
+                licence: { name: 'CLRA Licence (Contract Labour Licence)', labels: ['Start date', 'Date of renewal', 'Expiry date', 'Next renewal date'], need: true },
+                form2: { name: 'Form II (Registration)', labels: ['Start date (date of registration)', 'Date of renewal', 'Expiry date', 'Next renewal date'], need: true },
+                other: { name: 'Other document', labels: ['Start date', 'Date of renewal', 'Expiry date', 'Next renewal date'], need: false }
             },
             DATE_KEYS: ['regDate', 'renewalDate', 'expiryDate', 'nextRenewalDate'],
             PENDING: 'Pending HR Validation', VALID: 'Validated', RETURNED: 'Returned to Contractor',
@@ -6664,11 +6664,48 @@
                     return [(this.isHR() ? escH(d.contractor) : null), '<b>' + escH(t.name) + '</b>' + (d.number ? '<div style="font-size:11px;color:var(--aw-muted)">No. ' + escH(d.number) + '</div>' : ''),
                         this.nice(d.regDate), this.nice(d.renewalDate), this.nice(d.expiryDate), this.nice(d.nextRenewalDate), this.badge(d), this.statusBadge(d.status), (d.files || []).length, acts.join(' ')].filter(v => v !== null);
                 });
-                const head = (this.isHR() ? ['Contractor'] : []).concat(['Document', 'Registration / issue', 'Renewal', 'Expiry', 'Next renewal', 'Validity', 'HR status', 'Files', '']);
-                el.innerHTML = '<p style="font-size:12px;color:var(--aw-muted)">' + (this.isHR() ? 'Every contractor\'s agreement, Contract Labour Licence and Form II. Check the dates against the original and validate. Renewal alerts pop up 30 days and 15 days before, and every day in the last week.' : 'Upload your agreement, Contract Labour Licence and Form II. HR checks each one. You will be reminded 30 days and 15 days before expiry, and every day in the last week.') + '</p>' +
-                    cards + '<div id="docc-form"></div><div id="docc-view"></div>' + filters + DASH.table(head, rows, 'No documents yet.') + (this.isHR() ? this.missingHtml() : '');
+                const head = (this.isHR() ? ['Contractor'] : []).concat(['Document', 'Start date', 'Renewal', 'Expiry date', 'Next renewal', 'Validity', 'HR status', 'Files', '']);
+                const mode = this.mode || 'contractor';
+                const toggle = '<div class="cw-filter" style="margin:6px 0">' + [['contractor', 'By contractor'], ['list', 'All documents (list)']].map(([k, l]) => '<button type="button" class="' + (mode === k ? 'on' : '') + '" onclick="DOCC.mode=\'' + k + '\';DOCC.render()">' + l + '</button>').join('') + '</div>';
+                el.innerHTML = '<p style="font-size:12px;color:var(--aw-muted)">' + (this.isHR() ? 'Every contractor\'s agreement, CLRA licence and Form II, with start and expiry dates. Use Edit on any document to correct or update it. Renewal alerts pop up 30 days and 15 days before, and every day in the last week.' : 'Your agreement, CLRA licence and Form II, with start and expiry dates. HR checks each one. You will be reminded 30 days and 15 days before expiry, and every day in the last week.') + '</p>' +
+                    cards + '<div id="docc-form"></div><div id="docc-view"></div>' + filters + toggle +
+                    (mode === 'list' ? DASH.table(head, rows, 'No documents yet.') : this.byContractorHtml()) + (this.isHR() ? this.missingHtml() : '');
                 if (this.editing) this.formRender();
             },
+            /* ---- one panel per contractor: Agreement, CLRA licence, Form II (+ others), each with start / expiry dates and Edit ---- */
+            byContractorHtml() {
+                const f = this.f, ro = this.isViewer();
+                let names = this.isHR() ? this.contractorNames() : [currentContractorName];
+                if (f.contractor) names = names.filter(c => c === f.contractor);
+                const keyTypes = Object.keys(this.TYPES).filter(k => this.TYPES[k].need && (!f.type || f.type === k));
+                const statusOk = d => !f.status || (f.status === 'expiring' ? (this.daysLeft(d) !== null && this.daysLeft(d) >= 0 && this.daysLeft(d) <= 30) : f.status === 'expired' ? (this.daysLeft(d) !== null && this.daysLeft(d) < 0) : d.status === f.status);
+                this._names = names;
+                const panels = names.map((c, ci) => {
+                    const docs = contractorDocs.filter(d => this.current(d) && cw_normJs(d.contractor) === cw_normJs(c));
+                    const rows = [];
+                    keyTypes.forEach(k => {
+                        const have = docs.filter(d => d.type === k && statusOk(d)).sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+                        if (have.length) have.forEach(d => rows.push(this.docRow(d, ro)));
+                        else if (!f.status) rows.push(['<b>' + escH(this.TYPES[k].name) + '</b>', '-', '-', '-', '-', '<span class="badge badge-danger">Not on file</span>', '', ro ? '' : '<button type="button" class="action-btn edit" onclick="DOCC.add(DOCC._names[' + ci + '],\'' + k + '\')">+ Add</button>']);
+                    });
+                    if (!f.type || f.type === 'other') docs.filter(d => d.type === 'other' && statusOk(d)).forEach(d => rows.push(this.docRow(d, ro)));
+                    if (!rows.length) return '';
+                    return '<div class="cw-panel" style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div class="section-header" style="margin:0">' + escH(c) + '</div>' +
+                        (ro ? '' : '<button type="button" class="cw-btn-ghost" onclick="DOCC.add(DOCC._names[' + ci + '],\'other\')">+ Other document</button>') + '</div>' +
+                        DASH.table(['Document', 'Number', 'Start date', 'Expiry date', 'Next renewal', 'Validity', 'HR status', ''], rows, '') + '</div>';
+                }).join('');
+                return panels || '<p style="font-size:13px">No documents match these filters.</p>';
+            },
+            docRow(d, ro) {
+                const t = this.TYPES[d.type] || this.TYPES.other, q = '\'' + d.id + '\'', acts = ['<button type="button" class="action-btn" onclick="DOCC.view(' + q + ')">View</button>'];
+                if (!ro) {
+                    acts.push('<button type="button" class="action-btn edit" onclick="DOCC.edit(' + q + ')">✎ Edit</button>');
+                    if (this.isHR() && d.status === this.PENDING) acts.push('<button type="button" class="action-btn edit" onclick="DOCC.view(' + q + ')">Validate</button>');
+                    acts.push('<button type="button" class="action-btn" onclick="DOCC.renew(' + q + ')">Renew</button>');
+                }
+                return ['<b>' + escH(t.name) + '</b>' + (d.renewOf ? '<div style="font-size:11px;color:var(--aw-muted)">renewal</div>' : ''), escH(d.number || '-'), this.nice(d.regDate), '<b>' + this.nice(d.expiryDate) + '</b>', this.nice(d.nextRenewalDate), this.badge(d), this.statusBadge(d.status), acts.join(' ')];
+            },
+            add(contractor, type) { this.edit(null, { contractor, type }); },
             missingHtml() {   // HR: which active contractors are missing a validated, unexpired key document
                 const need = Object.entries(this.TYPES).filter(([, t]) => t.need), names = (typeof CONTRACTORS !== 'undefined' ? CONTRACTORS : []).map(c => c.name);
                 const rows = names.map(c => {
