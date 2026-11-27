@@ -6592,6 +6592,7 @@
             f: { contractor: '', type: '', status: '' }, editing: null, draftFiles: [], extra: [],
             isHR() { return currentRole === 'hr_admin'; },
             isViewer() { return !!(signedInUser && signedInUser.access === 'viewer'); },
+            canEdit() { return this.isHR() && !this.isViewer(); },   // only HR adds, edits, renews and validates; contractors view
             me() { return (signedInUser && (signedInUser.name || signedInUser.user)) || currentRole || ''; },
             today() { return DASH.iso(new Date()); },
             nice(d) { return d ? SOC.nice(d) : '-'; },
@@ -6652,11 +6653,11 @@
                     (this.isHR() ? '<div class="form-group"><label>Contractor</label><select onchange="DOCC.f.contractor=this.value;DOCC.render()">' + opt('', 'All contractors', f.contractor) + this.contractorNames().map(c => opt(c, c, f.contractor)).join('') + '</select></div>' : '') +
                     '<div class="form-group"><label>Document</label><select onchange="DOCC.f.type=this.value;DOCC.render()">' + opt('', 'All documents', f.type) + Object.entries(this.TYPES).map(([k, t]) => opt(k, t.name, f.type)).join('') + '</select></div>' +
                     '<div class="form-group"><label>Status</label><select onchange="DOCC.f.status=this.value;DOCC.render()">' + opt('', 'All', f.status) + opt('expiring', 'Expiring in 30 days', f.status) + opt('expired', 'Expired', f.status) + opt(this.PENDING, this.PENDING, f.status) + opt(this.VALID, this.VALID, f.status) + opt(this.RETURNED, this.RETURNED, f.status) + '</select></div>' +
-                    (this.isViewer() ? '' : '<button type="button" onclick="DOCC.edit(null)" style="margin-left:auto">+ Upload document</button>') + '</div>';
+                    (!this.canEdit() ? '' : '<button type="button" onclick="DOCC.edit(null)" style="margin-left:auto">+ Upload document</button>') + '</div>';
                 const rows = list.map(d => {
                     const t = this.TYPES[d.type] || this.TYPES.other, q = '\'' + d.id + '\'';
                     const acts = ['<button type="button" class="action-btn" onclick="DOCC.view(' + q + ')">View</button>'];
-                    if (!this.isViewer()) {
+                    if (this.canEdit()) {
                         if (this.isHR() && d.status === this.PENDING) acts.push('<button type="button" class="action-btn edit" onclick="DOCC.view(' + q + ')">Validate</button>');
                         acts.push('<button type="button" class="action-btn" onclick="DOCC.edit(' + q + ')">' + (d.status === this.RETURNED ? 'Correct' : 'Edit') + '</button>');
                         acts.push('<button type="button" class="action-btn" onclick="DOCC.renew(' + q + ')">Renew</button>');
@@ -6667,14 +6668,14 @@
                 const head = (this.isHR() ? ['Contractor'] : []).concat(['Document', 'Start date', 'Renewal', 'Expiry date', 'Next renewal', 'Validity', 'HR status', 'Files', '']);
                 const mode = this.mode || 'contractor';
                 const toggle = '<div class="cw-filter" style="margin:6px 0">' + [['contractor', 'By contractor'], ['list', 'All documents (list)']].map(([k, l]) => '<button type="button" class="' + (mode === k ? 'on' : '') + '" onclick="DOCC.mode=\'' + k + '\';DOCC.render()">' + l + '</button>').join('') + '</div>';
-                el.innerHTML = '<p style="font-size:12px;color:var(--aw-muted)">' + (this.isHR() ? 'Every contractor\'s agreement, CLRA licence and Form II, with start and expiry dates. Use Edit on any document to correct or update it. Renewal alerts pop up 30 days and 15 days before, and every day in the last week.' : 'Your agreement, CLRA licence and Form II, with start and expiry dates. HR checks each one. You will be reminded 30 days and 15 days before expiry, and every day in the last week.') + '</p>' +
+                el.innerHTML = '<p style="font-size:12px;color:var(--aw-muted)">' + (this.isHR() ? 'Every contractor\'s agreement, CLRA licence and Form II, with start and expiry dates. Use Edit on any document to correct or update it. Renewal alerts pop up 30 days and 15 days before, and every day in the last week.' : 'Your agreement, CLRA licence and Form II as HR has recorded them, with start and expiry dates (view only — please send any new or renewed document to HR). You will be reminded 30 days and 15 days before expiry, and every day in the last week.') + '</p>' +
                     cards + '<div id="docc-form"></div><div id="docc-view"></div>' + filters + toggle +
                     (mode === 'list' ? DASH.table(head, rows, 'No documents yet.') : this.byContractorHtml()) + (this.isHR() ? this.missingHtml() : '');
                 if (this.editing) this.formRender();
             },
             /* ---- one panel per contractor: Agreement, CLRA licence, Form II (+ others), each with start / expiry dates and Edit ---- */
             byContractorHtml() {
-                const f = this.f, ro = this.isViewer();
+                const f = this.f, ro = !this.canEdit();
                 let names = this.isHR() ? this.contractorNames() : [currentContractorName];
                 if (f.contractor) names = names.filter(c => c === f.contractor);
                 const keyTypes = Object.keys(this.TYPES).filter(k => this.TYPES[k].need && (!f.type || f.type === k));
@@ -6717,6 +6718,7 @@
 
             /* ---- add / edit / renew ---- */
             edit(id, renewFrom) {
+                if (!this.canEdit()) return;
                 const d = id ? contractorDocs.find(x => x.id === id) : null;
                 this.editing = d ? JSON.parse(JSON.stringify(d)) : { id: uid('CD'), contractor: this.isHR() ? (this.f.contractor || '') : currentContractorName, type: '', number: '', regDate: '', renewalDate: '', expiryDate: '', nextRenewalDate: '', extra: [], files: [], remarks: '', isNew: true };
                 if (renewFrom) Object.assign(this.editing, renewFrom);
@@ -6776,6 +6778,7 @@
                 if (st) st.textContent = ''; this.formRender();
             },
             save() {
+                if (!this.canEdit()) return;
                 this.grab(); const x = this.editing; if (!x) return;
                 const r = this.check(x); this.liveCheck();
                 if (r.e.length) { alert('Please fix:\n• ' + r.e.join('\n• ')); return; }
@@ -6848,7 +6851,7 @@
                 const worst = show[0].n;
                 box.innerHTML = '<div class="cw-panel" role="alertdialog" aria-label="Document renewal reminder" style="max-width:520px;width:100%;margin:0;max-height:85vh;overflow:auto">' +
                     '<div class="section-header" style="margin-top:0">' + (worst < 0 ? '⛔ Documents expired' : worst <= 7 ? '⚠ Renewal due this week' : '🔔 Renewal reminder') + '</div>' +
-                    '<p style="font-size:12px;color:var(--aw-muted);margin:0 0 6px">' + (this.isHR() ? 'These contractor documents need renewing.' : 'Please renew these documents and upload the new copy for HR.') + '</p>' +
+                    '<p style="font-size:12px;color:var(--aw-muted);margin:0 0 6px">' + (this.isHR() ? 'These contractor documents need renewing.' : 'Please renew these documents and send the new copy to HR.') + '</p>' +
                     show.map(line).join('') +
                     '<div class="cw-decision" style="margin-top:12px"><button type="button" onclick="DOCC.ack();PIPE.go(\'docs\')">Open Document Center</button><button type="button" class="cw-btn-ghost" onclick="DOCC.ack()">OK, remind me later</button></div></div>';
             },
@@ -6860,7 +6863,7 @@
             dashHtml() {
                 if (!['hr_admin', 'contractor'].includes(currentRole)) return '';
                 const all = this.mine().filter(d => this.current(d)), al = this.alerts(), pend = all.filter(d => d.status === this.PENDING).length, ret = all.filter(d => d.status === this.RETURNED).length;
-                if (!all.length && !this.isHR()) return '<div class="section-header">Documents</div><p style="font-size:12px">No documents on file yet — <a href="#docs" onclick="PIPE.go(\'docs\');return false;">upload your agreement, licence and Form II</a>.</p>';
+                if (!all.length && !this.isHR()) return '<div class="section-header">Documents</div><p style="font-size:12px">No documents on file yet — please send your agreement, CLRA licence and Form II to HR.</p>';
                 if (!al.length && !pend && !ret) return '';
                 return '<div class="section-header">Documents &amp; renewals</div>' + DASH.grid([
                     DASH.card(al.filter(a => a.n < 0).length, 'Expired', 'renew now'), DASH.card(al.filter(a => a.n >= 0 && a.n <= 7).length, 'Due this week', ''),
