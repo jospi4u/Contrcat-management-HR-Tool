@@ -132,6 +132,7 @@ dialog h3{font-family:var(--display);color:var(--ink);font-size:20px;margin:0 0 
     <a href="#logins">Login history</a>
     <a href="#activity">Activity</a>
     <a href="#sheet">Google Sheet</a>
+    <a href="#appmap">App map</a>
   </nav>
   <main>
     <div id="load-error" class="note bad" style="display:none"></div>
@@ -220,6 +221,12 @@ dialog h3{font-family:var(--display);color:var(--ink);font-size:20px;margin:0 0 
     </section>
 
     <!-- ACTIVITY -->
+    <section id="appmap">
+      <h2>App map</h2>
+      <p class="sub">The four faces of the app — who uses it, how they are told, how the app knows who they are, and how pay flows — and every type of user, editors and viewers. Numbers are live.</p>
+      <div id="map-body"></div>
+    </section>
+
     <section id="activity">
       <h2>Activity</h2>
       <p class="sub">What people did in the app, newest first. To change any data yourself, use <a href="/">Open the app</a>: your admin login has full HR rights there.</p>
@@ -292,6 +299,50 @@ async function load() {
   catch (e) { const el = document.getElementById('load-error'); el.textContent = 'Could not load: ' + e.message + '. If you just set up the Admin Portal, run supabase/setup.sql again in Supabase.'; el.style.display = 'block'; }
 }
 
+/* ---------- App map: the four faces, the sign-in flow, every user type (editors and viewers) ---------- */
+const USER_TYPES = [
+  ['admin', 'System Admin', 'IT / owner of the app', 'Admin Portal', 'Manages logins, contractors, access, email and the Google Sheet; full HR rights in the app'],
+  ['hr_admin', 'HR (Head and Officers)', 'HR department', 'Main app — HR dashboard', 'Everything about employees, recruitment, onboarding, payroll, exits; the HR Head alone gives final candidate approval and salary approval'],
+  ['gm_production', 'GM Production', 'General Manager (also HOD of Aristo Vertical)', 'Main app — GM dashboard', 'Approves new manpower; sees all employees and reports without anyone\'s salary'],
+  ['production_manager', 'HOD / Manager', 'HOD, Production Manager, Admin Manager, Assistant Manager', 'Main app — department dashboard', 'Raises and approves requisitions, interviews, approves leave for their division'],
+  ['supervisor', 'Supervisor', 'Line supervisors', 'Main app — team dashboard', 'Raises requisitions, interviews, approves leave, does exit clearance for their team'],
+  ['contractor', 'Contractor', 'Labour contractors (one login each)', 'Main app — contractor dashboard', 'Submits candidates and employees, confirms joining, raises separations — only for their own workers'],
+  ['store', 'Store', 'Store department', 'Main app — store dashboard', 'Issues PPE and keeps the PPE stock'],
+  ['employee', 'Worker (self-service)', 'Contract workers (sign in with Employee ID)', 'Worker app /me', 'Checks in, applies for leave, requests corrections, sees pay, raises tickets — only their own']
+];
+function renderMap() {
+  const el = document.getElementById('map-body'); if (!el || !D) return;
+  const users = D.users || [], act = users.filter(u => u.active), acc = u => u.access === 'viewer' ? 'viewer' : 'editor';
+  const cnt = (r, a) => act.filter(u => u.role === r && (!a || acc(u) === a)).length;
+  const workers = D.workers || [], working = workers.filter(w => ['Active', 'Notice Period', 'Rejoined', 'Transferred'].includes(w.status || 'Active')).length;
+  const s = D.sheet || {}, mailOn = !!s.url && s.mail !== false, since = Date.now() - 30 * 864e5;
+  const ok = (D.logins || []).filter(l => l.success && new Date(l.at) >= since).length, bad = (D.logins || []).filter(l => !l.success && new Date(l.at) >= since).length;
+  const face = (icon, title, line, items, color) => `<div class="card" style="margin:0;border-top:3px solid ${color}"><div style="font-size:26px">${icon}</div><h3 style="margin:4px 0 2px">${title}</h3><p class="mut" style="margin:0 0 8px;font-size:12px">${line}</p><ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7">${items.map(i => '<li>' + i + '</li>').join('')}</ul></div>`;
+  const b = n => `<b style="color:var(--gold)">${n}</b>`;
+  const faces = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px">` +
+    face('👥', 'People', 'Who the app is for', [b(act.filter(u => u.role !== 'employee').length) + ' staff and contractor logins', b(working) + ' working employees · ' + b(workers.length) + ' in the master', b((D.contractors || []).filter(c => c.active !== false).length) + ' labour contractors', b((D.candidates || []).length) + ' candidates in recruitment', b(cnt('employee')) + ' workers using self-service'], '#3fb950') +
+    face('💬', 'Communication', 'How people are told', ['🔔 In-app notifications (dismiss when read)', '✉ Email on every request step — ' + (mailOn ? '<span class="badge ok">on</span>' : '<span class="badge warn">off</span>') + ' · ' + b(act.filter(u => u.email).length) + ' logins with email', '📢 Announcements to all, contractors or departments', '🎫 Tickets &amp; reminders with escalation', '📊 Google Sheet event log — ' + (s.url ? 'connected' : 'not connected')], '#58a6ff') +
+    face('🔐', 'Authentication', 'Who you are and what you may do', ['Sign in with user ID (workers: Employee ID) and password', 'Password never stored — only a scrambled fingerprint', 'Secure 12-hour session', 'Role and Editor / Viewer come from the database', 'Every screen and every save checked by the database', b(ok) + ' sign-ins · ' + b(bad) + ' failed in 30 days'], '#d2a8ff') +
+    face('₹', 'Payments', 'How pay is worked out and recorded', ['Payroll from attendance with PF, ESI and PT', 'Wage register (locked when final) and payslip data', 'Contractor invoices and payroll confirmation', 'Salary revisions and promotions — HR Head approves', 'Full &amp; final settlement at exit', 'Bonus (8.33%) and leave salary', '<span class="mut">Money itself is paid through the bank, outside the app</span>'], '#d4a64a') + `</div>`;
+  // the sign-in flow, left to right
+  const step = (t, sub, color) => `<div style="flex:1;min-width:130px;border:1px solid ${color || 'var(--gold-line)'};border-radius:10px;padding:10px;background:var(--card);text-align:center"><div style="font-size:13px;font-weight:600">${t}</div><div class="mut" style="font-size:11px;margin-top:3px">${sub}</div></div>`;
+  const arrow = '<div style="align-self:center;color:var(--gold);font-size:20px;padding:0 2px">→</div>';
+  const flow = `<div class="card"><h3>Authentication — how the app knows who you are</h3><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:stretch">` +
+    [step('1 · Person', 'opens the app link'), step('2 · Sign-in page', 'user ID + password'), step('3 · Check', 'password fingerprint matched in the database'), step('4 · Session', 'secure cookie, 12 hours'), step('5 · Identity', 'role · division / contractor · Editor or Viewer'), step('6 · Their screens', 'home page for their role')].join(arrow) +
+    `</div><div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font-size:12px"><div class="note" style="flex:1;min-width:240px;margin:0">✖ Wrong password → refused and recorded in <b>Login history</b>. A switched-off login cannot sign in.</div><div class="note" style="flex:1;min-width:240px;margin:0">🛡 After sign-in, every list is filtered and every save is checked <b>by the database</b>: a contractor only ever gets their own workers, a viewer can never save.</div></div></div>`;
+  // editors and viewers
+  const eds = act.filter(u => acc(u) === 'editor').length, vws = act.length - eds;
+  const access = `<div class="card"><h3>Users and viewers</h3><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px">` +
+    `<div style="border:1px solid #3fb950;border-radius:10px;padding:12px"><div style="font-size:22px">✎</div><b>Editor</b> — ${b(eds)} logins<p class="mut" style="font-size:12px;margin:4px 0 0">Uses the app: adds, changes, approves and uploads — within what their role allows.</p></div>` +
+    `<div style="border:1px solid #e3b341;border-radius:10px;padding:12px"><div style="font-size:22px">👁</div><b>Viewer</b> — ${b(vws)} logins<p class="mut" style="font-size:12px;margin:4px 0 0">Watches only: sees the same screens and reports as their role, but cannot change anything (the database refuses). For management, auditors or people who only monitor.</p></div>` +
+    `</div><p class="mut" style="font-size:12px;margin:8px 0 0">Set it per person in <a href="#users">Users</a> → Edit → Access. Role decides <i>what</i> someone sees; Access decides whether they may <i>change</i> it.</p></div>`;
+  // every user type
+  const types = `<div class="card"><h3>User types</h3><div class="scroll"><table><thead><tr><th>Type</th><th>Who</th><th>Signs in to</th><th>As an Editor they can…</th><th>Editors</th><th>Viewers</th></tr></thead><tbody>` +
+    USER_TYPES.map(([r, name, who, where, can]) => `<tr><td><b>${name}</b></td><td>${who}</td><td>${where}</td><td style="font-size:12px">${can}</td><td><a href="#users" onclick="document.getElementById('user-role').value='${r}';document.getElementById('user-access').value='editor';setTimeout(renderUsers,0)">${cnt(r, 'editor')}</a></td><td><a href="#users" onclick="document.getElementById('user-role').value='${r}';document.getElementById('user-access').value='viewer';setTimeout(renderUsers,0)">${cnt(r, 'viewer')}</a></td></tr>`).join('') +
+    `</tbody></table></div><p class="mut" style="font-size:12px;margin:8px 0 0">A viewer of any type sees what that type sees and changes nothing. Click a number to see those logins.</p></div>`;
+  el.innerHTML = faces + flow + access + types;
+}
+
 /* ---------- navigation ---------- */
 function show(id) {
   document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === id));
@@ -355,7 +406,7 @@ function renderFunnel() {
   }).join('') : '<li class="mut" style="border-left-color:var(--line2)">Aha moments will appear here as people do their first key action.</li>';
 }
 
-function render() { if (!D) return; renderFunnel(); renderSix(); renderSheet(); renderUsers(); renderContractors(); renderLogins(); renderActivity(); }
+function render() { if (!D) return; renderFunnel(); renderSix(); renderSheet(); renderUsers(); renderContractors(); renderLogins(); renderActivity(); try { renderMap(); } catch (e) { console.warn(e); } }
 function renderSix() {
   const days = +document.getElementById('period').value, since = Date.now() - days * 864e5;
   const logins = D.logins.filter(l => l.success && new Date(l.at) >= since);
