@@ -407,6 +407,14 @@ begin
         rejected := rejected || jsonb_build_array(jsonb_build_object('c', x->>'c', 'id', x->>'id')); continue;
       end if;
       d := prev.data || jsonb_build_object('status', d->'status', 'supervisor', d->'supervisor', 'history', d->'history');
+    elsif u.role in ('production_manager', 'supervisor', 'gm_production') and x->>'c' = 'resignations'
+          and prev.collection is not null and coalesce(prev.data->>'status', '') = 'Pending Supervisor Clearance' then
+      -- exit clearance by the division: accept and clear, or note what is pending; nothing else on the request changes
+      if not cw_in_div(u.division, prev.division)
+         or coalesce(d->>'status', '') not in ('Pending Supervisor Clearance', 'Production Cleared') then
+        rejected := rejected || jsonb_build_array(jsonb_build_object('c', x->>'c', 'id', x->>'id')); continue;
+      end if;
+      d := prev.data || jsonb_build_object('status', d->'status', 'prodClearance', d->'prodClearance', 'history', d->'history');
     elsif not cw_can_write(u, x->>'c', prev, x->>'contractor', x->>'division') then
       rejected := rejected || jsonb_build_array(jsonb_build_object('c', x->>'c', 'id', x->>'id')); continue;
     end if;
@@ -416,6 +424,18 @@ begin
         rejected := rejected || jsonb_build_array(jsonb_build_object('c', x->>'c', 'id', x->>'id')); continue;
       end if;
       d := prev.data || jsonb_build_object('status', d->'status', 'queryRemarks', coalesce(d->'queryRemarks', prev.data->'queryRemarks', 'null'::jsonb));
+    end if;
+    if x->>'c' = 'resignations' and u.role = 'contractor' then
+      -- contractors raise a request (to HR), may edit it while HR has not looked at it, and close it after HR's exit clearance
+      if prev.collection is null then
+        if coalesce(d->>'status', '') <> 'Pending HR Review' then
+          rejected := rejected || jsonb_build_array(jsonb_build_object('c', x->>'c', 'id', x->>'id')); continue;
+        end if;
+      elsif coalesce(prev.data->>'status', '') = 'HR Cleared' and coalesce(d->>'status', '') = 'Closed' then
+        d := prev.data || jsonb_build_object('status', d->'status', 'contractorClosure', d->'contractorClosure', 'history', d->'history');
+      elsif not (coalesce(prev.data->>'status', '') = 'Pending HR Review' and coalesce(d->>'status', '') = 'Pending HR Review') then
+        rejected := rejected || jsonb_build_array(jsonb_build_object('c', x->>'c', 'id', x->>'id')); continue;
+      end if;
     end if;
     if x->>'c' = 'candidates' and u.role = 'contractor' then
       if coalesce(prev.data->>'status', '') = 'Approved for Onboarding' and coalesce(d->>'status', '') in ('Joined', 'Not Joined') then
