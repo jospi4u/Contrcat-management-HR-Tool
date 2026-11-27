@@ -60,6 +60,9 @@ alter table app_users add column if not exists created_at timestamptz not null d
 alter table app_users add column if not exists last_login timestamptz;
 alter table app_users add column if not exists emp_id      text;          -- for worker logins: their Employee ID
 alter table app_users add column if not exists must_change boolean not null default false;  -- change password at next sign-in
+alter table app_users add column if not exists access text not null default 'editor';   -- editor: can change things / viewer: can only look
+alter table app_users drop constraint if exists app_users_access_check;
+alter table app_users add constraint app_users_access_check check (access in ('editor', 'viewer'));
 alter table app_users drop constraint if exists app_users_role_check;
 alter table app_users add constraint app_users_role_check
   check (role in ('admin','hr_admin','gm_production','production_manager','supervisor','contractor','employee','store'));
@@ -135,7 +138,7 @@ $$;
 create or replace function cw_user_json(u app_users) returns jsonb language sql stable as $$
   select jsonb_build_object('user', u.user_id, 'role', u.role, 'contractor', u.contractor, 'division', u.division, 'name', u.name,
                             'empId', u.emp_id, 'mustChange', u.must_change, 'hrHead', cw_is_hr_head(u),
-                            'ppeAdmin', cw_ppe_desk(u, 'admin'), 'ppeStore', cw_ppe_desk(u, 'store'))
+                            'ppeAdmin', cw_ppe_desk(u, 'admin'), 'ppeStore', cw_ppe_desk(u, 'store'), 'access', coalesce(u.access, 'editor'))
 $$;
 
 -- where events are copied to (the admin's Google Sheet); only the sign-in layer and admins receive it
@@ -368,6 +371,10 @@ declare
   w_con text; w_div text; n_con text; n_div text; n_emp text;
 begin
   u := cw_auth(p_user, p_key);
+  if coalesce(u.access, 'editor') = 'viewer' then   -- view-only logins can look but never change anything
+    return jsonb_build_object('saved', 0, 'viewOnly', true, 'rejected', coalesce((select jsonb_agg(jsonb_build_object('c', e->>'c', 'id', e->>'id'))
+      from jsonb_array_elements(coalesce(p_upserts, '[]'::jsonb) || coalesce(p_deletes, '[]'::jsonb)) e), '[]'::jsonb));
+  end if;
   if u.role = 'employee' then   -- a worker's contractor and division always come from their own worker record
     select contractor, division into w_con, w_div from records where collection = 'workers' and id = u.emp_id;
   end if;
@@ -547,7 +554,7 @@ returns jsonb language plpgsql volatile security definer set search_path = publi
 declare u app_users; prev documents;
 begin
   u := cw_auth(p_user, p_key);
-  if u.role not in ('hr_admin', 'admin', 'contractor') then raise exception 'not allowed' using errcode = '42501'; end if;
+  if u.role not in ('hr_admin', 'admin', 'contractor') or coalesce(u.access, 'editor') = 'viewer' then raise exception 'not allowed' using errcode = '42501'; end if;
   if p_id !~ '^[A-Za-z0-9_-]{8,64}$' then raise exception 'bad id' using errcode = '22023'; end if;
   if length(coalesce(p_data, '')) > 4000000 then raise exception 'file too large' using errcode = '54000'; end if;
   if p_kind not in ('aadhaar', 'cv', 'education', 'other') then p_kind := 'other'; end if;
@@ -607,7 +614,7 @@ begin
   return jsonb_build_object(
     'users', coalesce((select jsonb_agg(jsonb_build_object('user', user_id, 'role', role, 'contractor', contractor, 'division', division,
                           'name', name, 'active', active, 'created_at', created_at, 'last_login', last_login, 'has_password', fp is not null,
-                          'empId', emp_id, 'mustChange', must_change, 'email', email)
+                          'empId', emp_id, 'mustChange', must_change, 'email', email, 'access', coalesce(access, 'editor'))
                         order by role, user_id) from app_users), '[]'::jsonb),
     'logins', coalesce((select jsonb_agg(x order by x.at desc) from
                         (select at, user_id, success, ip, user_agent, note from login_events order by at desc limit 500) x), '[]'::jsonb),
@@ -879,6 +886,20 @@ end $$;
 drop trigger if exists records_notify on records;
 create trigger records_notify after insert or update on records for each row execute function cw_notify();
 
+-- Admin Portal: Editor (can change things) or Viewer (can only look) for a login
+create or replace function cw_admin_set_access(p_user text, p_key text, p_target text, p_access text) returns jsonb
+language plpgsql volatile security definer set search_path = public as $$
+declare u app_users; t text := lower(trim(coalesce(p_target, '')));
+begin
+  u := cw_admin(p_user, p_key);
+  if p_access not in ('editor', 'viewer') then raise exception 'Choose Editor or Viewer' using errcode = '22023'; end if;
+  if t = u.user_id and p_access = 'viewer' then raise exception 'You cannot make your own admin login view-only' using errcode = '22023'; end if;
+  update app_users set access = p_access where user_id = t;
+  if not found then raise exception 'no such login' using errcode = 'P0002'; end if;
+  insert into audit_log (user_id, text) values (u.user_id, 'Admin set ' || t || ' to ' || case when p_access = 'viewer' then 'Viewer (view only)' else 'Editor' end);
+  return jsonb_build_object('ok', true);
+end $$;
+
 -- Admin Portal: set a login's email, turn emails on / off, send a test email
 create or replace function cw_admin_set_email(p_user text, p_key text, p_target text, p_email text) returns jsonb
 language plpgsql volatile security definer set search_path = public as $$
@@ -1048,7 +1069,7 @@ grant execute on function cw_login_salt(text), cw_login(text, text, text, text),
   cw_admin_delete_user(text, text, text), cw_admin_set_contractors(text, text, jsonb), cw_admin_rename_contractor(text, text, text, text),
   cw_admin_set_sheet(text, text, text, text, boolean), cw_admin_sheet_send(text, text, text, jsonb),
   cw_admin_create_logins(text, text, jsonb), cw_change_password(text, text, text, text),
-  cw_admin_set_email(text, text, text, text), cw_admin_mail(text, text, text, text)
+  cw_admin_set_email(text, text, text, text), cw_admin_mail(text, text, text, text), cw_admin_set_access(text, text, text, text)
   to anon, authenticated;
 
 revoke all on function cw_auth(text, text), cw_load(text, text), cw_save(text, text, jsonb, jsonb, jsonb, jsonb) from public;
