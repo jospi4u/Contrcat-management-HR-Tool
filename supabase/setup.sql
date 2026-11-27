@@ -294,7 +294,8 @@ language sql stable as $$
     when 'contractor' then
       (r.collection in ('workers','pendingSubmissions','candidates','resignations','payrollRuns',
                         'wageRegisters','invoices','attendanceRecords','exitClearances',
-                        'punches','leaveRequests')   -- contractor dashboard: their own workers present / on leave today
+                        'punches','leaveRequests',   -- contractor dashboard: their own workers present / on leave today
+                        'contractorDocs')            -- Document Center: their own agreements, licence, Form II
         and cw_norm(r.contractor) = cw_norm(u.contractor))
       or (r.collection = 'requisitions' and exists (
             select 1 from jsonb_array_elements_text(coalesce(r.data->'assignedContractors', '[]'::jsonb)) a
@@ -322,6 +323,7 @@ returns boolean language sql stable as $$
         p_coll in ('pendingSubmissions','candidates','resignations')
         or (p_coll = 'payrollRuns' and prev.collection is not null)      -- confirm / query existing rows only
         or (p_coll = 'invoices' and (prev is null or prev.collection is null))  -- raise new invoices only
+        or p_coll = 'contractorDocs'                                            -- their own documents (HR validates; see cw_save)
       )
     when 'gm_production' then (p_coll = 'requisitions' and prev.collection is not null)
       -- GM who is also a division's HOD: the HOD's rights in that division
@@ -441,6 +443,12 @@ begin
       elsif coalesce(prev.data->>'status', '') = 'HR Cleared' and coalesce(d->>'status', '') = 'Closed' then
         d := prev.data || jsonb_build_object('status', d->'status', 'contractorClosure', d->'contractorClosure', 'history', d->'history');
       elsif not (coalesce(prev.data->>'status', '') = 'Pending HR Review' and coalesce(d->>'status', '') = 'Pending HR Review') then
+        rejected := rejected || jsonb_build_array(jsonb_build_object('c', x->>'c', 'id', x->>'id')); continue;
+      end if;
+    end if;
+    if x->>'c' = 'contractorDocs' and u.role = 'contractor' then
+      -- Document Center: a contractor uploads or renews their own document; it always goes back to HR for validation
+      if coalesce(d->>'status', '') <> 'Pending HR Validation' or cw_norm(d->>'contractor') <> cw_norm(u.contractor) then
         rejected := rejected || jsonb_build_array(jsonb_build_object('c', x->>'c', 'id', x->>'id')); continue;
       end if;
     end if;
