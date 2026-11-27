@@ -1572,6 +1572,7 @@
 
                 <!-- Contractor: raise resignation -->
                 <div id="exit-contractor-section" style="display:none;">
+                    <div id="exit-contractor-flow"></div>
                     <div class="section-header">Raise Resignation / Report Exit</div>
                     <div class="mini-form">
                         <div class="form-group"><label>Worker</label>
@@ -1621,6 +1622,7 @@
 
                 <!-- Production Manager / Supervisor: give clearance -->
                 <div id="exit-department-section" style="display:none;">
+                    <div id="exit-sup-flow"></div>
                     <div class="section-header">Pending Exit Clearances — My Division</div>
                     <div class="table-wrapper">
                         <table>
@@ -6410,6 +6412,227 @@
             NOTIF.list = function () { const out = nl(); if (currentRole === 'hr_admin' && PIPE.isHead()) workers.filter(w => w.pendingRevision).forEach(w => out.unshift({ lvl: 'amber', text: 'Approve salary revision: ' + w.name + ' (' + w.empId + ') → ' + HRM.inr(w.pendingRevision.toGross), fn: "HRM.go('" + w.empId + "');HRM.tab='actions';HRM.renderProfile()" })); return out; };
             const sb = statusBadge;
             statusBadge = function (s) { if (s === 'Notice Period' || s === 'On Hold') return '<span class="badge badge-pending">' + s + '</span>'; if (s === 'Rejoined' || s === 'Transferred') return '<span class="badge badge-active">' + s + '</span>'; if (s === 'Relieved') return '<span class="badge badge-neutral">Relieved</span>'; return sb(s); };
+        })();
+
+        /* =====================================================================
+           1) Notifications can be dismissed once read. A dismissed notice comes back by itself when
+              something new happens to it (its wording changes: new stage, new date, new count).
+           2) Birthdays and work anniversaries: only on the day itself, in two short columns.
+           3) Resignation / exit workflow:
+              Contractor submits → HR confirms (Pending Supervisor Clearance; Production Manager notified, view only)
+              → Supervisor accepts and clears (Production Cleared; HR and contractor notified)
+              → HR final exit clearance (HR Cleared) → Contractor confirms → Closed.
+           ===================================================================== */
+        Object.assign(NOTIF, {
+            showDismissed: false,
+            dkey() { return 'aw_dismissed_' + ((signedInUser && signedInUser.user) || currentRole || 'local'); },
+            keyOf(x) { return x.key || x.text; },
+            dismissed() { try { return new Set(JSON.parse(localStorage.getItem(this.dkey()) || '[]')); } catch (e) { return new Set(); } },
+            saveDismissed(set) { try { localStorage.setItem(this.dkey(), JSON.stringify(Array.from(set).slice(-500))); } catch (e) { } },
+            // what to show: everything not dismissed; dismissed keys that no longer appear are forgotten, so the same notice can come back later
+            visible() {
+                const all = this.list(), d = this.dismissed(), live = new Set(all.map(x => this.keyOf(x)));
+                const kept = new Set(Array.from(d).filter(k => live.has(k))); if (kept.size !== d.size) this.saveDismissed(kept);
+                return { shown: all.filter(x => !kept.has(this.keyOf(x))), hidden: all.filter(x => kept.has(this.keyOf(x))) };
+            },
+            dismiss(k) { const d = this.dismissed(); d.add(k); this.saveDismissed(d); this.render(); try { DASH.render(); } catch (e) { } },
+            dismissAll() { const d = this.dismissed(); this.list().forEach(x => d.add(this.keyOf(x))); this.saveDismissed(d); this.render(); try { DASH.render(); } catch (e) { } },
+            restore(k) { const d = this.dismissed(); d.delete(k); this.saveDismissed(d); this.render(); try { DASH.render(); } catch (e) { } },
+            color(l) { return l === 'red' ? 'var(--aw-danger,#e5484d)' : l === 'amber' ? 'var(--aw-gold)' : 'var(--aw-muted)'; },
+            row(x, dismissable) {
+                const k = escH(JSON.stringify(this.keyOf(x)));
+                return '<div style="display:flex;gap:6px;align-items:flex-start;padding:7px 4px 7px 8px;border-bottom:1px solid var(--aw-line,#333);border-left:3px solid ' + this.color(x.lvl) + ';font-size:12px' + (dismissable ? '' : ';opacity:.55') + '">' +
+                    '<span style="flex:1;cursor:pointer" onclick="NOTIF.toggle(false);' + escH(x.fn) + '">' + escH(x.text) + '</span>' +
+                    (dismissable ? '<button type="button" title="Dismiss" class="cw-btn-ghost" style="min-height:22px;padding:0 7px" onclick="event.stopPropagation();NOTIF.dismiss(' + k + ')">✕</button>' : '<button type="button" title="Show again" class="cw-btn-ghost" style="min-height:22px;padding:0 7px" onclick="event.stopPropagation();NOTIF.restore(' + k + ')">↺</button>') + '</div>';
+            },
+            render() {
+                let b = document.getElementById('notif-btn');
+                if (!b) {
+                    const badge = document.getElementById('role-badge'); if (!badge) return;
+                    b = document.createElement('button'); b.id = 'notif-btn'; b.type = 'button'; b.title = 'Notifications';
+                    b.style.cssText = 'background:transparent;border:1px solid var(--aw-gold-line);color:var(--aw-gold);padding:4px 10px;margin-left:8px;min-height:30px;cursor:pointer;position:relative';
+                    b.onclick = () => NOTIF.toggle(); badge.parentNode.insertBefore(b, badge);
+                    const p = document.createElement('div'); p.id = 'notif-panel';
+                    p.style.cssText = 'display:none;position:fixed;top:60px;right:16px;width:min(420px,calc(100vw - 32px));max-height:70vh;overflow:auto;z-index:50;background:var(--aw-black,#111);border:1px solid var(--aw-gold-line);padding:10px;box-shadow:0 10px 30px rgba(0,0,0,.5)';
+                    document.body.appendChild(p);
+                }
+                const v = this.visible(), reds = v.shown.filter(x => x.lvl === 'red').length;
+                b.innerHTML = '🔔 ' + v.shown.length + (reds ? ' <span style="color:var(--aw-danger,#e5484d)">●</span>' : '');
+                document.getElementById('notif-panel').innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:6px"><b style="color:var(--aw-gold)">Notifications</b><span>' +
+                    (v.shown.length ? '<button type="button" class="cw-btn-ghost" style="min-height:24px;padding:2px 8px" onclick="NOTIF.dismissAll()">Mark all read</button> ' : '') + '<button type="button" class="cw-btn-ghost" style="min-height:24px;padding:2px 8px" onclick="NOTIF.toggle(false)">Close</button></span></div>' +
+                    (v.shown.length ? v.shown.map(x => this.row(x, true)).join('') : '<p style="color:var(--aw-muted);font-size:12px">You\'re all caught up.</p>') +
+                    (v.hidden.length ? '<div style="margin-top:8px;font-size:11px"><a href="#" onclick="NOTIF.showDismissed=!NOTIF.showDismissed;NOTIF.render();return false;">' + (this.showDismissed ? 'Hide' : 'Show') + ' ' + v.hidden.length + ' dismissed</a></div>' + (this.showDismissed ? v.hidden.map(x => this.row(x, false)).join('') : '') : '') +
+                    '<p style="font-size:10px;color:var(--aw-muted);margin-top:6px">A dismissed notification comes back when something new happens to it. Email alerts will be added later.</p>';
+            },
+            dashHtml() {
+                const v = this.visible(); if (!v.shown.length) return '';
+                return '<div class="section-header">Waiting for you <a href="#" style="font-size:11px;margin-left:8px" onclick="NOTIF.dismissAll();return false;">mark all read</a></div><div class="cw-panel" style="margin-bottom:12px;padding:6px">' + v.shown.slice(0, 8).map(x => this.row(x, true)).join('') + (v.shown.length > 8 ? '<div style="font-size:11px;color:var(--aw-muted);padding:4px">+' + (v.shown.length - 8) + ' more under 🔔</div>' : '') + '</div>';
+            }
+        });
+
+        /* ---- birthdays & anniversaries: today only, two columns ---- */
+        SOC.celebrations = function () {
+            const t = DASH.iso(new Date()), md = t.slice(5), list = DASH.scope().filter(w => isWorking(w.status) || w.status === 'Onboarding'), out = [];
+            list.forEach(w => {
+                if (/^\d{4}-\d{2}-\d{2}/.test(w.dob || '') && w.dob.slice(5, 10) === md) out.push({ w, kind: 'birthday' });
+                if (/^\d{4}-\d{2}-\d{2}/.test(w.doj || '') && w.doj.slice(5, 10) === md) { const yrs = +t.slice(0, 4) - +w.doj.slice(0, 4); if (yrs >= 1) out.push({ w, kind: 'anniversary', yrs }); }
+            });
+            return out;
+        };
+        SOC.celebHtml = function () {
+            const c = this.celebrations(); if (!c.length) return '';
+            const b = c.filter(x => x.kind === 'birthday'), a = c.filter(x => x.kind === 'anniversary');
+            const col = (title, icon, rows, fmt) => '<div class="cw-panel" style="margin:0;padding:8px 10px"><b style="color:var(--aw-gold);font-size:12px">' + icon + ' ' + title + ' (' + rows.length + ')</b>' +
+                (rows.length ? rows.slice(0, 15).map(x => '<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--aw-line,#333)">' + escH(x.w.name) + ' <span style="color:var(--aw-muted);font-size:11px">' + escH(x.w.empId) + (fmt ? ' · ' + fmt(x) : '') + '</span></div>').join('') + (rows.length > 15 ? '<div style="font-size:11px;color:var(--aw-muted)">+' + (rows.length - 15) + ' more</div>' : '') : '<div style="font-size:11px;color:var(--aw-muted);padding:3px 0">None today</div>') + '</div>';
+            return '<div class="section-header">Today\'s celebrations</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:12px">' +
+                col('Birthdays', '🎂', b) + col('Work anniversaries', '🎉', a, x => x.yrs + (x.yrs === 1 ? ' year' : ' years')) + '</div>';
+        };
+
+        /* ---- resignation / exit workflow ---- */
+        var EXITX = {
+            ST: { HR: 'Pending HR Review', SUP: 'Pending Supervisor Clearance', PROD: 'Production Cleared', HRC: 'HR Cleared', CLOSED: 'Closed' },
+            SUP_CHECKS: ['Work and responsibilities handed over', 'Tools, equipment and machine keys returned', 'PPE returned', 'ID card / gate pass returned', 'No pending production dues or damages'],
+            HR_CHECKS: ['Full and final settlement worked out', 'ID card and company documents collected', 'PF / ESI exit updated', 'Relieving / experience letter issued', 'No pending advances or recoveries'],
+            me() { return (signedInUser && signedInUser.name) || ROLE_LABELS[currentRole] || ''; },
+            now() { return new Date().toISOString(); },
+            hist(r, what, remarks) { r.history = (r.history || []).concat([{ at: new Date().toLocaleString(), iso: this.now(), by: this.me() + (ROLE_LABELS[currentRole] && ROLE_LABELS[currentRole] !== this.me() ? ' (' + ROLE_LABELS[currentRole] + ')' : ''), what, remarks: remarks || '' }]); },
+            inDiv(r) { return String((signedInUser && signedInUser.division) || currentDivision || '').split('|').includes(r.division); },
+            steps(r) {
+                const order = [this.ST.HR, this.ST.SUP, this.ST.PROD, this.ST.HRC, this.ST.CLOSED], i = order.indexOf(r.status), labels = ['HR confirmation', 'Supervisor clearance', 'HR exit clearance', 'Contractor confirmation', 'Closed'];
+                if (i < 0) return '';
+                return '<div style="display:flex;gap:4px;flex-wrap:wrap;margin:6px 0">' + labels.map((l, k) => '<span class="badge ' + (k < i || r.status === this.ST.CLOSED ? 'badge-active' : k === i ? 'badge-pending' : 'badge-neutral') + '">' + (k + 1) + '. ' + l + '</span>').join('') + '</div>';
+            },
+            finalFor(cat) { return { 'Termination': 'Terminated', 'Absconding': 'Absconded', 'Contract Completion / Expiry': 'Contract Completed' }[cat] || 'Relieved'; },
+            checklist(name, items, saved) { return items.map((t, i) => '<label style="display:block;font-weight:normal;text-transform:none;letter-spacing:0;font-size:12px"><input type="checkbox" class="' + name + '" style="width:auto"' + (saved && saved[i] ? ' checked' : '') + '> ' + escH(t) + '</label>').join(''); },
+
+            // step 2 — HR confirms the contractor's request
+            confirm(rid) {
+                const r = resignations.find(x => x.id === rid), w = r && workers.find(x => x.empId === r.empId); if (!r || !w || currentRole !== 'hr_admin') return;
+                const lwd = (document.getElementById('sx-lwd') || {}).value || r.lwd, rem = ((document.getElementById('sx-rem') || {}).value || '').trim(), cat = r.category || (r.type === 'Immediate' ? 'Absconding' : 'Resignation');
+                if (cat === 'Transfer to Another Contractor') return HRM.acceptSep(rid);   // a transfer is not an exit: applied straight away
+                const to = lwd > HRM.day() && !['Absconding', 'Termination', 'Death in Service'].includes(cat) ? 'Notice Period' : HRM.sepStatus(cat, lwd);
+                w.separation = Object.assign({}, w.separation, { category: cat, resignDate: r.resignDate, noticeDays: r.noticeDays, lwd, relievingDate: (w.separation || {}).relievingDate || lwd, reason: r.reason, remarks: [r.remarks, rem].filter(Boolean).join(' · '), source: r.source || 'contractor', requestId: r.id,
+                    shortNoticeDays: r.noticeDays ? Math.max(0, r.noticeDays - HRM.daysBetween(r.resignDate, lwd)) : 0, noticeServed: (w.separation || {}).noticeServed || 'Serving', exitInterview: 'Pending', fnf: 'Pending', clearance: 'In progress' });
+                w.lwd = lwd; w.exitReason = r.reason;
+                const from = w.status || 'Active'; if (from !== to) { w.status = to; w.statusHistory = (w.statusHistory || []).concat([{ from, to, date: HRM.day(), remarks: cat + ' confirmed by HR', by: this.me(), at: this.now() }]); }
+                r.status = this.ST.SUP; r.lwd = lwd; r.hrRemarks = rem; r.hrConfirm = { by: this.me(), at: this.now(), remarks: rem }; r.category = cat;
+                this.hist(r, 'HR confirmed — sent to the Supervisor for exit clearance', rem);
+                HRM.log(w, 'Exit', 'HR confirmed ' + cat + ' (last working day ' + HRM.nice(lwd) + ') — sent to the Supervisor for clearance');
+                persistAll(); this.refresh();
+            },
+            // step 3 — Supervisor accepts and confirms production exit clearance
+            supClear(rid) {
+                const r = resignations.find(x => x.id === rid); if (!r || r.status !== this.ST.SUP) return;
+                const boxes = Array.from(document.querySelectorAll('.ex-sup-' + rid.replace(/\W/g, ''))), checks = boxes.map(b => b.checked), rem = (document.getElementById('ex-sup-rem-' + rid) || {}).value || '';
+                if (checks.some(c => !c)) { alert('Please confirm every clearance item. If something is pending, note it in the remarks and save without clearing.'); return; }
+                r.status = this.ST.PROD; r.prodClearance = { checks, remarks: rem.trim(), by: this.me(), role: ROLE_LABELS[currentRole], at: this.now() };
+                this.hist(r, 'Supervisor accepted the resignation and confirmed production exit clearance', rem.trim());
+                persistAll(); this.refresh();
+            },
+            supNote(rid) {
+                const r = resignations.find(x => x.id === rid); if (!r || r.status !== this.ST.SUP) return;
+                const rem = ((document.getElementById('ex-sup-rem-' + rid) || {}).value || '').trim(); if (!rem) { alert('Write what is still pending.'); return; }
+                r.prodClearance = Object.assign({}, r.prodClearance, { pending: rem, by: this.me(), at: this.now() }); this.hist(r, 'Supervisor: clearance pending', rem); persistAll(); this.refresh();
+            },
+            // step 4 — HR final exit clearance
+            hrClear(rid) {
+                const r = resignations.find(x => x.id === rid), w = r && workers.find(x => x.empId === r.empId); if (!r || !w || currentRole !== 'hr_admin' || r.status !== this.ST.PROD) return;
+                const checks = Array.from(document.querySelectorAll('.ex-hr')).map(b => b.checked); if (checks.some(c => !c)) { alert('Please confirm every HR clearance item.'); return; }
+                const rel = document.getElementById('ex-hr-rel').value || r.lwd, fnf = document.getElementById('ex-hr-fnf').value, to = document.getElementById('ex-hr-status').value, rem = document.getElementById('ex-hr-rem').value.trim();
+                r.status = this.ST.HRC; r.finalStatus = to; r.hrClearance = { checks, relievingDate: rel, fnf, remarks: rem, by: this.me(), at: this.now() };
+                this.hist(r, 'HR exit clearance completed — ' + to + ', relieved on ' + HRM.nice(rel), rem);
+                w.separation = Object.assign({}, w.separation, { relievingDate: rel, fnf, clearance: 'Cleared', exitInterview: (w.separation || {}).exitInterview === 'Pending' ? 'Completed' : (w.separation || {}).exitInterview, noticeServed: (w.separation || {}).noticeServed === 'Serving' ? ((w.separation || {}).shortNoticeDays ? 'Partly served' : 'Served') : (w.separation || {}).noticeServed });
+                const from = w.status || 'Active'; if (from !== to) { w.status = to; w.statusHistory = (w.statusHistory || []).concat([{ from, to, date: rel, remarks: 'HR exit clearance', by: this.me(), at: this.now() }]); }
+                HRM.log(w, 'Exit', 'HR exit clearance completed — ' + to + ' on ' + HRM.nice(rel) + ' (F&F: ' + fnf + ')');
+                persistAll(); this.refresh();
+            },
+            // step 5 — contractor confirms and closes
+            contractorClose(rid) {
+                const r = resignations.find(x => x.id === rid); if (!r || currentRole !== 'contractor' || r.status !== this.ST.HRC) return;
+                const rem = ((document.getElementById('ex-c-rem-' + rid) || {}).value || '').trim();
+                r.status = this.ST.CLOSED; r.contractorClosure = { by: currentContractorName, at: this.now(), remarks: rem };
+                this.hist(r, 'Contractor confirmed — resignation closed', rem); persistAll(); this.refresh();
+            },
+            refresh() { try { HRM.render(); NOTIF.render(); DASH.render(); renderResignations(); renderExitClearance(); this.renderSup(); this.renderMine(); } catch (e) { console.warn(e); } },
+
+            // one card per request: who it is, its steps, its history and what the viewer can do now
+            card(r) {
+                const role = currentRole, w = workers.find(x => x.empId === r.empId) || {}, id = r.id, cls = 'ex-sup-' + id.replace(/\W/g, '');
+                const f = (l, v) => v ? '<div><span>' + escH(l) + '</span>' + escH(String(v)) + '</div>' : '';
+                let act = '';
+                if (r.status === this.ST.SUP && (role === 'supervisor' || role === 'production_manager' || role === 'gm_production') && this.inDiv(r)) {
+                    act = (role === 'supervisor' ? '' : '<p class="cw-hint">View only for the Production Manager — the Supervisor clears this. Use the button below only if the division has no supervisor.</p>') +
+                        '<div style="margin:6px 0">' + this.checklist(cls, this.SUP_CHECKS, r.prodClearance && r.prodClearance.checks) + '</div>' + (r.prodClearance && r.prodClearance.pending ? '<div class="access-note">Pending: ' + escH(r.prodClearance.pending) + '</div>' : '') +
+                        '<div class="cw-decision"><div class="form-group" style="flex:1;min-width:220px"><label>Remarks</label><input type="text" id="ex-sup-rem-' + escH(id) + '"></div>' +
+                        '<button type="button"' + (role === 'supervisor' ? '' : ' class="cw-btn-ghost"') + ' onclick="EXITX.supClear(\'' + escH(id) + '\')">' + (role === 'supervisor' ? 'Accept and confirm exit clearance' : 'Clear for the supervisor') + '</button><button type="button" class="cw-btn-ghost" onclick="EXITX.supNote(\'' + escH(id) + '\')">Save — clearance pending</button></div>';
+                }
+                if (r.status === this.ST.PROD && role === 'hr_admin') act = '<div class="section-header">HR exit clearance</div>' + this.checklist('ex-hr', this.HR_CHECKS) +
+                    '<div class="cw-decision"><div class="form-group"><label>Relieving date</label><input type="date" id="ex-hr-rel" value="' + escH((w.separation || {}).relievingDate || r.lwd || '') + '"></div>' +
+                    '<div class="form-group"><label>F&amp;F settlement</label><select id="ex-hr-fnf"><option>Processed</option><option>Paid</option><option>Pending</option></select></div>' +
+                    '<div class="form-group"><label>Final status</label><select id="ex-hr-status">' + ['Relieved', 'Resigned', 'Terminated', 'Absconded', 'Contract Completed'].map(s => '<option' + (s === this.finalFor(r.category) ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></div>' +
+                    '<div class="form-group" style="flex:1;min-width:200px"><label>Remarks</label><input type="text" id="ex-hr-rem"></div><button type="button" onclick="EXITX.hrClear(\'' + escH(id) + '\')">Complete HR exit clearance</button></div>';
+                if (r.status === this.ST.HRC && role === 'contractor') act = '<div class="cw-decision"><div class="form-group" style="flex:1;min-width:220px"><label>Your remarks</label><input type="text" id="ex-c-rem-' + escH(id) + '"></div><button type="button" onclick="EXITX.contractorClose(\'' + escH(id) + '\')">Confirm and close</button></div>';
+                const pc = r.prodClearance, hc = r.hrClearance;
+                return '<div class="cw-panel" style="margin:8px 0"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b style="color:var(--aw-gold)">' + escH(r.name) + ' · ' + escH(r.empId) + '</b><span>' + statusBadge(r.status) + '</span></div>' + this.steps(r) +
+                    '<div class="cw-detail-grid">' + f('Category', r.category || r.type) + f('Contractor', r.contractor) + f('Department', [r.division, r.department].filter(Boolean).join(' · ')) + f('Designation', r.designation || w.designation) + f('Submitted', HRM.nice(r.resignDate)) + f('Last working day', HRM.nice(r.lwd)) + f('Reason', r.reason) +
+                    f('HR confirmed', r.hrConfirm && r.hrConfirm.by + ' · ' + HRM.nice(r.hrConfirm.at)) + f('Production clearance', pc && pc.at && pc.checks ? pc.by + ' · ' + HRM.nice(pc.at) + (pc.remarks ? ' · ' + pc.remarks : '') : '') + f('HR clearance', hc && hc.by + ' · relieved ' + HRM.nice(hc.relievingDate) + ' · F&F ' + hc.fnf) + f('Closed by contractor', r.contractorClosure && r.contractorClosure.by + ' · ' + HRM.nice(r.contractorClosure.at)) + '</div>' + act + '</div>';
+            },
+            // Supervisor / Production Manager: requests in their division (Exit & Clearance tab)
+            renderSup() {
+                const box = document.getElementById('exit-sup-flow'); if (!box) return;
+                if (!['supervisor', 'production_manager', 'gm_production'].includes(currentRole)) { box.innerHTML = ''; return; }
+                const list = resignations.filter(r => this.inDiv(r) && [this.ST.SUP, this.ST.PROD, this.ST.HRC].includes(r.status)).sort((a, b) => (a.status === this.ST.SUP ? 0 : 1) - (b.status === this.ST.SUP ? 0 : 1));
+                box.innerHTML = '<div class="section-header">Resignations — exit clearance' + (currentRole === 'supervisor' ? '' : ' (view only)') + '</div>' + (list.length ? list.map(r => this.card(r)).join('') : '<p class="cw-hint">No resignations waiting for clearance.</p>');
+            },
+            // Contractor: their requests and what they still have to do (Exit & Clearance tab)
+            renderMine() {
+                const box = document.getElementById('exit-contractor-flow'); if (!box) return;
+                if (currentRole !== 'contractor') { box.innerHTML = ''; return; }
+                const list = resignations.filter(r => cw_normJs(r.contractor) === cw_normJs(currentContractorName) && [this.ST.HR, this.ST.SUP, this.ST.PROD, this.ST.HRC].includes(r.status));
+                box.innerHTML = list.length ? '<div class="section-header">Resignations in progress</div>' + list.map(r => this.card(r)).join('') : '';
+            }
+        };
+        (function () {
+            // only a request waiting for HR shows HR's confirm card; any request in progress stops a second one being raised
+            HRM.openReq = function (w) { return resignations.find(r => r.empId === w.empId && r.status === EXITX.ST.HR && !r.closedByRejoin); };
+            const sf = HRM.sepForm.bind(HRM);
+            HRM.sepForm = function (w) { const busy = resignations.some(r => r.empId === w.empId && ['Pending Supervisor', EXITX.ST.HR, EXITX.ST.SUP, EXITX.ST.PROD, EXITX.ST.HRC].includes(r.status)); return busy ? '<p class="cw-hint">A separation request for this employee is already in progress — see above.</p>' : sf(w); };
+            // HR's "Accept" in the Exit & Clearance tab now opens the request in the employee's Separation & Exit tab
+            acceptResignation = function (id) { const r = resignations.find(x => x.id === id); if (!r) return; HRM.go(r.empId); HRM.tab = 'separation'; HRM.renderProfile(); };
+            // HRM's Accept button on a request becomes "Confirm", which starts the supervisor clearance
+            HRM.acceptSepDirect = HRM.acceptSep;
+            HRM.acceptSep = function (rid) { const r = resignations.find(x => x.id === rid); if (r && r.category === 'Transfer to Another Contractor') return HRM.acceptSepDirect(rid); return EXITX.confirm(rid); };
+            const ts = HRM.t_separation.bind(HRM);
+            HRM.t_separation = function (w) {
+                let h = ts(w).replace('>Accept</button>', '>Confirm — send to Supervisor for clearance</button>');
+                const flow = resignations.filter(r => r.empId === w.empId && [EXITX.ST.SUP, EXITX.ST.PROD, EXITX.ST.HRC].includes(r.status));
+                return (flow.length ? flow.map(r => EXITX.card(r)).join('') : '') + h;
+            };
+            const sb = statusBadge;
+            statusBadge = function (s) { if (s === EXITX.ST.SUP || s === EXITX.ST.HRC) return '<span class="badge badge-pending">' + s + '</span>'; if (s === EXITX.ST.PROD) return '<span class="badge badge-active">' + s + '</span>'; if (s === EXITX.ST.CLOSED) return '<span class="badge badge-neutral">Closed</span>'; return sb(s); };
+            const st = switchTab; switchTab = function (id) { st(id); if (id === 'exit-clearance') { EXITX.renderSup(); EXITX.renderMine(); } };
+            const rr = SYNC.rerender.bind(SYNC); SYNC.rerender = function () { rr(); const a = document.activeElement; if (!(a && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && a.closest('#exit-clearance'))) { try { EXITX.renderSup(); EXITX.renderMine(); } catch (e) { } } };
+            const arp = applyRolePermissions; applyRolePermissions = function () { arp(); try { EXITX.renderSup(); EXITX.renderMine(); } catch (e) { } };
+            // who is told what at each step
+            const nl = NOTIF.list.bind(NOTIF);
+            NOTIF.list = function () {
+                const out = nl(), r0 = currentRole, add = (lvl, text, fn) => out.push({ lvl, text, fn });
+                const open = r => "PIPE.go('exit-clearance')", prof = r => "HRM.go('" + r.empId + "');HRM.tab='separation';HRM.renderProfile()";
+                resignations.forEach(r => {
+                    if (r0 === 'hr_admin') {
+                        if (r.status === EXITX.ST.HR) add('amber', 'Confirm ' + (r.category || 'resignation') + ': ' + r.name + ' (' + r.empId + ') from ' + (r.contractor || ''), prof(r));
+                        if (r.status === EXITX.ST.PROD) add('amber', 'Production formalities complete for ' + r.name + ' — do the HR exit clearance', prof(r));
+                    }
+                    if ((r0 === 'supervisor' || r0 === 'production_manager') && EXITX.inDiv(r) && r.status === EXITX.ST.SUP)
+                        add(r0 === 'supervisor' ? 'amber' : 'info', (r0 === 'supervisor' ? 'Exit clearance needed: ' : 'For your information — exit clearance with the Supervisor: ') + r.name + ' (' + r.empId + '), last day ' + HRM.nice(r.lwd), open(r));
+                    if (r0 === 'contractor' && cw_normJs(r.contractor) === cw_normJs(currentContractorName)) {
+                        if (r.status === EXITX.ST.PROD) add('info', 'Production formalities complete for ' + r.name + ' — waiting for HR exit clearance', open(r));
+                        if (r.status === EXITX.ST.HRC) add('amber', 'HR exit clearance done for ' + r.name + ' — confirm to close', open(r));
+                        if (r.status === EXITX.ST.SUP) add('info', r.name + ': HR confirmed — with the Supervisor for clearance', open(r));
+                    }
+                });
+                return out;
+            };
         })();
 
         /* ---------- install as a phone / desktop app ---------- */
